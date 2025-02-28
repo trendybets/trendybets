@@ -1,21 +1,33 @@
 import { PlayerData } from '../types'
 import { serverEnv } from "@/lib/env"
 
-export async function fetchPlayerOdds(): Promise<PlayerData[]> {
-  const response = await fetch('/api/odds')
+export async function fetchPlayerOdds(limit?: number): Promise<PlayerData[]> {
+  // Build the URL with query parameters
+  const url = new URL('/api/odds', window.location.origin);
+  if (limit) {
+    url.searchParams.append('limit', limit.toString());
+  }
+  
+  const response = await fetch(url.toString())
   
   if (!response.ok) {
     const errorData = await response.json()
     throw new Error(errorData.error || 'Failed to fetch player odds')
   }
 
-  const data = await response.json()
-  if (!Array.isArray(data)) {
-    console.error('Unexpected API response:', data)
+  const responseData = await response.json()
+  
+  // Handle the new response format with data and meta fields
+  if (responseData.data && Array.isArray(responseData.data)) {
+    console.log('API meta information:', responseData.meta);
+    return responseData.data;
+  } else if (Array.isArray(responseData)) {
+    // Fallback for old API format
+    return responseData;
+  } else {
+    console.error('Unexpected API response:', responseData)
     throw new Error('Invalid response format from API')
   }
-
-  return data
 }
 
 // Types

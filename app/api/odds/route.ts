@@ -3,6 +3,8 @@ import { serverEnv } from "@/lib/env"
 
 // Add this line to tell Next.js this is a dynamic route
 export const dynamic = 'force-dynamic'
+// Increase the maximum duration for this route
+export const maxDuration = 60; // 60 seconds instead of the default 10
 
 // Helper function to calculate averages from player results
 async function fetchPlayerResults(playerId: string, statType: string): Promise<{
@@ -68,17 +70,8 @@ async function fetchPlayerResults(playerId: string, statType: string): Promise<{
         try {
           // Get date from the fixture object
           const dateStr = game.fixture?.start_date
-          console.log('Processing game date:', {
-            originalDate: dateStr,
-            gameFields: Object.keys(game),
-            fixtureFields: game.fixture ? Object.keys(game.fixture) : []
-          })
-
+          
           if (!dateStr) {
-            console.log('No valid date field found in game data:', {
-              fixture: game.fixture,
-              game: game
-            })
             return false
           }
 
@@ -86,15 +79,6 @@ async function fetchPlayerResults(playerId: string, statType: string): Promise<{
           const isCompleted = game.results?.[0]?.status === 'completed'
           const isValidDate = !isNaN(gameDate.getTime())
           const isAfterSeasonStart = isValidDate && gameDate >= SEASON_START_DATE
-          
-          console.log('Game date validation:', {
-            dateStr,
-            parsedDate: gameDate.toISOString(),
-            isCompleted,
-            isValidDate,
-            isAfterSeasonStart,
-            seasonStartDate: SEASON_START_DATE.toISOString()
-          })
           
           return isCompleted && isValidDate && isAfterSeasonStart
         } catch (error) {
@@ -119,7 +103,6 @@ async function fetchPlayerResults(playerId: string, statType: string): Promise<{
               break
           }
           
-          console.log(`Game stat for ${statType}: ${statValue}`)
           return statValue
         } catch (error) {
           console.error('Error processing game stats:', error)
@@ -129,7 +112,6 @@ async function fetchPlayerResults(playerId: string, statType: string): Promise<{
       .filter((stat: number) => !isNaN(stat))
 
     console.log(`Found ${gameStats.length} valid games for player ${playerId}`)
-    console.log('Game stats:', gameStats)
 
     // Calculate averages
     const last5Games = gameStats.slice(0, 5)
@@ -140,7 +122,6 @@ async function fetchPlayerResults(playerId: string, statType: string): Promise<{
       if (arr.length === 0) return 0
       const sum = arr.reduce((a, b) => a + b, 0)
       const avg = sum / arr.length
-      console.log(`Calculating average for ${arr.length} games:`, { sum, avg, games: arr })
       return avg
     }
 
@@ -149,8 +130,6 @@ async function fetchPlayerResults(playerId: string, statType: string): Promise<{
       last10: calculateAverage(last10Games),
       season: calculateAverage(allGames)
     }
-
-    console.log('Calculated averages:', averages)
 
     // Calculate hit rates (we'll need the line value for this later)
     const calculateHitRate = (arr: number[], line: number) =>
@@ -196,14 +175,20 @@ async function fetchPlayerResults(playerId: string, statType: string): Promise<{
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     console.log('API Key:', serverEnv.OPTIC_ODDS_API_KEY ? 'Present' : 'Missing')
+    
+    // Get query parameters
+    const url = new URL(request.url);
+    const fixtureId = url.searchParams.get('fixture_id');
+    const limit = parseInt(url.searchParams.get('limit') || '2'); // Default to 2 fixtures
     
     // First get active fixtures
     const fixturesUrl = `https://api.opticodds.com/api/v3/fixtures?` +
       `league=nba&` +
       `status=unplayed&` +
+      (fixtureId ? `id=${fixtureId}&` : '') +
       `key=${serverEnv.OPTIC_ODDS_API_KEY}`
     
     console.log('Fetching fixtures from:', fixturesUrl.replace(serverEnv.OPTIC_ODDS_API_KEY, '[REDACTED]'))
@@ -234,9 +219,13 @@ export async function GET() {
       return NextResponse.json([])
     }
 
+    // Limit the number of fixtures to process
+    const limitedFixtures = fixtureId ? fixtures : fixtures.slice(0, limit);
+    console.log(`Processing ${limitedFixtures.length} fixtures out of ${fixtures.length} total fixtures`);
+
     // Then get odds for each fixture
     const allPlayerOdds = []
-    for (const fixture of fixtures) {
+    for (const fixture of limitedFixtures) {
       console.log(`Processing fixture ${fixture.id} - ${fixture.home_team} vs ${fixture.away_team}`)
       
       const oddsUrl = `https://api.opticodds.com/api/v3/fixtures/odds?` +
@@ -271,7 +260,10 @@ export async function GET() {
       const playerIds = new Set(fixtureOdds.map((odd: any) => odd.player_id)) as Set<string>
       const playerDetails = new Map()
       
-      for (const playerId of Array.from(playerIds)) {
+      // Limit the number of players to process per fixture
+      const limitedPlayerIds = Array.from(playerIds).slice(0, 10); // Process max 10 players per fixture
+      
+      for (const playerId of limitedPlayerIds) {
         try {
           const playerUrl = `https://api.opticodds.com/api/v3/players?` +
             `sport=basketball&` +
@@ -299,13 +291,17 @@ export async function GET() {
       }
       
       // Process all odds first to get unique props
-      const oddsToProcess = fixtureOdds
+      // Limit the number of odds to process
+      const limitedOdds = fixtureOdds
         .filter((odd: any) => 
           odd.market_id === 'player_points' || 
           odd.market_id === 'player_rebounds' || 
           odd.market_id === 'player_assists'
         )
-        .map(async (odd: any) => {
+        .filter((odd: any) => limitedPlayerIds.includes(odd.player_id))
+        .slice(0, 20); // Process max 20 odds per fixture
+      
+      const oddsToProcess = limitedOdds.map(async (odd: any) => {
           const key = odd.grouping_key || `${odd.normalized_selection}:${odd.points}`
           if (uniqueProps.has(key)) return null
 
@@ -366,7 +362,7 @@ export async function GET() {
                 date: fixture.start_date,
               },
               trend_strength: parseFloat((Math.abs((playerStats.last5 - odd.points) / odd.points)).toFixed(3)) || 0,
-              games: gameStats.map(stat => {
+              games: gameStats.slice(0, 10).map(stat => { // Limit game history to 10 games
                 const gameData = {
                   points: 0,
                   assists: 0,
@@ -393,10 +389,7 @@ export async function GET() {
         })
 
       // Wait for all player stats to be processed
-      const processedOdds = await Promise.all(oddsToProcess.filter((odd: any) => {
-        // Filter out any 1H markets
-        return !odd.market?.toLowerCase().includes('1st half')
-      }))
+      const processedOdds = await Promise.all(oddsToProcess)
       
       // Add processed odds to the uniqueProps map
       processedOdds
@@ -409,10 +402,19 @@ export async function GET() {
     }
 
     console.log('Total player odds collected:', allPlayerOdds.length)
-    if (allPlayerOdds.length === 0) {
-      console.warn('No player odds were collected from any fixtures')
-    }
-    return NextResponse.json(allPlayerOdds)
+    
+    // Add pagination metadata
+    const response = {
+      data: allPlayerOdds,
+      meta: {
+        total_fixtures: fixtures.length,
+        processed_fixtures: limitedFixtures.length,
+        total_odds: allPlayerOdds.length,
+        has_more: limitedFixtures.length < fixtures.length
+      }
+    };
+    
+    return NextResponse.json(response)
   } catch (error) {
     console.error('Detailed error in /api/odds:', error)
     if (error instanceof Error) {
