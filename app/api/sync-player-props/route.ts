@@ -45,7 +45,7 @@ export async function POST() {
         const props = await fetchPlayerProps(fixture.id)
         
         // Batch upsert props with timestamp
-        const propsToUpsert = props.map(prop => ({
+        const propsToUpsert = props.map((prop: Record<string, any>) => ({
           ...prop,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
