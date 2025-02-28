@@ -1,6 +1,8 @@
 import { createServerClient } from "@/lib/supabase-server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
+export const dynamic = 'force-dynamic'
+
 export default async function TeamsPage() {
   const supabase = createServerClient()
   const { data: teams, error } = await supabase.from("teams").select("*")
