@@ -1,3 +1,5 @@
+'use client'
+
 import { useEffect, useState } from 'react'
 import { PlayerData } from '../types'
 import { calculateProjection, getAllCustomProjections } from '../lib/projections'
