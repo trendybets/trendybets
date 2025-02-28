@@ -4,6 +4,11 @@ export const clientEnv = {
   SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
 }
 
+// Log Supabase URL for debugging
+if (typeof window !== 'undefined') {
+  console.log('Using Supabase URL:', clientEnv.SUPABASE_URL);
+}
+
 // Server-side environment variables (only available in API routes and server components)
 export const serverEnv = {
   SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',

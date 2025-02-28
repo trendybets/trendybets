@@ -14,6 +14,8 @@ import {
   Title,
   Tooltip,
   Legend,
+  LineController,
+  BarController
 } from 'chart.js'
 import { cn } from "@/lib/utils"
 
@@ -24,6 +26,8 @@ ChartJS.register(
   BarElement,
   LineElement,
   PointElement,
+  LineController,
+  BarController,
   Title,
   Tooltip,
   Legend
