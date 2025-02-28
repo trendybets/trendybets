@@ -87,6 +87,11 @@ export function SportsbookSelect({ value, onChange }: SportsbookSelectProps) {
 }
 
 export async function getSportsbooks() {
+  const supabase = createClient<Database>(
+    clientEnv.SUPABASE_URL,
+    clientEnv.SUPABASE_ANON_KEY
+  )
+  
   const { data, error } = await supabase
     .from('sportsbook')
     .select('*')
