@@ -1,3 +1,5 @@
+'use client'
+
 interface BarProps {
   value: number
   maxValue: number
@@ -9,18 +11,17 @@ export function Bar({ value, maxValue, color = 'bg-blue-500', label }: BarProps)
   const percentage = (value / maxValue) * 100
 
   return (
-    <div className="flex-1">
-      <div className="relative h-full">
+    <div className="w-full">
+      {label && <div className="text-xs text-gray-500 mb-1">{label}</div>}
+      <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
         <div
-          className={`absolute bottom-0 w-full ${color} rounded-t transition-all duration-300`}
-          style={{ height: `${percentage}%` }}
-        >
-          {label && (
-            <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs">
-              {label}
-            </div>
-          )}
-        </div>
+          className={`h-full ${color} rounded-full`}
+          style={{ width: `${Math.min(percentage, 100)}%` }}
+        />
+      </div>
+      <div className="flex justify-between text-xs mt-1">
+        <span>{value}</span>
+        <span>{maxValue}</span>
       </div>
     </div>
   )

@@ -1,3 +1,5 @@
+'use client'
+
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
@@ -12,7 +14,7 @@ const Text = React.forwardRef<HTMLParagraphElement, TextProps>(
       <p
         ref={ref}
         className={cn(
-          "text-sm leading-6",
+          "text-base text-gray-700 leading-relaxed",
           className
         )}
         {...props}
