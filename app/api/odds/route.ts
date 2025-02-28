@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import { serverEnv } from "@/lib/env"
 
+// Add this line to tell Next.js this is a dynamic route
+export const dynamic = 'force-dynamic'
+
 // Helper function to calculate averages from player results
 async function fetchPlayerResults(playerId: string, statType: string): Promise<{
   last5: number;

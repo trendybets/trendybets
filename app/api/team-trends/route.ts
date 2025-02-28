@@ -3,6 +3,9 @@ import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { cache } from 'react'
 
+// Add this line to tell Next.js this is a dynamic route
+export const dynamic = 'force-dynamic'
+
 // Cache the team trends data
 const getTeamTrendsData = cache(async (teamName: string, games: number) => {
   const supabase = createRouteHandlerClient({ cookies })
