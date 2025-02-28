@@ -1,6 +1,6 @@
 'use client'
 
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { useState, useEffect } from "react"
 import { Bar } from "react-chartjs-2"
 import { PlayerData } from '../types'
@@ -467,6 +467,12 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose }: PlayerAnalysis
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl bg-white border-gray-200 p-0">
+        <DialogTitle className="sr-only">
+          {processedPlayer.player.name} - {processedPlayer.stat_type} Analysis
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          Detailed performance analysis for {processedPlayer.player.name}'s {processedPlayer.stat_type} statistics
+        </DialogDescription>
         {/* Fixed header with tabs */}
         <div className="border-b border-gray-100">
           {/* Player header */}
