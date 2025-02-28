@@ -1,3 +1,19 @@
+import { NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
+import type { Database } from "@/types/supabase"
+
+// Define constants for environment variables
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+// Define the fetchPlayerProps function if it doesn't exist elsewhere
+async function fetchPlayerProps(fixtureId: string) {
+  // This is a placeholder implementation
+  // You should implement the actual API call to fetch player props
+  console.log(`Fetching player props for fixture ${fixtureId}...`)
+  return [] // Return empty array for now
+}
+
 export async function POST() {
   try {
     const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY)
