@@ -31,7 +31,7 @@ export default async function ProfilePage() {
               <strong>User ID:</strong> {session.user.id}
             </p>
             <p>
-              <strong>Last Sign In:</strong> {new Date(session.user.last_sign_in_at).toLocaleString()}
+              <strong>Last Sign In:</strong> {session.user.last_sign_in_at ? new Date(session.user.last_sign_in_at).toLocaleString() : 'Never'}
             </p>
             {profile && (
               <>
