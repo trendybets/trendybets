@@ -270,7 +270,6 @@ export default function TrendyGamesView() {
       // Add cache-busting query parameter
       const timestamp = new Date().getTime()
       const data = await fetch('/api/games?t=' + timestamp, { 
-        cache: 'no-store',
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import { serverEnv } from "@/lib/env"
 
+// Add this line to tell Next.js this is a dynamic route
+export const dynamic = 'force-dynamic'
+
 // At the top of the file, add default sportsbook
 const DEFAULT_SPORTSBOOK = 'draftkings'
 
@@ -44,7 +47,6 @@ async function fetchActiveFixtures() {
   
   try {
     const response = await fetch(url, {
-      cache: 'no-store',  // Disable caching to ensure fresh data
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json'
@@ -154,7 +156,6 @@ export async function GET() {
       console.log('Fetching unplayed fixtures from:', url.replace(serverEnv.OPTIC_ODDS_API_KEY, '[REDACTED]'))
       
       const response = await fetch(url, {
-        cache: 'no-store',
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
@@ -210,7 +211,6 @@ export async function GET() {
       console.log('Fetching scheduled fixtures from:', url.replace(serverEnv.OPTIC_ODDS_API_KEY, '[REDACTED]'))
       
       const response = await fetch(url, {
-        cache: 'no-store',
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
