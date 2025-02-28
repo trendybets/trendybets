@@ -112,7 +112,7 @@ export default function TrendyPropsView() {
     return Array.from(stats).sort();
   }, [playerOdds]);
 
-  if (isLoading) {
+  if (isLoading && playerOdds.length === 0) {
     return (
       <div className="container mx-auto p-4">
         <div className="p-8 text-center text-gray-600">
@@ -123,7 +123,7 @@ export default function TrendyPropsView() {
     )
   }
 
-  if (playerOdds.length === 0) {
+  if (playerOdds.length === 0 && !isLoading) {
     return (
       <div className="container mx-auto p-4">
         <div className="p-8 text-center text-gray-600">
@@ -151,106 +151,39 @@ export default function TrendyPropsView() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-8">
-        {/* Removed Filters Section */}
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <p className="font-bold">Error loading player props</p>
+          <p>{error}</p>
+          {errorDetails && (
+            <details className="mt-2">
+              <summary className="cursor-pointer">Error Details</summary>
+              <pre className="mt-2 text-xs overflow-auto">{errorDetails}</pre>
+            </details>
+          )}
+        </div>
+      )}
 
+      <div className="flex flex-col gap-8">
         {/* Trends Table First */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <TrendsTable data={filteredData} />
+          <TrendsTable 
+            data={filteredData} 
+            isLoading={isLoading && playerOdds.length > 0} 
+            hasMore={hasMore}
+            onLoadMore={loadMore}
+          />
         </div>
 
         {/* Projections Table Second */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <ProjectionsTable data={filteredData} />
+          <ProjectionsTable 
+            data={filteredData} 
+            hasMore={hasMore}
+            onLoadMore={loadMore}
+            isLoading={isLoading && playerOdds.length > 0}
+          />
         </div>
-      </div>
-
-      <div className="container mx-auto py-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Trendy Props</h1>
-          <div className="flex gap-4">
-            <Select
-              value={filters.stat}
-              onValueChange={(value) => setFilters({ ...filters, stat: value })}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Stat Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Stats</SelectItem>
-                <SelectItem value="Points">Points</SelectItem>
-                <SelectItem value="Rebounds">Rebounds</SelectItem>
-                <SelectItem value="Assists">Assists</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <Select
-              value={filters.team}
-              onValueChange={(value) => setFilters({ ...filters, team: value })}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Team" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Teams</SelectItem>
-                {Array.from(new Set(playerOdds.map(prop => prop.player.team))).sort().map(team => (
-                  <SelectItem key={team} value={team}>{team}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            <p className="font-bold">Error loading player props</p>
-            <p>{error}</p>
-            {errorDetails && (
-              <details className="mt-2">
-                <summary className="cursor-pointer">Error Details</summary>
-                <pre className="mt-2 text-xs overflow-auto">{errorDetails}</pre>
-              </details>
-            )}
-          </div>
-        )}
-
-        {isLoading && playerOdds.length === 0 ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h2 className="text-xl font-semibold mb-4">Trending Props</h2>
-                <TrendsTable data={filteredData} />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold mb-4">Projections</h2>
-                <ProjectionsTable data={filteredData} />
-              </div>
-            </div>
-            
-            {/* Load More Button */}
-            {hasMore && !isLoading && (
-              <div className="mt-8 flex justify-center">
-                <button
-                  onClick={loadMore}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                  disabled={isLoading}
-                >
-                  {isLoading ? 'Loading...' : 'Load More Fixtures'}
-                </button>
-              </div>
-            )}
-            
-            {isLoading && playerOdds.length > 0 && (
-              <div className="mt-8 flex justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-              </div>
-            )}
-          </>
-        )}
       </div>
     </div>
   )

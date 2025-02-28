@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
 import {
   createColumnHelper,
   flexRender,
@@ -32,6 +32,8 @@ export interface GameStats {
 interface TrendsTableProps {
   data: PlayerData[]
   isLoading?: boolean
+  hasMore?: boolean
+  onLoadMore?: () => void
 }
 
 type TimeframeKey = 'last5' | 'last10' | 'last20'
@@ -48,12 +50,38 @@ const getOpponentTeam = (player: Player, nextGame: NextGame | undefined) => {
   return nextGame.opponent;
 }
 
-export function TrendsTable({ data, isLoading = false }: TrendsTableProps) {
+export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMore }: TrendsTableProps) {
   const [timeframe, setTimeframe] = useState('L5')
   const [statType, setStatType] = useState('All Props')
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerData | null>(null)
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
+  const loaderRef = useRef<HTMLDivElement>(null);
+  
+  // Set up intersection observer for infinite scrolling
+  useEffect(() => {
+    if (!hasMore || !onLoadMore || isLoading) return;
+    
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          onLoadMore();
+        }
+      },
+      { threshold: 0.5 }
+    );
+    
+    const currentLoaderRef = loaderRef.current;
+    if (currentLoaderRef) {
+      observer.observe(currentLoaderRef);
+    }
+    
+    return () => {
+      if (currentLoaderRef) {
+        observer.unobserve(currentLoaderRef);
+      }
+    };
+  }, [hasMore, onLoadMore, isLoading]);
   
   // Helper function to get the correct stat value
   const getStatValue = (game: GameStats, statType: string) => {
@@ -266,7 +294,7 @@ export function TrendsTable({ data, isLoading = false }: TrendsTableProps) {
   })
   
   // Render loading state
-  if (isLoading) {
+  if (isLoading && data.length === 0) {
     return (
       <div className="flex h-64 w-full flex-col items-center justify-center rounded-lg border border-gray-200 bg-white p-6">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-blue-500"></div>
@@ -394,6 +422,22 @@ export function TrendsTable({ data, isLoading = false }: TrendsTableProps) {
                   ))}
                 </tbody>
               </table>
+              
+              {/* Infinite Scroll Loader */}
+              {hasMore && (
+                <div 
+                  ref={loaderRef} 
+                  className="py-4 flex justify-center items-center"
+                >
+                  {isLoading ? (
+                    <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                  ) : (
+                    <div className="h-8 flex items-center justify-center text-sm text-gray-500">
+                      Scroll for more
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ) : (
