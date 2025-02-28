@@ -545,7 +545,7 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
                         {selectedBetType === 'spread' && (
                           <>
                             <div className={`text-sm font-mono flex justify-between ${
-                              bestOdds?.away?.sportsbook === bookOdds.sportsbook ? 'text-green-400' : ''
+                              selectedBetType === 'spread' && bestOdds && 'away' in bestOdds && bestOdds.away?.sportsbook === bookOdds.sportsbook ? 'text-green-400' : ''
                             }`}>
                               {bookOdds.spread.away ? (
                                 <>
@@ -555,7 +555,7 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
                               ) : <span className="opacity-50">N/A</span>}
                             </div>
                             <div className={`text-sm font-mono flex justify-between ${
-                              bestOdds?.home?.sportsbook === bookOdds.sportsbook ? 'text-green-400' : ''
+                              selectedBetType === 'spread' && bestOdds && 'home' in bestOdds && bestOdds.home?.sportsbook === bookOdds.sportsbook ? 'text-green-400' : ''
                             }`}>
                               {bookOdds.spread.home ? (
                                 <>
@@ -570,19 +570,20 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
                           <>
                             <div className="text-sm font-mono flex justify-between">
                               {typeof bookOdds.moneyline.away === 'number' ? (
-                                <span className={`font-bold ${bestOdds?.away?.sportsbook === bookOdds.sportsbook ? 'text-green-400' : ''}`}>
+                                <span className={`font-bold ${
+                                  selectedBetType === 'moneyline' && bestOdds && 'away' in bestOdds && bestOdds.away?.sportsbook === bookOdds.sportsbook ? 'text-green-400' : ''
+                                }`}>
                                   {bookOdds.moneyline.away > 0 ? `+${bookOdds.moneyline.away}` : bookOdds.moneyline.away}
                                 </span>
                               ) : (
-                                <span className="opacity-50">
-                                  N/A {/* Add debug info */}
-                                  {JSON.stringify(bookOdds.moneyline)}
-                                </span>
+                                <span className="opacity-50">N/A</span>
                               )}
                             </div>
                             <div className="text-sm font-mono flex justify-between">
                               {typeof bookOdds.moneyline.home === 'number' ? (
-                                <span className={`font-bold ${bestOdds?.home?.sportsbook === bookOdds.sportsbook ? 'text-green-400' : ''}`}>
+                                <span className={`font-bold ${
+                                  selectedBetType === 'moneyline' && bestOdds && 'home' in bestOdds && bestOdds.home?.sportsbook === bookOdds.sportsbook ? 'text-green-400' : ''
+                                }`}>
                                   {bookOdds.moneyline.home > 0 ? `+${bookOdds.moneyline.home}` : bookOdds.moneyline.home}
                                 </span>
                               ) : (
@@ -594,9 +595,11 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
                         {selectedBetType === 'total' && (
                           <>
                             <div className="text-sm font-mono flex justify-between">
-                              {bookOdds.total.over?.points ? (
+                              {bookOdds.total.over ? (
                                 <>
-                                  <span className="font-bold">O {bookOdds.total.over.points}</span>
+                                  <span className={`font-bold ${
+                                    selectedBetType === 'total' && bestOdds && 'total' in bestOdds && bestOdds.total?.sportsbook === bookOdds.sportsbook ? 'text-green-400' : ''
+                                  }`}>O {bookOdds.total.over.points}</span>
                                   <span className="opacity-80">{bookOdds.total.over.price}</span>
                                 </>
                               ) : (
@@ -604,9 +607,11 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
                               )}
                             </div>
                             <div className="text-sm font-mono flex justify-between">
-                              {bookOdds.total.under?.points ? (
+                              {bookOdds.total.under ? (
                                 <>
-                                  <span className="font-bold">U {bookOdds.total.under.points}</span>
+                                  <span className={`font-bold ${
+                                    selectedBetType === 'total' && bestOdds && 'total' in bestOdds && bestOdds.total?.sportsbook === bookOdds.sportsbook ? 'text-green-400' : ''
+                                  }`}>U {bookOdds.total.under.points}</span>
                                   <span className="opacity-80">{bookOdds.total.under.price}</span>
                                 </>
                               ) : (
