@@ -1,4 +1,4 @@
-import { syncTeams } from "../lib/sync-teams"
+import { syncTeams } from "../lib/sync"
 
 async function runSync() {
   console.log("Starting team sync...")
