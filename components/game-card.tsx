@@ -103,7 +103,7 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
   // First, let's log all unique market_ids to see what we're working with
   useEffect(() => {
     if (odds) {
-      const uniqueMarkets = [...new Set(odds.map(o => o.market_id))]
+      const uniqueMarkets = Array.from(new Set(odds.map(o => o.market_id)))
       console.log('Available market types:', uniqueMarkets)
     }
   }, [odds])
