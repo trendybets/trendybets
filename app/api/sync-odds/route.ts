@@ -2,6 +2,25 @@ import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/supabase"
 
+// Define a type for the odds data from the API
+type ApiOdd = {
+  id: string;
+  sportsbook: { toLowerCase: () => string };
+  market: string;
+  name: string;
+  is_main: boolean;
+  selection: string;
+  normalized_selection: string;
+  market_id: string;
+  selection_line?: string;
+  player_id?: string;
+  team_id?: string;
+  price: number;
+  points?: number;
+  timestamp: number;
+  [key: string]: any;
+};
+
 // Move these to .env.local
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -34,8 +53,8 @@ async function fetchOdds(fixtureId: string) {
 
     // Transform the odds data to match our schema exactly
     const mappedOdds = data
-      .filter(odd => odd && typeof odd === 'object')
-      .map((odd: any) => ({
+      .filter((odd: unknown): odd is ApiOdd => odd !== null && typeof odd === 'object')
+      .map((odd: ApiOdd) => ({
         id: odd.id,
         fixture_id: fixtureId,
         sportsbook: odd.sportsbook.toLowerCase(),
@@ -111,7 +130,7 @@ export async function POST() {
         
         if (odds.length > 0) {
           // Batch upsert odds with timestamp
-          const oddsToUpsert = odds.map(odd => ({
+          const oddsToUpsert = odds.map((odd: ApiOdd) => ({
             ...odd,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
