@@ -70,6 +70,25 @@ type GroupedOdds = {
 // Add this type
 type BetType = 'spread' | 'moneyline' | 'total'
 
+// Add these type definitions before the findBestOdds function
+type BestSpreadOdds = {
+  price: number;
+  points: number | null;
+  sportsbook: string;
+} | null;
+
+type BestMoneylineOdds = {
+  price: number;
+  sportsbook: string;
+} | null;
+
+type BestTotalOdds = {
+  points: number;
+  over_price: number;
+  under_price?: number;
+  sportsbook: string;
+} | null;
+
 interface GameCardProps {
   fixture: Fixture
   selectedSportsbook: string | null
@@ -188,63 +207,49 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
         })
         console.log('Found home moneyline:', homeMoneyline)
 
-        const result = {
+        // Find spread odds once and reuse
+        const awaySpreadOdds = bookOdds.find(o => 
+          o.market_id === 'point_spread' && 
+          o.team_id === fixture.away_team_id
+        );
+        
+        const homeSpreadOdds = bookOdds.find(o => 
+          o.market_id === 'point_spread' && 
+          o.team_id === fixture.home_team_id
+        );
+        
+        // Find total odds once and reuse
+        const overOdds = bookOdds.find(o => 
+          o.market_id === 'total_points' && 
+          o.selection_line === 'over'
+        );
+        
+        const underOdds = bookOdds.find(o => 
+          o.market_id === 'total_points' && 
+          o.selection_line === 'under'
+        );
+
+        const result: GroupedOdds = {
           sportsbook: book,
           logo: bookOdds[0]?.sportsbook_logo || '/placeholder-sportsbook.png',
           spread: {
-            away: bookOdds.find(o => 
-              o.market_id === 'point_spread' && 
-              o.team_id === fixture.away_team_id
-            ) ? {
-              points: bookOdds.find(o => 
-                o.market_id === 'point_spread' && 
-                o.team_id === fixture.away_team_id
-              )?.points,
-              price: bookOdds.find(o => 
-                o.market_id === 'point_spread' && 
-                o.team_id === fixture.away_team_id
-              )?.price
+            away: awaySpreadOdds ? {
+              points: awaySpreadOdds.points ?? null,
+              price: awaySpreadOdds.price ?? null
             } : null,
-            home: bookOdds.find(o => 
-              o.market_id === 'point_spread' && 
-              o.team_id === fixture.home_team_id
-            ) ? {
-              points: bookOdds.find(o => 
-                o.market_id === 'point_spread' && 
-                o.team_id === fixture.home_team_id
-              )?.points,
-              price: bookOdds.find(o => 
-                o.market_id === 'point_spread' && 
-                o.team_id === fixture.home_team_id
-              )?.price
+            home: homeSpreadOdds ? {
+              points: homeSpreadOdds.points ?? null,
+              price: homeSpreadOdds.price ?? null
             } : null
           },
           total: {
-            over: bookOdds.find(o => 
-              o.market_id === 'total_points' && 
-              o.selection_line === 'over'
-            ) ? {
-              points: bookOdds.find(o => 
-                o.market_id === 'total_points' && 
-                o.selection_line === 'over'
-              )?.points || 0,
-              price: bookOdds.find(o => 
-                o.market_id === 'total_points' && 
-                o.selection_line === 'over'
-              )?.price || 0
+            over: overOdds ? {
+              points: overOdds.points || 0,
+              price: overOdds.price || 0
             } : null,
-            under: bookOdds.find(o => 
-              o.market_id === 'total_points' && 
-              o.selection_line === 'under'
-            ) ? {
-              points: bookOdds.find(o => 
-                o.market_id === 'total_points' && 
-                o.selection_line === 'under'
-              )?.points || 0,
-              price: bookOdds.find(o => 
-                o.market_id === 'total_points' && 
-                o.selection_line === 'under'
-              )?.price || 0
+            under: underOdds ? {
+              points: underOdds.points || 0,
+              price: underOdds.price || 0
             } : null
           },
           moneyline: {
@@ -254,18 +259,8 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
         }
 
         // Add debug logs for totals
-        const overOdds = bookOdds.find(o => 
-          o.market_id === 'total_points' && 
-          o.selection_line === 'over'
-        )
         console.log('Found over odds:', overOdds)
-
-        const underOdds = bookOdds.find(o => 
-          o.market_id === 'total_points' && 
-          o.selection_line === 'under'
-        )
         console.log('Found under odds:', underOdds)
-
         console.log('Total odds result:', {
           over: result.total.over,
           under: result.total.under
@@ -283,7 +278,7 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
       switch (betType) {
         case 'spread':
           return {
-            away: odds.reduce((best, current) => {
+            away: odds.reduce<BestSpreadOdds>((best, current) => {
               if (!current.spread.away?.price) return best
               if (!best?.price || current.spread.away.price > best.price) {
                 return { 
@@ -293,8 +288,8 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
                 }
               }
               return best
-            }, null as { price: number; points: number; sportsbook: string } | null),
-            home: odds.reduce((best, current) => {
+            }, null),
+            home: odds.reduce<BestSpreadOdds>((best, current) => {
               if (!current.spread.home?.price) return best
               if (!best?.price || current.spread.home.price > best.price) {
                 return { 
@@ -304,28 +299,28 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
                 }
               }
               return best
-            }, null as { price: number; points: number; sportsbook: string } | null)
+            }, null)
           }
         case 'moneyline':
           return {
-            away: odds.reduce((best, current) => {
+            away: odds.reduce<BestMoneylineOdds>((best, current) => {
               if (!current.moneyline.away) return best
               if (!best?.price || current.moneyline.away > best.price) {
                 return { price: current.moneyline.away, sportsbook: current.sportsbook }
               }
               return best
-            }, null as { price: number; sportsbook: string } | null),
-            home: odds.reduce((best, current) => {
+            }, null),
+            home: odds.reduce<BestMoneylineOdds>((best, current) => {
               if (!current.moneyline.home) return best
               if (!best?.price || current.moneyline.home > best.price) {
                 return { price: current.moneyline.home, sportsbook: current.sportsbook }
               }
               return best
-            }, null as { price: number; sportsbook: string } | null)
+            }, null)
           }
         case 'total':
           return {
-            total: odds.reduce((best, current) => {
+            total: odds.reduce<BestTotalOdds>((best, current) => {
               if (!current.total.over?.points) return best
               if (!best?.over_price || current.total.over.price > best.over_price) {
                 return {
@@ -336,7 +331,7 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
                 }
               }
               return best
-            }, null as { points: number; over_price: number; under_price?: number; sportsbook: string } | null)
+            }, null)
           }
         default:
           return null
@@ -448,13 +443,13 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
                         <>
                           {bestOdds?.away && (
                             <div className="text-sm font-mono flex justify-between text-green-400">
-                              <span className="font-bold">{bestOdds.away.points > 0 ? `+${bestOdds.away.points}` : bestOdds.away.points}</span>
+                              <span className="font-bold">{bestOdds.away.points !== null && (bestOdds.away.points > 0 ? `+${bestOdds.away.points}` : bestOdds.away.points)}</span>
                               <span className="opacity-80">{bestOdds.away.price > 0 ? `+${bestOdds.away.price}` : bestOdds.away.price}</span>
                             </div>
                           )}
                           {bestOdds?.home && (
                             <div className="text-sm font-mono flex justify-between text-green-400">
-                              <span className="font-bold">{bestOdds.home.points > 0 ? `+${bestOdds.home.points}` : bestOdds.home.points}</span>
+                              <span className="font-bold">{bestOdds.home.points !== null && (bestOdds.home.points > 0 ? `+${bestOdds.home.points}` : bestOdds.home.points)}</span>
                               <span className="opacity-80">{bestOdds.home.price > 0 ? `+${bestOdds.home.price}` : bestOdds.home.price}</span>
                             </div>
                           )}
@@ -537,8 +532,8 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
                             }`}>
                               {bookOdds.spread.away ? (
                                 <>
-                                  <span className="font-bold">{bookOdds.spread.away.points > 0 ? `+${bookOdds.spread.away.points}` : bookOdds.spread.away.points}</span>
-                                  <span className="opacity-80">{bookOdds.spread.away.price > 0 ? `+${bookOdds.spread.away.price}` : bookOdds.spread.away.price}</span>
+                                  <span className="font-bold">{bookOdds.spread.away.points !== null && (bookOdds.spread.away.points > 0 ? `+${bookOdds.spread.away.points}` : bookOdds.spread.away.points)}</span>
+                                  <span className="opacity-80">{bookOdds.spread.away.price !== null && (bookOdds.spread.away.price > 0 ? `+${bookOdds.spread.away.price}` : bookOdds.spread.away.price)}</span>
                                 </>
                               ) : <span className="opacity-50">N/A</span>}
                             </div>
@@ -547,8 +542,8 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
                             }`}>
                               {bookOdds.spread.home ? (
                                 <>
-                                  <span className="font-bold">{bookOdds.spread.home.points > 0 ? `+${bookOdds.spread.home.points}` : bookOdds.spread.home.points}</span>
-                                  <span className="opacity-80">{bookOdds.spread.home.price > 0 ? `+${bookOdds.spread.home.price}` : bookOdds.spread.home.price}</span>
+                                  <span className="font-bold">{bookOdds.spread.home.points !== null && (bookOdds.spread.home.points > 0 ? `+${bookOdds.spread.home.points}` : bookOdds.spread.home.points)}</span>
+                                  <span className="opacity-80">{bookOdds.spread.home.price !== null && (bookOdds.spread.home.price > 0 ? `+${bookOdds.spread.home.price}` : bookOdds.spread.home.price)}</span>
                                 </>
                               ) : <span className="opacity-50">N/A</span>}
                             </div>
