@@ -252,7 +252,19 @@ export default function TrendyGamesView() {
     historicalData: []
   })
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const [showToast, setShowToast] = useState(false)
+  const [showRefreshNotification, setShowRefreshNotification] = useState(false)
+
+  // Add effect to handle notification visibility
+  useEffect(() => {
+    if (lastUpdated) {
+      setShowRefreshNotification(true);
+      const timer = setTimeout(() => {
+        setShowRefreshNotification(false);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [lastUpdated]);
 
   // Update the availableDates useMemo
   const availableDates = useMemo(() => {
@@ -563,8 +575,8 @@ export default function TrendyGamesView() {
                 Last updated: {lastUpdated.toLocaleTimeString()}
               </span>
               
-              {/* Add toast notification for successful refresh */}
-              {lastUpdated && Date.now() - lastUpdated.getTime() < 1000 && (
+              {/* Updated notification with state-based visibility */}
+              {showRefreshNotification && (
                 <div className="fixed top-4 right-4 bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-lg shadow-md z-50 animate-fade-in">
                   Data refreshed successfully!
                 </div>

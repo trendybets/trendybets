@@ -68,11 +68,15 @@ export function LoginPopup({ isOpen, onClose }: LoginPopupProps) {
     }
     
     try {
+      console.log("Starting signup process...")
+      const redirectUrl = `${window.location.origin}/api/auth/callback`
+      console.log("Redirect URL:", redirectUrl)
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: redirectUrl,
           data: {
             first_name: firstName,
             last_name: lastName,
@@ -82,6 +86,8 @@ export function LoginPopup({ isOpen, onClose }: LoginPopupProps) {
         },
       })
       
+      console.log("Signup response:", { data, error })
+      
       if (error) {
         toast.error(error.message)
         return
@@ -90,6 +96,7 @@ export function LoginPopup({ isOpen, onClose }: LoginPopupProps) {
       toast.success("Account created! Please check your email to confirm your account.")
       setActiveTab("login")
     } catch (error) {
+      console.error("Signup error:", error)
       toast.error("An error occurred during signup")
     } finally {
       setLoading(false)
