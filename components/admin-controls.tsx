@@ -1,3 +1,5 @@
+"use client"
+
 import { Button } from "@/components/ui/button"
 import { syncTeams, syncPlayerOdds, syncFixturesCompleted } from "@/lib/sync"
 import { toast } from "sonner"

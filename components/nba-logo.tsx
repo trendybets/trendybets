@@ -1,3 +1,5 @@
+"use client"
+
 export function NBALogo() {
   return (
     <svg viewBox="0 0 70 156" fill="none" xmlns="http://www.w3.org/2000/svg">
