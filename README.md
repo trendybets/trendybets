@@ -8,6 +8,7 @@ A modern web application for tracking sports betting odds and trends across majo
 - Compare spreads, moneylines, and totals in a clean, modern interface
 - Filter games by date and timeframe
 - Responsive design for mobile and desktop
+- User authentication with Supabase
 
 ## Getting Started
 
