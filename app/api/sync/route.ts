@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import type { Database } from "@/types/supabase"
+
+// Define constants for environment variables
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 export async function POST() {
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+  const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY)
   
   try {
     // Get endpoints that need to be synced
@@ -61,8 +66,7 @@ async function syncEndpoint(endpoint: string, retries = 3): Promise<boolean> {
   for (let i = 0; i < retries; i++) {
     try {
       const response = await fetch(`/api/sync-${endpoint}`, { 
-        method: 'POST',
-        timeout: 60000 // 1 minute timeout
+        method: 'POST'
       })
       
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
