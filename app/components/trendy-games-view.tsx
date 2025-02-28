@@ -137,6 +137,8 @@ interface Game {
     name: string
     logo: string
   }
+  home_record: string | null
+  away_record: string | null
   odds: {
     moneyline: Array<{
       sportsbook: string
@@ -740,13 +742,10 @@ function OddsTable({
     return teamAbbreviations[teamName] || teamName.substring(0, 3).toUpperCase();
   };
 
-  // Add a function to format team record
-  const formatTeamRecord = (teamName: string) => {
-    // This is a placeholder - in a real app, you'd fetch actual records
-    // For now, let's generate some realistic-looking records
-    const wins = Math.floor(Math.random() * 20) + 20; // 20-39 wins
-    const losses = Math.floor(Math.random() * 20) + 20; // 20-39 losses
-    return `${wins}-${losses}`;
+  // Update the formatTeamRecord function to use the actual records
+  const formatTeamRecord = (teamName: string, record: string | null) => {
+    // Use the record from the API if available, otherwise show a placeholder
+    return record || 'N/A';
   };
 
   const tableData = useMemo(() => 
@@ -893,6 +892,7 @@ function OddsTable({
         homeTeam: {
           name: fixture.home_team.name,
           logo: fixture.home_team.logo,
+          record: fixture.home_record,
           odds: {
             moneyline: bestHomeMoneyline ? { 
               price: bestHomeMoneyline.price,
@@ -908,6 +908,7 @@ function OddsTable({
         awayTeam: {
           name: fixture.away_team.name,
           logo: fixture.away_team.logo,
+          record: fixture.away_record,
           odds: {
             moneyline: bestAwayMoneyline ? {
               price: bestAwayMoneyline.price,
@@ -971,7 +972,7 @@ function OddsTable({
                 </div>
                 <div className="ml-3">
                   <div className="font-bold text-lg text-gray-900">{getTeamAbbreviation(game.awayTeam.name)}</div>
-                  <div className="text-xs text-gray-500">{formatTeamRecord(game.awayTeam.name)}</div>
+                  <div className="text-xs text-gray-500">{formatTeamRecord(game.awayTeam.name, game.awayTeam.record)}</div>
                 </div>
               </div>
               
@@ -1058,7 +1059,7 @@ function OddsTable({
                 </div>
                 <div className="ml-3">
                   <div className="font-bold text-lg text-gray-900">{getTeamAbbreviation(game.homeTeam.name)}</div>
-                  <div className="text-xs text-gray-500">{formatTeamRecord(game.homeTeam.name)}</div>
+                  <div className="text-xs text-gray-500">{formatTeamRecord(game.homeTeam.name, game.homeTeam.record)}</div>
                 </div>
               </div>
               

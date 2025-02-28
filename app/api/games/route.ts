@@ -11,6 +11,8 @@ interface Fixture {
   away_competitors?: Array<{ id: string; name: string; logo: string }>
   home_team_display: string
   away_team_display: string
+  home_record?: string | null
+  away_record?: string | null
 }
 
 interface Odd {
@@ -357,6 +359,8 @@ export async function GET() {
             name: awayTeam?.name || fixture.away_team_display,
             logo: awayTeam?.logo || ''
           },
+          home_record: fixture.home_record || null,
+          away_record: fixture.away_record || null,
           odds: {
             moneyline: processedOdds.moneyline || [],
             spread: processedOdds.spread || [],
