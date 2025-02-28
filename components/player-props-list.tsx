@@ -10,6 +10,8 @@ interface PlayerPropsListProps {
   awayTeam: string
   isVisible: boolean
   players: Player[]
+  homeTeamDisplay?: string
+  awayTeamDisplay?: string
 }
 
 export function PlayerPropsList({ 
@@ -17,7 +19,9 @@ export function PlayerPropsList({
   homeTeam,
   awayTeam,
   isVisible,
-  players
+  players,
+  homeTeamDisplay = 'Home Team',
+  awayTeamDisplay = 'Away Team'
 }: PlayerPropsListProps) {
   console.log('PlayerPropsList received:', { 
     playerPropsCount: playerProps.length,
@@ -34,8 +38,8 @@ export function PlayerPropsList({
 
   // Create a map of team IDs to team names
   const teamNames = {
-    [homeTeam]: players.find(p => p.team_id === homeTeam)?.team_name || 'Home Team',
-    [awayTeam]: players.find(p => p.team_id === awayTeam)?.team_name || 'Away Team'
+    [homeTeam]: homeTeamDisplay,
+    [awayTeam]: awayTeamDisplay
   }
 
   // Group props by market and team
@@ -78,8 +82,8 @@ export function PlayerPropsList({
   // Group props by player
   const groupPropsByPlayer = (props: PlayerProp[]) => {
     const grouped = new Map<string, { 
-      over: PlayerProp; 
-      under: PlayerProp;
+      over: PlayerProp | null; 
+      under: PlayerProp | null;
       player?: Player  // Add player data
     }>()
     
