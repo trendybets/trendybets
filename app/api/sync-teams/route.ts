@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/supabase"
-import { env } from "@/lib/env"
+
+// Define constants for environment variables
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 interface SportInfo {
   id: string
@@ -41,7 +44,7 @@ export async function POST() {
   console.log("API route called")
   
   try {
-    const supabase = createClient<Database>(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY)
+    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     // Fetch teams from API
     const apiUrl = `https://api.opticodds.com/api/v3/teams?sport=basketball&league=nba&key=${process.env.OPTIC_ODDS_API_KEY}`
