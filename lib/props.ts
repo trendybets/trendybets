@@ -2,7 +2,7 @@ import { supabase } from '@/lib/database'
 import type { PlayerProp } from '@/types/props'
 
 export async function getPlayerProps() {
-  const { data, error } = await supabase
+  const { data: rawData, error } = await supabase
     .from('player_props')
     .select(`
       id,
@@ -29,6 +29,12 @@ export async function getPlayerProps() {
     console.error('Error fetching player props:', error)
     throw error
   }
+
+  // Transform the data to match the PlayerProp type
+  const data = rawData.map(item => ({
+    ...item,
+    player: Array.isArray(item.player) ? item.player[0] : item.player
+  }))
 
   return data as PlayerProp[]
 } 
