@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/supabase"
+import { serverEnv } from "@/lib/env"
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -64,8 +65,20 @@ interface APIResponse {
   data: APIFixture[]
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   console.log("API route called")
+  
+  // Add authentication for cron jobs
+  const apiToken = request.headers.get('api-token');
+  
+  // For production, you should use a secure comparison method and store this in an environment variable
+  if (apiToken !== serverEnv.CRON_API_TOKEN) {
+    console.error('Unauthorized access attempt to sync-fixtures');
+    return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
   
   try {
     const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY)
