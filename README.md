@@ -133,7 +133,7 @@ You can manually trigger these sync functions by sending a POST request to the r
 
 ```bash
 curl -X POST https://your-domain.com/api/sync-player-history \
-  -H "api-token: your-secure-api-token"
+  -H "api-token: 2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0="
 ```
 
 ### Environment Variables
@@ -141,7 +141,7 @@ curl -X POST https://your-domain.com/api/sync-player-history \
 To configure the sync process, add the following to your `.env.local` file:
 
 ```
-CRON_API_TOKEN=your-secure-api-token
+CRON_API_TOKEN=2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0=
 ```
 
 ### Vercel Configuration

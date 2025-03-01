@@ -13,7 +13,7 @@ if (typeof window !== 'undefined') {
 export const serverEnv = {
   SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
   OPTIC_ODDS_API_KEY: process.env.OPTIC_ODDS_API_KEY || '',
-  CRON_API_TOKEN: process.env.CRON_API_TOKEN || 'your-secure-api-token'
+  CRON_API_TOKEN: process.env.CRON_API_TOKEN || '2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0='
 }
 
 // Validate client environment variables
