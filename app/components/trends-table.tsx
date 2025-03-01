@@ -51,12 +51,21 @@ const getOpponentTeam = (player: Player, nextGame: NextGame | undefined) => {
 }
 
 export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMore }: TrendsTableProps) {
+  // Default to Last 5 Games for initial load
   const [timeframe, setTimeframe] = useState('L5')
   const [statType, setStatType] = useState('All Props')
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerData | null>(null)
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
+  
+  // Log the data we're receiving
+  useEffect(() => {
+    if (data && data.length > 0) {
+      console.log(`TrendsTable received ${data.length} players`);
+      console.log(`Sample player games count: ${data[0].games?.length || 0}`);
+    }
+  }, [data]);
   
   // Set up intersection observer for infinite scrolling
   useEffect(() => {
@@ -83,6 +92,14 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
     };
   }, [hasMore, onLoadMore, isLoading]);
   
+  // Helper function to get timeframe number
+  const getTimeframeNumber = (tf: string) => {
+    if (tf === 'L5') return 5;
+    if (tf === 'L10') return 10;
+    if (tf === 'L20') return 20;
+    return 20; // Default to 20 if unknown
+  }
+
   // Helper function to get the correct stat value
   const getStatValue = (game: GameStats, statType: string) => {
     switch (statType.toLowerCase()) {
@@ -152,7 +169,7 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
 
   const filteredAndSortedData = useMemo(() => {
     let filtered = [...data]
-    const timeframeNumber = parseInt(timeframe.substring(1))
+    const timeframeNumber = getTimeframeNumber(timeframe)
     
     // Filter by stat type
     if (statType !== 'All Props') {
@@ -187,7 +204,7 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
       header: 'TREND',
       cell: (info) => {
         const row = info.row.original
-        const timeframeNumber = parseInt(timeframe.substring(1))
+        const timeframeNumber = getTimeframeNumber(timeframe)
         const stats = calculateHits(row, timeframeNumber)
         
         // Get relevant game info
@@ -204,12 +221,15 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
         // Check if we're on a mobile device
         const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
+        // Debug log to check what data we have
+        console.log(`Player: ${info.getValue().name}, Timeframe: ${timeframe}, Games available: ${row.games?.length || 0}, Showing: ${recentGames.length}`);
+
         return (
           <div className="flex flex-col md:flex-row md:items-center w-full">
             {/* Top row for mobile - Player info and hit rate */}
-            <div className="flex justify-between items-center w-full md:w-auto">
+            <div className="flex justify-between items-center w-full md:w-auto md:min-w-[280px] md:mr-4">
               {/* Player Image and Info */}
-              <div className="flex items-center">
+              <div className="flex items-center w-full">
                 {/* Player Image */}
                 <div className="relative mr-2 md:mr-3">
                   <img 
@@ -232,10 +252,10 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                 </div>
                 
                 {/* Player Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-col md:flex-row md:items-center md:space-x-1">
-                    <span className="font-medium text-sm md:text-base text-gray-900 truncate">{info.getValue().name}</span>
-                    <span className="text-xs text-gray-500">{info.getValue().position} • {info.getValue().team}</span>
+                <div className="flex-1 min-w-0 md:min-w-[240px]">
+                  <div className="flex flex-col md:flex-row md:items-baseline md:space-x-1">
+                    <span className="font-medium text-sm md:text-base text-gray-900 truncate max-w-[180px] md:max-w-full">{info.getValue().name}</span>
+                    <span className="text-xs text-gray-500 truncate max-w-[180px] md:max-w-full">{info.getValue().position} • {info.getValue().team}</span>
                   </div>
                 </div>
               </div>
@@ -276,8 +296,8 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
 
               <div className="flex items-center justify-between mt-1 md:mt-0">
                 {/* Performance Indicators - Smaller circles with dynamic count */}
-                <div className="flex items-center flex-wrap gap-1 max-w-[150px] md:max-w-[300px] md:mr-6">
-                  {recentGames.slice(0, isMobile ? 5 : timeframeNumber).map((game, i) => {
+                <div className="flex items-center flex-wrap gap-1 max-w-[150px] md:max-w-[450px] md:mr-6">
+                  {recentGames.map((game, i) => {
                     const value = getStatValue(game, row.stat_type)
                     const isHit = stats.direction === 'MORE' ? value > row.line : value < row.line
                     

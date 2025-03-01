@@ -362,7 +362,7 @@ export async function GET(request: Request) {
                 date: fixture.start_date,
               },
               trend_strength: parseFloat((Math.abs((playerStats.last5 - odd.points) / odd.points)).toFixed(3)) || 0,
-              games: gameStats.slice(0, 10).map(stat => { // Limit game history to 10 games
+              games: gameStats.slice(0, 20).map(stat => { // Increase limit to 20 games for Last 20 filter
                 const gameData = {
                   points: 0,
                   assists: 0,

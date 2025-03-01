@@ -1,32 +1,29 @@
 import { PlayerData } from '../types'
 import { serverEnv } from "@/lib/env"
 
-export async function fetchPlayerOdds(limit?: number): Promise<PlayerData[]> {
-  // Build the URL with query parameters
-  const url = new URL('/api/odds', window.location.origin);
-  if (limit) {
-    url.searchParams.append('limit', limit.toString());
-  }
-  
-  const response = await fetch(url.toString())
-  
-  if (!response.ok) {
-    const errorData = await response.json()
-    throw new Error(errorData.error || 'Failed to fetch player odds')
-  }
-
-  const responseData = await response.json()
-  
-  // Handle the new response format with data and meta fields
-  if (responseData.data && Array.isArray(responseData.data)) {
-    console.log('API meta information:', responseData.meta);
-    return responseData.data;
-  } else if (Array.isArray(responseData)) {
-    // Fallback for old API format
-    return responseData;
-  } else {
-    console.error('Unexpected API response:', responseData)
-    throw new Error('Invalid response format from API')
+export async function fetchPlayerOdds(fixtureLimit = 2): Promise<PlayerData[]> {
+  try {
+    console.log(`Fetching player odds with fixture limit: ${fixtureLimit}`);
+    const response = await fetch(`/api/odds?limit=${fixtureLimit}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch player odds: ${response.status} ${response.statusText}`);
+    }
+    
+    const responseData = await response.json();
+    const playerData = responseData.data || [];
+    
+    console.log(`Received ${playerData.length} player odds entries`);
+    
+    // Log a sample player to check the games data
+    if (playerData.length > 0) {
+      console.log(`Sample player games count: ${playerData[0].games?.length || 0}`);
+    }
+    
+    return playerData;
+  } catch (error) {
+    console.error('Error in fetchPlayerOdds:', error);
+    throw error;
   }
 }
 

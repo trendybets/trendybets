@@ -35,6 +35,19 @@ export default function TrendyPropsView() {
         setErrorDetails(null)
         const odds = await fetchPlayerOdds(fixtureLimit)
         console.log('Fetched odds:', odds) // Debug log
+        
+        // Check if we have games data and how many games per player
+        if (odds && odds.length > 0) {
+          const gamesCounts = odds.map(player => player.games?.length || 0);
+          console.log('Games per player:', gamesCounts);
+          // Add safety check before using spread operator
+          if (gamesCounts.length > 0) {
+            console.log('Max games available:', Math.max(...gamesCounts));
+          } else {
+            console.log('No games data available');
+          }
+        }
+        
         setPlayerOdds(odds || [])
         // If we got data back, assume there might be more
         setHasMore(odds && odds.length > 0)
@@ -60,7 +73,8 @@ export default function TrendyPropsView() {
   // Get filtered data
   const filteredData = useMemo(() => {
     console.log('Filtering data from playerOdds:', playerOdds) // Debug log with full data
-    let filtered = [...(playerOdds || [])]
+    // Ensure playerOdds is an array before using spread operator
+    let filtered = Array.isArray(playerOdds) ? [...playerOdds] : [];
 
     // Filter out any items with invalid data
     filtered = filtered.filter(item => {
