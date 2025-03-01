@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       
       try {
         // Call the sync-player-history endpoint for this player
-        const response = await fetch(`${process.env.NEXT_PUBLIC_VERCEL_URL || 'http://localhost:3000'}/api/sync-player-history`, {
+        const response = await fetch(`https://v0-trendy-bets.vercel.app/api/sync-player-history`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
