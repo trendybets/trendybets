@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createClient, SupabaseClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/supabase"
 import { serverEnv } from "@/lib/env"
 
@@ -96,20 +96,20 @@ export async function POST(request: Request) {
     });
   }
 
-  console.log("API route called")
+  // Parse request body to check for player_id parameter
+  let playerIdToProcess: string | null = null;
+  try {
+    const body = await request.json();
+    playerIdToProcess = body.player_id || null;
+  } catch (e) {
+    // No body or invalid JSON, continue with full sync
+  }
+
+  console.log("API route called", playerIdToProcess ? `for player ${playerIdToProcess}` : "for all players");
   const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY)
   const syncStartTime = new Date().toISOString()
   
   try {
-    // Get all active players
-    const { data: players, error: playerError } = await supabase
-      .from("players")
-      .select("id")
-      .eq("is_active", true)
-
-    if (playerError) throw playerError
-    console.log(`Found ${players.length} active players`)
-
     // Get the last sync timestamp with correct column names
     const { data: lastSync } = await supabase
       .from("sync_log")
@@ -133,174 +133,215 @@ export async function POST(request: Request) {
     
     console.log(`Last sync was at: ${lastSyncDate}`)
     
-    let totalHistoryRecords = 0
-    const batchSize = 10 // Process 10 players at a time
+    let totalHistoryRecords = 0;
     
-    // Process players in batches
-    for (let i = 0; i < players.length; i += batchSize) {
-      const batch = players.slice(i, i + batchSize)
-      console.log(`Processing batch ${i / batchSize + 1} of ${Math.ceil(players.length / batchSize)}`)
+    // If a specific player ID is provided, only process that player
+    if (playerIdToProcess) {
+      console.log(`Processing single player: ${playerIdToProcess}`);
+      const playerHistoryCount = await processPlayer(playerIdToProcess, lastSyncDate, supabase);
+      totalHistoryRecords = playerHistoryCount;
       
-      // Process each batch in parallel
-      const batchResults = await Promise.all(batch.map(async (player) => {
-        try {
-          console.log(`Fetching recent history for player ${player.id}...`)
-          
-          // Add start_date parameter to only get games after last sync
-          const apiUrl = `https://api.opticodds.com/api/v3/fixtures/player-results?` + 
-            `player_id=${player.id}` +
-            `&status=completed` +
-            `&start_date=${lastSyncDate}` +
-            `&key=${process.env.OPTIC_ODDS_API_KEY}`
-
-          const response = await fetch(apiUrl)
-          
-          if (!response.ok) {
-            console.error(`Failed to fetch history for player ${player.id}: ${response.statusText}`)
-            return 0
+      // Update sync_log for this specific player
+      await supabase
+        .from("sync_log")
+        .insert([{ 
+          sync_type: "player_history_single",
+          started_at: syncStartTime,
+          completed_at: new Date().toISOString(),
+          status: "completed",
+          last_sync_date: new Date().toISOString(),
+          records_processed: totalHistoryRecords,
+          metadata: {
+            player_id: playerIdToProcess,
+            games_processed: totalHistoryRecords
           }
-          
-          const json: APIResponse = await response.json()
-          
-          if (!json.data?.length) {
-            console.log(`No new games for player ${player.id} since ${lastSyncDate}`)
-            return 0
-          }
-
-          let playerHistoryCount = 0
-
-          // Process each new fixture
-          for (const fixtureData of json.data) {
-            const { fixture, results } = fixtureData
-            
-            // Skip if the game started before our last sync
-            const gameDate = new Date(fixture.start_date)
-            const syncDate = new Date(lastSyncDate)
-            if (gameDate <= syncDate) {
-              console.log(`Skipping game ${fixture.id} as it's before last sync date`)
-              continue
-            }
-            
-            const playerResult = results.find(r => r.player.id === player.id)
-            if (!playerResult) continue
-            
-            const allStats = playerResult.stats.find(s => s.period === 'all')
-            if (!allStats) continue
-
-            // Check if we already have this record
-            const { data: existingRecord } = await supabase
-              .from("player_history")
-              .select("id")
-              .eq("player_id", player.id)
-              .eq("fixture_id", fixture.id)
-              .maybeSingle()
-
-            if (existingRecord) {
-              console.log(`Record already exists for player ${player.id} and fixture ${fixture.id}`)
-              continue
-            }
-
-            // Provide default values for potentially null fields
-            const stats = allStats.stats
-            const historyRecord = {
-              player_id: player.id,
-              fixture_id: fixture.id,
-              game_id: fixture.game_id,
-              start_date: fixture.start_date,
-              fouls: stats.fouls ?? 0,
-              blocks: stats.blocks ?? 0,
-              points: stats.points ?? 0,
-              steals: stats.steals ?? 0,
-              assists: stats.assists ?? 0,
-              minutes: stats.minutes ?? 0,
-              seconds: stats.seconds ?? 0,
-              turnovers: stats.turnovers ?? 0,
-              plus_minus: stats.plus_minus ?? 0,
-              first_basket: stats.first_basket ?? 0,
-              flagrant_fouls: stats.flagrant_fouls ?? 0,
-              total_rebounds: stats.total_rebounds ?? 0,
-              blocks_received: stats.blocks_received ?? 0,
-              technical_fouls: stats.technical_fouls ?? 0,
-              field_goals_made: stats.field_goals_made ?? 0,
-              free_throws_made: stats.free_throws_made ?? 0,
-              first_team_basket: stats.first_team_basket ?? 0,
-              defensive_rebounds: stats.defensive_rebounds ?? 0,
-              offensive_rebounds: stats.offensive_rebounds ?? 0,
-              points_off_turnovers: stats.points_off_turnovers ?? 0,
-              field_goals_attempted: stats.field_goals_attempted ?? 0,
-              free_throws_attempted: stats.free_throws_attempted ?? 0,
-              first_basket_including_ft: stats.first_basket_including_ft ?? 0,
-              two_point_field_goals_made: stats.two_point_field_goals_made ?? 0,
-              three_point_field_goals_made: stats.three_point_field_goals_made ?? 0,
-              first_team_basket_including_ft: stats.first_team_basket_including_ft ?? 0,
-              two_point_field_goals_attempted: stats.two_point_field_goals_attempted ?? 0,
-              three_point_field_goals_attempted: stats.three_point_field_goals_attempted ?? 0,
-              created_at: new Date().toISOString()
-            }
-
-            // Insert the new record
-            const { error: insertError } = await supabase
-              .from("player_history")
-              .insert(historyRecord)
-
-            if (insertError) {
-              console.error(`Error inserting history for player ${player.id}:`, insertError)
-              continue
-            }
-
-            playerHistoryCount++
-          }
-          
-          return playerHistoryCount
-        } catch (error) {
-          console.error(`Error processing player ${player.id}:`, error)
-          return 0
-        }
-      }))
-      
-      // Sum up the records processed in this batch
-      totalHistoryRecords += batchResults.reduce((sum, count) => sum + count, 0)
+        }])
+        .select();
+        
+      return NextResponse.json(
+        { 
+          message: `Synced ${totalHistoryRecords} new history records for player ${playerIdToProcess} since ${lastSyncDate}`,
+          player_id: playerIdToProcess,
+          records: totalHistoryRecords
+        },
+        { status: 200 }
+      );
     }
+    
+    // Otherwise, get all active players and queue them for processing
+    const { data: players, error: playerError } = await supabase
+      .from("players")
+      .select("id")
+      .eq("is_active", true);
 
-    // Update sync_log with correct column names
+    if (playerError) throw playerError;
+    console.log(`Found ${players.length} active players`);
+    
+    // Instead of processing all players, just return the list of players to process
+    // and update the sync_log to indicate we've started the sync process
     await supabase
       .from("sync_log")
       .insert([{ 
-        sync_type: "player_history",
+        sync_type: "player_history_coordinator",
         started_at: syncStartTime,
         completed_at: new Date().toISOString(),
         status: "completed",
         last_sync_date: new Date().toISOString(),
-        records_processed: totalHistoryRecords,
+        records_processed: 0,
         metadata: {
-          games_processed: totalHistoryRecords,
-          players_processed: players.length
+          players_to_process: players.length,
+          last_sync_date: lastSyncDate
         }
       }])
-      .select()
-
+      .select();
+    
     return NextResponse.json(
       { 
-        message: `Synced ${totalHistoryRecords} new history records since ${lastSyncDate}`,
+        message: `Queued ${players.length} players for history sync since ${lastSyncDate}`,
+        players: players.map(p => p.id)
       },
       { status: 200 }
-    )
+    );
   } catch (error) {
     // Add error logging to sync_log
-    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
     
     await supabase
       .from("sync_log")
       .insert([{
-        sync_type: "player_history",
+        sync_type: playerIdToProcess ? "player_history_single" : "player_history",
         started_at: syncStartTime,
         completed_at: new Date().toISOString(),
         status: "error",
         error: errorMessage,
-        records_processed: 0
-      }])
+        records_processed: 0,
+        metadata: playerIdToProcess ? { player_id: playerIdToProcess } : undefined
+      }]);
 
-    console.error("Sync error:", error)
-    return NextResponse.json({ error: errorMessage }, { status: 500 })
+    console.error("Sync error:", error);
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  }
+}
+
+// Helper function to process a single player
+async function processPlayer(
+  playerId: string, 
+  lastSyncDate: string, 
+  supabase: SupabaseClient<Database>
+): Promise<number> {
+  try {
+    console.log(`Fetching recent history for player ${playerId} since ${lastSyncDate}...`);
+    
+    // Add start_date parameter to only get games after last sync
+    const apiUrl = `https://api.opticodds.com/api/v3/fixtures/player-results?` + 
+      `player_id=${playerId}` +
+      `&status=completed` +
+      `&start_date=${lastSyncDate}` +
+      `&key=${process.env.OPTIC_ODDS_API_KEY}`;
+
+    const response = await fetch(apiUrl);
+    
+    if (!response.ok) {
+      console.error(`Failed to fetch history for player ${playerId}: ${response.statusText}`);
+      return 0;
+    }
+    
+    const json = await response.json() as APIResponse;
+    
+    if (!json.data?.length) {
+      console.log(`No new games for player ${playerId} since ${lastSyncDate}`);
+      return 0;
+    }
+
+    let playerHistoryCount = 0;
+
+    // Process each new fixture
+    for (const fixtureData of json.data) {
+      const { fixture, results } = fixtureData;
+      
+      // Skip if the game started before our last sync
+      const gameDate = new Date(fixture.start_date);
+      const syncDate = new Date(lastSyncDate);
+      if (gameDate <= syncDate) {
+        console.log(`Skipping game ${fixture.id} as it's before last sync date`);
+        continue;
+      }
+      
+      const playerResult = results.find(r => r.player.id === playerId);
+      if (!playerResult) continue;
+      
+      const allStats = playerResult.stats.find(s => s.period === 'all');
+      if (!allStats) continue;
+
+      // Check if we already have this record
+      const { data: existingRecord } = await supabase
+        .from("player_history")
+        .select("id")
+        .eq("player_id", playerId)
+        .eq("fixture_id", fixture.id)
+        .maybeSingle();
+
+      if (existingRecord) {
+        console.log(`Record already exists for player ${playerId} and fixture ${fixture.id}`);
+        continue;
+      }
+
+      // Provide default values for potentially null fields
+      const stats = allStats.stats;
+      const historyRecord = {
+        player_id: playerId,
+        fixture_id: fixture.id,
+        game_id: fixture.game_id,
+        start_date: fixture.start_date,
+        fouls: stats.fouls ?? 0,
+        blocks: stats.blocks ?? 0,
+        points: stats.points ?? 0,
+        steals: stats.steals ?? 0,
+        assists: stats.assists ?? 0,
+        minutes: stats.minutes ?? 0,
+        seconds: stats.seconds ?? 0,
+        turnovers: stats.turnovers ?? 0,
+        plus_minus: stats.plus_minus ?? 0,
+        first_basket: stats.first_basket ?? 0,
+        flagrant_fouls: stats.flagrant_fouls ?? 0,
+        total_rebounds: stats.total_rebounds ?? 0,
+        blocks_received: stats.blocks_received ?? 0,
+        technical_fouls: stats.technical_fouls ?? 0,
+        field_goals_made: stats.field_goals_made ?? 0,
+        free_throws_made: stats.free_throws_made ?? 0,
+        first_team_basket: stats.first_team_basket ?? 0,
+        defensive_rebounds: stats.defensive_rebounds ?? 0,
+        offensive_rebounds: stats.offensive_rebounds ?? 0,
+        points_off_turnovers: stats.points_off_turnovers ?? 0,
+        field_goals_attempted: stats.field_goals_attempted ?? 0,
+        free_throws_attempted: stats.free_throws_attempted ?? 0,
+        first_basket_including_ft: stats.first_basket_including_ft ?? 0,
+        two_point_field_goals_made: stats.two_point_field_goals_made ?? 0,
+        three_point_field_goals_made: stats.three_point_field_goals_made ?? 0,
+        first_team_basket_including_ft: stats.first_team_basket_including_ft ?? 0,
+        two_point_field_goals_attempted: stats.two_point_field_goals_attempted ?? 0,
+        three_point_field_goals_attempted: stats.three_point_field_goals_attempted ?? 0,
+        created_at: new Date().toISOString()
+      };
+
+      // Insert the new record
+      const { error: insertError } = await supabase
+        .from("player_history")
+        .insert(historyRecord);
+
+      if (insertError) {
+        console.error(`Error inserting history for player ${playerId}:`, insertError);
+        continue;
+      }
+
+      playerHistoryCount++;
+      console.log(`Added new history record for player ${playerId}, fixture ${fixture.id}`);
+    }
+    
+    console.log(`Completed sync for player ${playerId}: ${playerHistoryCount} new records`);
+    return playerHistoryCount;
+  } catch (error) {
+    console.error(`Error processing player ${playerId}:`, error);
+    return 0;
   }
 } 
