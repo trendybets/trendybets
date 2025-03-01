@@ -24,6 +24,13 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 This project is automatically deployed to Vercel when changes are pushed to the main branch.
 
+### Vercel Pro Features
+
+This project utilizes Vercel Pro features for more frequent cron job execution:
+- Player history sync: Every 6 hours
+- Fixtures completed sync: Every 12 hours
+- Predictions: Every 6 hours, 30 minutes after sync
+
 ## Environment Variables
 
 Create a `.env.local` file in the root directory with the following variables:
@@ -123,11 +130,7 @@ The following sync functions are available:
    - Updates the `fixtures_completed` table with completed game results
    - Runs every 12 hours
 
-3. **Player Odds Sync** (`/api/sync-player-odds`):
-   - Updates the `player_odds` table with the latest odds from sportsbooks
-   - Runs every 3 hours
-
-4. **Run Predictions** (`/api/run-predictions`):
+3. **Run Predictions** (`/api/run-predictions`):
    - Executes the prediction algorithm to generate new player prop predictions
    - Runs every 6 hours, 30 minutes after data sync
 
@@ -136,9 +139,6 @@ The following sync functions are available:
 You can manually trigger the sync functions using curl:
 
 ```bash
-# Sync all odds
-curl -X POST https://your-domain.com/api/sync-odds -H "api-token: 2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0="
-
 # Sync player history (all players - may timeout)
 curl -X POST https://your-domain.com/api/sync-player-history -H "api-token: 2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0="
 
