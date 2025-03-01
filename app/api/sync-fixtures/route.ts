@@ -145,12 +145,15 @@ export async function POST(request: Request) {
     }
 
     // Fetch new fixtures from API
-    const apiUrl = `https://api.opticodds.com/api/v3/fixtures/active?sport=basketball&league=nba&key=${process.env.OPTIC_ODDS_API_KEY}`
-    console.log("Fetching from API...")
+    const apiUrl = `https://api.opticodds.com/api/v3/fixtures/active?sport=basketball&league=nba&key=${serverEnv.OPTIC_ODDS_API_KEY}`
+    console.log("Fetching from API URL:", apiUrl.replace(serverEnv.OPTIC_ODDS_API_KEY, 'API_KEY_HIDDEN'))
+    console.log("Using API key:", serverEnv.OPTIC_ODDS_API_KEY ? 'API key is set' : 'API key is missing')
     
     const response = await fetch(apiUrl)
     if (!response.ok) {
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`)
+      const errorText = await response.text()
+      console.error(`API request failed: ${response.status} ${response.statusText}`, errorText)
+      throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`)
     }
     
     const json: APIResponse = await response.json()
@@ -216,7 +219,11 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Sync error:", error)
     return NextResponse.json(
-      { error: "Sync failed" },
+      { 
+        error: "Sync failed", 
+        details: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      },
       { status: 500 }
     )
   }
