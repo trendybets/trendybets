@@ -89,12 +89,52 @@ export async function POST(request: Request) {
       SUPABASE_SERVICE_KEY_length: SUPABASE_SERVICE_KEY?.length,
     })
     
+    // Test direct connectivity to Supabase
+    console.log("Testing direct connectivity to Supabase...")
+    try {
+      const testResponse = await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${SUPABASE_SERVICE_KEY}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`
+        },
+        cache: 'no-store',
+      });
+      
+      console.log("Direct connectivity test result:", {
+        status: testResponse.status,
+        statusText: testResponse.statusText,
+        ok: testResponse.ok
+      });
+      
+      if (!testResponse.ok) {
+        const errorText = await testResponse.text();
+        console.error("Direct connectivity test error:", errorText);
+      }
+    } catch (connectError) {
+      console.error("Direct connectivity test failed:", connectError);
+    }
+    
     console.log("Creating Supabase client...")
     const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
-      }
+      },
+      global: {
+        fetch: (url, options) => {
+          console.log(`Supabase fetch to: ${url.toString().split('?')[0]}`);
+          return fetch(url, {
+            ...options,
+            cache: 'no-store',
+            headers: {
+              ...options?.headers,
+              'Content-Type': 'application/json',
+            },
+          });
+        },
+      },
     })
     console.log("Supabase client created")
 
