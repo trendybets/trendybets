@@ -108,6 +108,7 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
       case 'assists':
         return game.assists
       case 'rebounds':
+      case 'total_rebounds':
         return game.total_rebounds
       default:
         return 0
@@ -173,9 +174,14 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
     
     // Filter by stat type
     if (statType !== 'All Props') {
-      filtered = filtered.filter(item => 
-        item.stat_type.toLowerCase() === statType.toLowerCase()
-      )
+      filtered = filtered.filter(item => {
+        // Handle both 'rebounds' and 'total_rebounds'
+        if (statType.toLowerCase() === 'rebounds') {
+          return item.stat_type.toLowerCase() === 'rebounds' || 
+                 item.stat_type.toLowerCase() === 'total_rebounds';
+        }
+        return item.stat_type.toLowerCase() === statType.toLowerCase();
+      });
     }
     
     // Apply search filter

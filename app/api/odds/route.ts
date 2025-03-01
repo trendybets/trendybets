@@ -378,6 +378,7 @@ export async function GET(request: Request) {
                     gameData.assists = stat
                     break
                   case 'rebounds':
+                  case 'total_rebounds': // Add this case to handle both formats
                     gameData.total_rebounds = stat
                     break
                 }

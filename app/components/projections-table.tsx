@@ -118,7 +118,8 @@ export function ProjectionsTable({ data, hasMore = false, onLoadMore, isLoading 
     const customProjection = customProjections.find(
       cp => cp.player_name.toLowerCase() === playerName && 
            (cp.stat_type.toLowerCase() === statType || 
-            (statType === 'rebounds' && cp.stat_type.toLowerCase() === 'total_rebounds'))
+            (statType === 'rebounds' && cp.stat_type.toLowerCase() === 'total_rebounds') ||
+            (statType === 'total_rebounds' && cp.stat_type.toLowerCase() === 'rebounds'))
     );
 
     if (customProjection) {
@@ -201,7 +202,10 @@ export function ProjectionsTable({ data, hasMore = false, onLoadMore, isLoading 
       // Handle special case for rebounds
       if (normalizedSelectedType === 'rebounds') {
         return normalizedStatType === 'rebounds' || 
-               (p.projection.originalStatType && p.projection.originalStatType.toLowerCase() === 'total_rebounds');
+               normalizedStatType === 'total_rebounds' ||
+               (p.projection.originalStatType && 
+                (p.projection.originalStatType.toLowerCase() === 'total_rebounds' || 
+                 p.projection.originalStatType.toLowerCase() === 'rebounds'));
       }
       
       return normalizedStatType === normalizedSelectedType;
