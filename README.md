@@ -129,11 +129,20 @@ The following sync functions are available:
 
 ### Manual Triggering
 
-You can manually trigger these sync functions by sending a POST request to the respective API endpoint with the appropriate API token:
+You can manually trigger the sync functions using curl:
 
 ```bash
-curl -X POST https://your-domain.com/api/sync-player-history \
-  -H "api-token: 2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0="
+# Sync all odds
+curl -X POST https://your-domain.com/api/sync-odds -H "api-token: 2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0="
+
+# Sync player history (all players - may timeout)
+curl -X POST https://your-domain.com/api/sync-player-history -H "api-token: 2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0="
+
+# Sync player history for a specific player
+curl -X POST https://your-domain.com/api/sync-player-history -H "api-token: 2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0=" -H "Content-Type: application/json" -d '{"player_id": 123}'
+
+# Sync player history in batches (recommended to avoid timeouts)
+curl -X POST https://your-domain.com/api/sync-coordinator -H "api-token: 2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0="
 ```
 
 ### Environment Variables
