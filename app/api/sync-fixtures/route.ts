@@ -3,6 +3,9 @@ import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/supabase"
 import { serverEnv } from "@/lib/env"
 
+// NOTE: For this to work reliably in Vercel, add the following environment variable:
+// NODE_OPTIONS="--no-experimental-fetch"
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
@@ -65,6 +68,22 @@ interface APIResponse {
   data: APIFixture[]
 }
 
+// Helper function to retry failed operations
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  retries = 3,
+  delay = 1000
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (retries <= 0) throw error;
+    console.log(`Operation failed, retrying in ${delay}ms... (${retries} retries left)`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+    return withRetry(operation, retries - 1, delay * 1.5);
+  }
+}
+
 export async function POST(request: Request) {
   console.log("API route called")
   
@@ -87,33 +106,39 @@ export async function POST(request: Request) {
       SUPABASE_SERVICE_KEY_set: !!SUPABASE_SERVICE_KEY,
       SUPABASE_URL_length: SUPABASE_URL?.length,
       SUPABASE_SERVICE_KEY_length: SUPABASE_SERVICE_KEY?.length,
+      NODE_OPTIONS: process.env.NODE_OPTIONS || 'not set'
     })
     
-    // Test direct connectivity to Supabase
+    // Test direct connectivity to Supabase with retry
     console.log("Testing direct connectivity to Supabase...")
     try {
-      const testResponse = await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${SUPABASE_SERVICE_KEY}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_SERVICE_KEY,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`
-        },
-        cache: 'no-store',
+      await withRetry(async () => {
+        const testResponse = await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${SUPABASE_SERVICE_KEY}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_SERVICE_KEY,
+            'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`
+          },
+          cache: 'no-store',
+        });
+        
+        console.log("Direct connectivity test result:", {
+          status: testResponse.status,
+          statusText: testResponse.statusText,
+          ok: testResponse.ok
+        });
+        
+        if (!testResponse.ok) {
+          const errorText = await testResponse.text();
+          console.error("Direct connectivity test error:", errorText);
+          throw new Error(`Direct connectivity test failed: ${testResponse.status} ${testResponse.statusText}`);
+        }
+        
+        return testResponse;
       });
-      
-      console.log("Direct connectivity test result:", {
-        status: testResponse.status,
-        statusText: testResponse.statusText,
-        ok: testResponse.ok
-      });
-      
-      if (!testResponse.ok) {
-        const errorText = await testResponse.text();
-        console.error("Direct connectivity test error:", errorText);
-      }
     } catch (connectError) {
-      console.error("Direct connectivity test failed:", connectError);
+      console.error("Direct connectivity test failed after retries:", connectError);
     }
     
     console.log("Creating Supabase client...")
@@ -141,10 +166,12 @@ export async function POST(request: Request) {
     // First, verify we can access the table
     console.log("Attempting to access fixtures table...")
     try {
-      const { data: tableCheck, error: tableError } = await supabase
-        .from("fixtures")
-        .select("id")
-        .limit(1)
+      const { data: tableCheck, error: tableError } = await withRetry(async () => {
+        return await supabase
+          .from("fixtures")
+          .select("id")
+          .limit(1);
+      });
 
       if (tableError) {
         console.error("Table check error:", tableError)
@@ -158,10 +185,12 @@ export async function POST(request: Request) {
     }
 
     // Get IDs of unplayed fixtures
-    const { data: unplayedFixtures, error: fetchError } = await supabase
-      .from("fixtures")
-      .select("id")
-      .eq('status', 'unplayed')
+    const { data: unplayedFixtures, error: fetchError } = await withRetry(async () => {
+      return await supabase
+        .from("fixtures")
+        .select("id")
+        .eq('status', 'unplayed');
+    });
 
     if (fetchError) {
       console.error("Error fetching unplayed fixtures:", fetchError)
@@ -172,10 +201,12 @@ export async function POST(request: Request) {
       const fixtureIds = unplayedFixtures.map(f => f.id)
 
       // First delete related odds
-      const { error: oddsDeleteError } = await supabase
-        .from("odds")
-        .delete()
-        .in('fixture_id', fixtureIds)
+      const { error: oddsDeleteError } = await withRetry(async () => {
+        return await supabase
+          .from("odds")
+          .delete()
+          .in('fixture_id', fixtureIds);
+      });
 
       if (oddsDeleteError) {
         console.error("Error deleting related odds:", oddsDeleteError)
@@ -183,10 +214,12 @@ export async function POST(request: Request) {
       }
 
       // Then delete related player odds
-      const { error: playerOddsDeleteError } = await supabase
-        .from("player_odds")
-        .delete()
-        .in('fixture_id', fixtureIds)
+      const { error: playerOddsDeleteError } = await withRetry(async () => {
+        return await supabase
+          .from("player_odds")
+          .delete()
+          .in('fixture_id', fixtureIds);
+      });
 
       if (playerOddsDeleteError) {
         console.error("Error deleting related player odds:", playerOddsDeleteError)
@@ -194,10 +227,12 @@ export async function POST(request: Request) {
       }
 
       // Finally delete the fixtures
-      const { error: fixturesDeleteError } = await supabase
-        .from("fixtures")
-        .delete()
-        .in('id', fixtureIds)
+      const { error: fixturesDeleteError } = await withRetry(async () => {
+        return await supabase
+          .from("fixtures")
+          .delete()
+          .in('id', fixtureIds);
+      });
 
       if (fixturesDeleteError) {
         console.error("Error deleting fixtures:", fixturesDeleteError)
@@ -205,24 +240,34 @@ export async function POST(request: Request) {
       }
     }
 
-    // Fetch new fixtures from API
+    // Fetch new fixtures from API with retry
     const apiUrl = `https://api.opticodds.com/api/v3/fixtures/active?sport=basketball&league=nba&key=${serverEnv.OPTIC_ODDS_API_KEY}`
     console.log("Fetching from API URL:", apiUrl.replace(serverEnv.OPTIC_ODDS_API_KEY, 'API_KEY_HIDDEN'))
     console.log("Using API key:", serverEnv.OPTIC_ODDS_API_KEY ? 'API key is set' : 'API key is missing')
     
-    const response = await fetch(apiUrl)
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`API request failed: ${response.status} ${response.statusText}`, errorText)
-      throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`)
-    }
+    const response = await withRetry(async () => {
+      const res = await fetch(apiUrl, {
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error(`API request failed: ${res.status} ${res.statusText}`, errorText);
+        throw new Error(`API request failed: ${res.status} ${res.statusText} - ${errorText}`);
+      }
+      
+      return res;
+    });
     
-    const json: APIResponse = await response.json()
+    const json: APIResponse = await response.json();
     if (!json.data || !Array.isArray(json.data)) {
-      throw new Error("Invalid API response format")
+      throw new Error("Invalid API response format");
     }
 
-    console.log(`Fetched ${json.data.length} fixtures`)
+    console.log(`Fetched ${json.data.length} fixtures`);
     
     // Map the fixtures to match our schema
     const fixturesToUpsert = json.data.map(fixture => ({
@@ -242,33 +287,37 @@ export async function POST(request: Request) {
       status: 'unplayed',
       is_live: fixture.is_live || false,
       created_at: new Date().toISOString()
-    }))
+    }));
 
-    console.log('Sample fixture to upsert:', fixturesToUpsert[0])
+    console.log('Sample fixture to upsert:', fixturesToUpsert[0]);
 
-    // Upsert new fixtures
-    const { data, error } = await supabase
-      .from("fixtures")
-      .upsert(fixturesToUpsert, {
-        onConflict: 'id',
-        ignoreDuplicates: false
-      })
-      .select()
+    // Upsert new fixtures with retry
+    const { data, error } = await withRetry(async () => {
+      return await supabase
+        .from("fixtures")
+        .upsert(fixturesToUpsert, {
+          onConflict: 'id',
+          ignoreDuplicates: false
+        })
+        .select();
+    });
 
     if (error) {
-      console.error("Database error:", error)
-      throw error
+      console.error("Database error:", error);
+      throw error;
     }
 
-    // Log sync completion
-    await supabase
-      .from("sync_log")
-      .insert([{
-        sync_type: 'fixtures',
-        success_count: fixturesToUpsert.length,
-        error_count: 0,
-        completed_at: new Date().toISOString()
-      }])
+    // Log sync completion with retry
+    await withRetry(async () => {
+      return await supabase
+        .from("sync_log")
+        .insert([{
+          sync_type: 'fixtures',
+          success_count: fixturesToUpsert.length,
+          error_count: 0,
+          completed_at: new Date().toISOString()
+        }]);
+    });
 
     return NextResponse.json(
       { 
@@ -276,7 +325,7 @@ export async function POST(request: Request) {
         example: data?.[0]
       },
       { status: 200 }
-    )
+    );
   } catch (error) {
     console.error("Sync error:", error)
     return NextResponse.json(
