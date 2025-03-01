@@ -126,7 +126,9 @@ export async function POST(request: Request) {
           params: {
             apikey: SUPABASE_SERVICE_KEY
           },
-          timeout: 10000 // 10 second timeout
+          timeout: 10000, // 10 second timeout
+          // Force IPv4
+          family: 4
         });
         
         console.log("Direct connectivity test result:", {
@@ -138,6 +140,35 @@ export async function POST(request: Request) {
       });
     } catch (connectError) {
       console.error("Direct connectivity test failed after retries:", connectError);
+      
+      // Try a fallback approach with node-fetch if available
+      try {
+        console.log("Attempting fallback connectivity test with node-fetch...");
+        const nodeFetch = await import('node-fetch').catch(() => null);
+        
+        if (nodeFetch) {
+          const fetchResponse = await nodeFetch.default(`${SUPABASE_URL}/rest/v1/`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': SUPABASE_SERVICE_KEY,
+              'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+              'Accept-Encoding': 'gzip, deflate',
+              'Connection': 'keep-alive'
+            }
+          });
+          
+          console.log("Fallback connectivity test result:", {
+            status: fetchResponse.status,
+            statusText: fetchResponse.statusText
+          });
+        } else {
+          console.log("node-fetch not available for fallback test");
+        }
+      } catch (fallbackError) {
+        console.error("Fallback connectivity test also failed:", fallbackError);
+      }
+      
       // Continue anyway, as the Supabase client might still work
     }
     
@@ -146,6 +177,21 @@ export async function POST(request: Request) {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
+      },
+      // Add custom fetch implementation with DNS resolution options
+      global: {
+        fetch: (url, options) => {
+          console.log(`Fetching URL: ${url.toString().replace(/apikey=[^&]+/, 'apikey=REDACTED')}`);
+          return fetch(url, {
+            ...options,
+            // Force IPv4 DNS resolution
+            headers: {
+              ...options?.headers,
+              'Accept-Encoding': 'gzip, deflate',
+              'Connection': 'keep-alive'
+            }
+          });
+        }
       }
     })
     console.log("Supabase client created")
@@ -242,9 +288,13 @@ export async function POST(request: Request) {
           key: serverEnv.OPTIC_ODDS_API_KEY
         },
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept-Encoding': 'gzip, deflate',
+          'Connection': 'keep-alive'
         },
-        timeout: 10000 // 10 second timeout
+        timeout: 15000, // 15 second timeout
+        // Force IPv4
+        family: 4
       });
       
       if (res.status !== 200) {

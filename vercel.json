@@ -16,5 +16,16 @@
       "path": "/api/run-predictions",
       "schedule": "30 */6 * * *"
     }
-  ]
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Connection", "value": "keep-alive" }
+      ]
+    }
+  ],
+  "env": {
+    "NODE_OPTIONS": "--dns-result-order=ipv4first"
+  }
 } 
