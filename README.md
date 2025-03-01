@@ -156,3 +156,32 @@ CRON_API_TOKEN=2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0=
 ### Vercel Configuration
 
 The cron jobs are configured in the `vercel.json` file at the root of the project.
+
+## GitHub Pages Deployment
+
+This project can also be deployed to GitHub Pages using GitHub Actions. The deployment workflow is configured in `.github/workflows/deploy.yml`.
+
+### Required Secrets
+
+For GitHub Pages deployment to work correctly, you need to add the following secrets to your GitHub repository:
+
+1. Go to your GitHub repository
+2. Navigate to Settings > Secrets and variables > Actions
+3. Add the following secrets:
+   - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase URL
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous key
+   - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
+   - `OPTIC_ODDS_API_KEY`: Your Optic Odds API key
+   - `CRON_API_TOKEN`: Your cron API token
+
+### Triggering Deployment
+
+The deployment will automatically trigger when you push changes to the `main` branch. You can also manually trigger the deployment:
+
+1. Go to the "Actions" tab in your GitHub repository
+2. Select the "Deploy to GitHub Pages" workflow
+3. Click "Run workflow" and select the main branch
+
+### Accessing the Deployed Site
+
+Once deployed, your site will be available at `https://[your-username].github.io/[repository-name]/`.
