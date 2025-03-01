@@ -139,6 +139,9 @@ export default function SyncPage() {
     try {
       const response = await fetch("/api/sync-fixtures", {
         method: "POST",
+        headers: {
+          "api-token": "2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0="
+        }
       })
       const data = await response.json()
 
