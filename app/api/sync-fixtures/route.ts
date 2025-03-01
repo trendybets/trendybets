@@ -81,20 +81,41 @@ export async function POST(request: Request) {
   }
   
   try {
-    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    // Log environment variables (without revealing full values)
+    console.log("Environment check:", {
+      SUPABASE_URL_set: !!SUPABASE_URL,
+      SUPABASE_SERVICE_KEY_set: !!SUPABASE_SERVICE_KEY,
+      SUPABASE_URL_length: SUPABASE_URL?.length,
+      SUPABASE_SERVICE_KEY_length: SUPABASE_SERVICE_KEY?.length,
+    })
+    
+    console.log("Creating Supabase client...")
+    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      }
+    })
+    console.log("Supabase client created")
 
     // First, verify we can access the table
-    const { data: tableCheck, error: tableError } = await supabase
-      .from("fixtures")
-      .select("id")
-      .limit(1)
+    console.log("Attempting to access fixtures table...")
+    try {
+      const { data: tableCheck, error: tableError } = await supabase
+        .from("fixtures")
+        .select("id")
+        .limit(1)
 
-    if (tableError) {
-      console.error("Table check error:", tableError)
-      throw new Error(`Failed to access fixtures table: ${tableError.message}`)
+      if (tableError) {
+        console.error("Table check error:", tableError)
+        throw new Error(`Failed to access fixtures table: ${tableError.message}`)
+      }
+
+      console.log("Table check successful", tableCheck)
+    } catch (tableAccessError) {
+      console.error("Error during table access:", tableAccessError)
+      throw new Error(`Table access error: ${tableAccessError instanceof Error ? tableAccessError.message : String(tableAccessError)}`)
     }
-
-    console.log("Table check successful")
 
     // Get IDs of unplayed fixtures
     const { data: unplayedFixtures, error: fetchError } = await supabase
