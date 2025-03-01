@@ -56,12 +56,20 @@ jobs:
         run: |
           echo "NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" >> .env.local
           echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" >> .env.local
+          echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env.local
+          echo "OPTIC_ODDS_API_KEY=${{ secrets.OPTIC_ODDS_API_KEY }}" >> .env.local
+          echo "CRON_API_TOKEN=${{ secrets.CRON_API_TOKEN }}" >> .env.local
           echo "NEXT_PUBLIC_GITHUB_PAGES=true" >> .env.local
       
       - name: Build with Next.js
         run: npm run build
         env:
           NEXT_PUBLIC_GITHUB_PAGES: 'true'
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPTIC_ODDS_API_KEY: ${{ secrets.OPTIC_ODDS_API_KEY }}
+          CRON_API_TOKEN: ${{ secrets.CRON_API_TOKEN }}
       
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v2
