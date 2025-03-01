@@ -20,6 +20,10 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Deployment
+
+This project is automatically deployed to Vercel when changes are pushed to the main branch.
+
 ## Environment Variables
 
 Create a `.env.local` file in the root directory with the following variables:
