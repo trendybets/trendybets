@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/supabase"
 import { serverEnv } from "@/lib/env"
+import axios from 'axios'
 
 // NOTE: For this to work reliably in Vercel, add the following environment variables:
 // NODE_OPTIONS="--dns-result-order=ipv4first"
@@ -110,36 +111,34 @@ export async function POST(request: Request) {
       NODE_OPTIONS: process.env.NODE_OPTIONS || 'not set'
     })
     
-    // Test direct connectivity to Supabase with retry
-    console.log("Testing direct connectivity to Supabase...")
+    // Test direct connectivity to Supabase with retry using axios instead of fetch
+    console.log("Testing direct connectivity to Supabase with axios...")
     try {
       await withRetry(async () => {
-        const testResponse = await fetch(`${SUPABASE_URL}/rest/v1/?apikey=${SUPABASE_SERVICE_KEY}`, {
+        const testResponse = await axios({
           method: 'GET',
+          url: `${SUPABASE_URL}/rest/v1/`,
           headers: {
             'Content-Type': 'application/json',
             'apikey': SUPABASE_SERVICE_KEY,
             'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`
           },
-          cache: 'no-store',
+          params: {
+            apikey: SUPABASE_SERVICE_KEY
+          },
+          timeout: 10000 // 10 second timeout
         });
         
         console.log("Direct connectivity test result:", {
           status: testResponse.status,
-          statusText: testResponse.statusText,
-          ok: testResponse.ok
+          statusText: testResponse.statusText
         });
-        
-        if (!testResponse.ok) {
-          const errorText = await testResponse.text();
-          console.error("Direct connectivity test error:", errorText);
-          throw new Error(`Direct connectivity test failed: ${testResponse.status} ${testResponse.statusText}`);
-        }
         
         return testResponse;
       });
     } catch (connectError) {
       console.error("Direct connectivity test failed after retries:", connectError);
+      // Continue anyway, as the Supabase client might still work
     }
     
     console.log("Creating Supabase client...")
@@ -147,20 +146,7 @@ export async function POST(request: Request) {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
-      },
-      global: {
-        fetch: (url, options) => {
-          console.log(`Supabase fetch to: ${url.toString().split('?')[0]}`);
-          return fetch(url, {
-            ...options,
-            cache: 'no-store',
-            headers: {
-              ...options?.headers,
-              'Content-Type': 'application/json',
-            },
-          });
-        },
-      },
+      }
     })
     console.log("Supabase client created")
 
@@ -241,29 +227,35 @@ export async function POST(request: Request) {
       }
     }
 
-    // Fetch new fixtures from API with retry
-    const apiUrl = `https://api.opticodds.com/api/v3/fixtures/active?sport=basketball&league=nba&key=${serverEnv.OPTIC_ODDS_API_KEY}`
-    console.log("Fetching from API URL:", apiUrl.replace(serverEnv.OPTIC_ODDS_API_KEY, 'API_KEY_HIDDEN'))
+    // Fetch new fixtures from API with retry using axios
+    const apiUrl = `https://api.opticodds.com/api/v3/fixtures/active`
+    console.log("Fetching from API URL with axios:", apiUrl)
     console.log("Using API key:", serverEnv.OPTIC_ODDS_API_KEY ? 'API key is set' : 'API key is missing')
     
     const response = await withRetry(async () => {
-      const res = await fetch(apiUrl, {
-        cache: 'no-store',
-        headers: {
-          'Content-Type': 'application/json',
+      const res = await axios({
+        method: 'GET',
+        url: apiUrl,
+        params: {
+          sport: 'basketball',
+          league: 'nba',
+          key: serverEnv.OPTIC_ODDS_API_KEY
         },
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000 // 10 second timeout
       });
       
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error(`API request failed: ${res.status} ${res.statusText}`, errorText);
-        throw new Error(`API request failed: ${res.status} ${res.statusText} - ${errorText}`);
+      if (res.status !== 200) {
+        console.error(`API request failed: ${res.status} ${res.statusText}`);
+        throw new Error(`API request failed: ${res.status} ${res.statusText}`);
       }
       
       return res;
     });
     
-    const json: APIResponse = await response.json();
+    const json: APIResponse = response.data;
     if (!json.data || !Array.isArray(json.data)) {
       throw new Error("Invalid API response format");
     }
