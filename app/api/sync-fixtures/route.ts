@@ -3,8 +3,9 @@ import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/supabase"
 import { serverEnv } from "@/lib/env"
 
-// NOTE: For this to work reliably in Vercel, add the following environment variable:
-// NODE_OPTIONS="--no-experimental-fetch"
+// NOTE: For this to work reliably in Vercel, add the following environment variables:
+// NODE_OPTIONS="--dns-result-order=ipv4first"
+// VERCEL_FORCE_NO_BUILD_CACHE=1 (only needed once to clear build cache)
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
