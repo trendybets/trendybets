@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { serverEnv } from "@/lib/env"
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
     const apiToken = request.headers.get('api-token');
     
     // For production, you should use a secure comparison method and store this in an environment variable
-    if (apiToken !== 'YOUR_SECRET_API_TOKEN') {
+    if (apiToken !== serverEnv.CRON_API_TOKEN) {
       return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },
@@ -111,11 +112,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Verify this is a legitimate CRON request
-    // For enhanced security, you should implement proper authentication here
     const apiToken = request.headers.get('api-token');
     
     // For production, use a secure comparison method
-    if (apiToken !== 'YOUR_SECRET_API_TOKEN') {
+    if (apiToken !== serverEnv.CRON_API_TOKEN) {
+      console.error('Unauthorized access attempt to run-predictions');
       return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },

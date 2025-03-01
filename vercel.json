@@ -1,0 +1,20 @@
+{
+  "crons": [
+    {
+      "path": "/api/sync-player-history",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/sync-fixtures-completed",
+      "schedule": "0 */12 * * *"
+    },
+    {
+      "path": "/api/sync-player-odds",
+      "schedule": "0 */3 * * *"
+    },
+    {
+      "path": "/api/run-predictions",
+      "schedule": "30 */6 * * *"
+    }
+  ]
+} 

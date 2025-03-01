@@ -11,8 +11,9 @@ if (typeof window !== 'undefined') {
 
 // Server-side environment variables (only available in API routes and server components)
 export const serverEnv = {
-  SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
-  OPTIC_ODDS_API_KEY: process.env.OPTIC_ODDS_API_KEY ?? '',
+  SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  OPTIC_ODDS_API_KEY: process.env.OPTIC_ODDS_API_KEY || '',
+  CRON_API_TOKEN: process.env.CRON_API_TOKEN || 'your-secure-api-token'
 }
 
 // Validate client environment variables

@@ -102,3 +102,48 @@ Both methods will:
 - Create profiles for any existing users
 
 After running this SQL, the signup process should work correctly.
+
+## Automated Data Synchronization
+
+This project uses automated data synchronization to keep the database updated with the latest NBA player statistics, game fixtures, and odds. The sync process is handled by several API routes that are automatically triggered by Vercel cron jobs.
+
+### Sync Functions
+
+The following sync functions are available:
+
+1. **Player History Sync** (`/api/sync-player-history`):
+   - Updates the `player_history` table with new game statistics
+   - Runs every 6 hours
+
+2. **Completed Fixtures Sync** (`/api/sync-fixtures-completed`):
+   - Updates the `fixtures_completed` table with completed game results
+   - Runs every 12 hours
+
+3. **Player Odds Sync** (`/api/sync-player-odds`):
+   - Updates the `player_odds` table with the latest odds from sportsbooks
+   - Runs every 3 hours
+
+4. **Run Predictions** (`/api/run-predictions`):
+   - Executes the prediction algorithm to generate new player prop predictions
+   - Runs every 6 hours, 30 minutes after data sync
+
+### Manual Triggering
+
+You can manually trigger these sync functions by sending a POST request to the respective API endpoint with the appropriate API token:
+
+```bash
+curl -X POST https://your-domain.com/api/sync-player-history \
+  -H "api-token: your-secure-api-token"
+```
+
+### Environment Variables
+
+To configure the sync process, add the following to your `.env.local` file:
+
+```
+CRON_API_TOKEN=your-secure-api-token
+```
+
+### Vercel Configuration
+
+The cron jobs are configured in the `vercel.json` file at the root of the project.

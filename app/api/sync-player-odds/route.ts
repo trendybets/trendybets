@@ -6,6 +6,9 @@ import { serverEnv } from "@/lib/env"
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabase = createClient<Database>(SUPABASE_URL, serverEnv.SUPABASE_SERVICE_KEY)
 
+// Add this line to tell Next.js this is a dynamic route
+export const dynamic = 'force-dynamic'
+
 // Add cache with 30-second TTL
 const cache = new Map<string, { data: any, timestamp: number }>()
 const CACHE_TTL = 30 * 1000 // 30 seconds
@@ -66,7 +69,19 @@ async function fetchFixtureOdds(fixtureIds: string[]) {
   return data.data
 }
 
-export async function POST() {
+export async function POST(request: Request) {
+  // Add authentication for cron jobs
+  const apiToken = request.headers.get('api-token');
+  
+  // For production, you should use a secure comparison method and store this in an environment variable
+  if (apiToken !== serverEnv.CRON_API_TOKEN) {
+    console.error('Unauthorized access attempt to sync-player-odds');
+    return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     // First get all players with their team_ids
     const { data: players, error: playersError } = await supabase

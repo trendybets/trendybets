@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/supabase"
+import { serverEnv } from "@/lib/env"
 
 const SUPABASE_URL = 'https://hvegilvwwvdmivnphlyo.supabase.co'
 const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2ZWdpbHZ3d3ZkbWl2bnBobHlvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczOTY1NjgxNCwiZXhwIjoyMDU1MjMyODE0fQ.6GV2B4ciNiMGOnnRXOMznwD1aNqYUQmHxuuWrdc3U44'
+
+// Add this line to tell Next.js this is a dynamic route
+export const dynamic = 'force-dynamic'
 
 interface Stats {
   fouls: number
@@ -79,7 +83,19 @@ interface APIResponse {
   data: FixtureData[]
 }
 
-export async function POST() {
+export async function POST(request: Request) {
+  // Add authentication for cron jobs
+  const apiToken = request.headers.get('api-token');
+  
+  // For production, you should use a secure comparison method and store this in an environment variable
+  if (apiToken !== serverEnv.CRON_API_TOKEN) {
+    console.error('Unauthorized access attempt to sync-player-history');
+    return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   console.log("API route called")
   const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY)
   const syncStartTime = new Date().toISOString()
