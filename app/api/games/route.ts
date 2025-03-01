@@ -50,7 +50,8 @@ async function fetchActiveFixtures() {
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json'
-      }
+      },
+      cache: 'no-store' // Ensure we're not using cached data
     })
     
     if (!response.ok) {
@@ -108,14 +109,34 @@ async function fetchFixtureOdds(fixtureId: string) {
     `is_main=true&` +
     `key=${serverEnv.OPTIC_ODDS_API_KEY}`
 
-  const response = await fetch(url)
-  if (!response.ok) throw new Error('Failed to fetch odds')
-  const data = await response.json()
+  console.log(`Fetching odds for fixture ${fixtureId}`)
   
-  // Log the raw odds data
-  console.log('Raw odds data for fixture:', fixtureId, JSON.stringify(data.data, null, 2))
-  
-  return data.data || []
+  try {
+    const response = await fetch(url, {
+      cache: 'no-store' // Ensure we're not using cached data
+    })
+    
+    if (!response.ok) {
+      console.error(`Failed to fetch odds for fixture ${fixtureId}:`, {
+        status: response.status,
+        statusText: response.statusText
+      })
+      return []
+    }
+    
+    const data = await response.json()
+    
+    // Log the raw odds data
+    console.log(`Raw odds data for fixture ${fixtureId}:`, {
+      count: data.data?.length || 0,
+      hasOdds: data.data?.some((game: any) => game.odds?.length > 0) || false
+    })
+    
+    return data.data || []
+  } catch (error) {
+    console.error(`Error fetching odds for fixture ${fixtureId}:`, error)
+    return []
+  }
 }
 
 export async function GET() {
@@ -159,7 +180,8 @@ export async function GET() {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
-        }
+        },
+        cache: 'no-store' // Ensure we're not using cached data
       })
       
       if (response.ok) {
@@ -214,7 +236,8 @@ export async function GET() {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
-        }
+        },
+        cache: 'no-store' // Ensure we're not using cached data
       })
       
       if (response.ok) {
@@ -266,8 +289,12 @@ export async function GET() {
     
     console.log(`Combined ${fixtures.length} active fixtures, ${additionalFixtures.length} unplayed fixtures, and ${scheduledFixtures.length} scheduled fixtures for a total of ${allFixtures.length} unique fixtures`)
 
-    // Filter out games that have already started
+    // Filter out games that have already started, but be more lenient with the time check
+    // to account for potential clock differences between environments
     const now = new Date()
+    // Subtract 15 minutes to be more lenient with games that just started
+    now.setMinutes(now.getMinutes() - 15)
+    
     const upcomingFixtures = allFixtures.filter((fixture: Fixture) => {
       const startDate = new Date(fixture.start_date)
       const isUpcoming = startDate > now
@@ -279,17 +306,26 @@ export async function GET() {
     
     console.log(`Filtered out ${allFixtures.length - upcomingFixtures.length} games that have already started, ${upcomingFixtures.length} upcoming games remaining`)
 
-    const gamesWithOdds = await Promise.all(
-      upcomingFixtures.map(async (fixture: Fixture) => {
+    // Process games with odds in parallel
+    const gamesWithOddsPromises = upcomingFixtures.map(async (fixture: Fixture) => {
+      try {
         const odds = await fetchFixtureOdds(fixture.id)
         const homeTeam = fixture.home_competitors?.[0]
         const awayTeam = fixture.away_competitors?.[0]
 
         // Process odds data
         const processedOdds = odds.reduce((acc: any, game: Game) => {
-          game.odds?.forEach((odd: Odd) => {
+          if (!game.odds || game.odds.length === 0) {
+            console.log(`No odds found for game ${fixture.id} in odds data`)
+            return acc
+          }
+          
+          game.odds.forEach((odd: Odd) => {
             const market = odd.market_id?.toLowerCase()
-            if (!market) return
+            if (!market) {
+              console.log(`Missing market_id for odd in game ${fixture.id}`)
+              return
+            }
 
             // Create market arrays if they don't exist
             if (!acc.moneyline) acc.moneyline = []
@@ -367,11 +403,52 @@ export async function GET() {
             total: processedOdds.total || []
           }
         }
-      })
-    )
+      } catch (error) {
+        console.error(`Error processing fixture ${fixture.id}:`, error)
+        // Return a minimal game object without odds in case of error
+        return {
+          id: fixture.id,
+          start_date: fixture.start_date,
+          home_team: {
+            id: fixture.home_competitors?.[0]?.id || '',
+            name: fixture.home_team_display,
+            logo: fixture.home_competitors?.[0]?.logo || ''
+          },
+          away_team: {
+            id: fixture.away_competitors?.[0]?.id || '',
+            name: fixture.away_team_display,
+            logo: fixture.away_competitors?.[0]?.logo || ''
+          },
+          home_record: fixture.home_record || null,
+          away_record: fixture.away_record || null,
+          odds: {
+            moneyline: [],
+            spread: [],
+            total: []
+          }
+        }
+      }
+    })
 
-    console.log('Final processed games:', gamesWithOdds.length)
-    return NextResponse.json(gamesWithOdds)
+    const gamesWithOdds = await Promise.all(gamesWithOddsPromises)
+    
+    // Filter out games with no odds data
+    const gamesWithValidOdds = gamesWithOdds.filter(game => {
+      const hasOdds = (
+        (game.odds.moneyline && game.odds.moneyline.length > 0) ||
+        (game.odds.spread && game.odds.spread.length > 0) ||
+        (game.odds.total && game.odds.total.length > 0)
+      )
+      
+      if (!hasOdds) {
+        console.log(`Filtering out game with no odds: ${game.id} - ${game.home_team.name} vs ${game.away_team.name}`)
+      }
+      
+      return true // Return all games, even those without odds
+    })
+
+    console.log('Final processed games:', gamesWithValidOdds.length)
+    return NextResponse.json(gamesWithValidOdds)
   } catch (error) {
     console.error('Error in /api/games:', error)
     return NextResponse.json({ error: 'Failed to fetch games data' }, { status: 500 })

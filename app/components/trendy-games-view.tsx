@@ -281,18 +281,26 @@ export default function TrendyGamesView() {
       
       // Add cache-busting query parameter
       const timestamp = new Date().getTime()
+      console.log('Fetching games data with timestamp:', timestamp)
+      
       const data = await fetch('/api/games?t=' + timestamp, { 
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
-        }
+        },
+        cache: 'no-store' // Ensure we're not using cached data
       }).then(res => {
         if (!res.ok) {
-          throw new Error('Failed to fetch games')
+          console.error('Failed to fetch games:', {
+            status: res.status,
+            statusText: res.statusText
+          })
+          throw new Error(`Failed to fetch games: ${res.status} ${res.statusText}`)
         }
         return res.json()
       })
       
+      // Log detailed information about the fetched games
       console.log('Games data fetched:', {
         timestamp: new Date().toISOString(),
         count: data.length,
@@ -302,9 +310,27 @@ export default function TrendyGamesView() {
           start_date: game.start_date,
           normalized_date: normalizeDate(game.start_date),
           home: game.home_team.name,
-          away: game.away_team.name
+          away: game.away_team.name,
+          hasOdds: {
+            moneyline: (game.odds?.moneyline?.length || 0) > 0,
+            spread: (game.odds?.spread?.length || 0) > 0,
+            total: (game.odds?.total?.length || 0) > 0
+          }
         }))
       })
+      
+      // Check if we have any games with odds
+      const gamesWithOdds = data.filter((game: any) => 
+        (game.odds?.moneyline?.length || 0) > 0 || 
+        (game.odds?.spread?.length || 0) > 0 || 
+        (game.odds?.total?.length || 0) > 0
+      )
+      
+      console.log(`Found ${gamesWithOdds.length} games with odds out of ${data.length} total games`)
+      
+      if (gamesWithOdds.length === 0 && data.length > 0) {
+        console.warn('No games have odds data! This might indicate an API issue.')
+      }
       
       setGames(data)
       setLastUpdated(new Date())
@@ -380,8 +406,9 @@ export default function TrendyGamesView() {
     return upcomingGames
   }, [games, selectedDate])
 
-  // Function to manually refresh data
+  // Add a function to manually refresh the data
   const handleRefresh = () => {
+    console.log('Manual refresh triggered')
     loadGamesData()
   }
 
@@ -759,6 +786,17 @@ function OddsTable({
     return record || 'N/A';
   };
 
+  // Log the fixtures we're processing
+  console.log('Processing fixtures for OddsTable:', {
+    count: fixtures.length,
+    fixtureIds: fixtures.map(f => f.id),
+    fixturesWithOdds: fixtures.filter(f => 
+      (f.odds?.moneyline && f.odds.moneyline.length > 0) || 
+      (f.odds?.spread && f.odds.spread.length > 0) || 
+      (f.odds?.total && f.odds.total.length > 0)
+    ).length
+  });
+
   const tableData = useMemo(() => 
     fixtures.map(fixture => {
       // Find best spread for each team across all sportsbooks
@@ -772,6 +810,8 @@ function OddsTable({
       // Log available sportsbooks for debugging
       console.log('Available sportsbooks for game:', {
         gameId: fixture.id,
+        homeTeam: fixture.home_team.name,
+        awayTeam: fixture.away_team.name,
         spreads: fixture.odds?.spread?.map(o => o.sportsbook) || [],
         moneylines: fixture.odds?.moneyline?.map(o => o.sportsbook) || [],
         totals: fixture.odds?.total?.map(o => o.sportsbook) || []
@@ -781,7 +821,7 @@ function OddsTable({
       // 1. For favorites (negative points): The smallest negative number (closest to 0)
       // 2. For underdogs (positive points): The largest positive number
       // If points are equal, take the better price
-      const bestHomeSpread = homeSpreadOdds.reduce((best, current) => {
+      const bestHomeSpread = homeSpreadOdds.length > 0 ? homeSpreadOdds.reduce((best, current) => {
         if (!best) return current
         // If both are favorites (negative points)
         if (current.points < 0 && best.points < 0) {
@@ -797,9 +837,9 @@ function OddsTable({
         }
         // If mixed, prefer the better price
         return current.price > best.price ? current : best
-      }, null as any)
+      }, homeSpreadOdds[0]) : null;
 
-      const bestAwaySpread = awaySpreadOdds.reduce((best, current) => {
+      const bestAwaySpread = awaySpreadOdds.length > 0 ? awaySpreadOdds.reduce((best, current) => {
         if (!best) return current
         if (current.points < 0 && best.points < 0) {
           return current.points > best.points ? current : 
@@ -812,7 +852,7 @@ function OddsTable({
                  best
         }
         return current.price > best.price ? current : best
-      }, null as any)
+      }, awaySpreadOdds[0]) : null;
 
       // Find best moneyline for each team across all sportsbooks
       const homeMoneylineOdds = fixture.odds?.moneyline?.filter(odd => 
@@ -823,10 +863,10 @@ function OddsTable({
       ) || []
 
       // Find best moneyline by comparing prices
-      const bestHomeMoneyline = homeMoneylineOdds.reduce((best, current) => 
-        !best || current.price > best.price ? current : best, null as any)
-      const bestAwayMoneyline = awayMoneylineOdds.reduce((best, current) => 
-        !best || current.price > best.price ? current : best, null as any)
+      const bestHomeMoneyline = homeMoneylineOdds.length > 0 ? homeMoneylineOdds.reduce((best, current) => 
+        !best || current.price > best.price ? current : best, homeMoneylineOdds[0]) : null;
+      const bestAwayMoneyline = awayMoneylineOdds.length > 0 ? awayMoneylineOdds.reduce((best, current) => 
+        !best || current.price > best.price ? current : best, awayMoneylineOdds[0]) : null;
 
       // Find best totals across all sportsbooks
       const overOdds = fixture.odds?.total?.filter(odd => 
@@ -841,21 +881,21 @@ function OddsTable({
       // For totals, we want:
       // 1. For overs: The lowest points with the best price
       // 2. For unders: The highest points with the best price
-      const bestOver = overOdds.reduce((best, current) => {
+      const bestOver = overOdds.length > 0 ? overOdds.reduce((best, current) => {
         if (!best) return current
         if (current.points === best.points) {
           return current.price > best.price ? current : best
         }
         return current.points < best.points ? current : best
-      }, null as any)
+      }, overOdds[0]) : null;
 
-      const bestUnder = underOdds.reduce((best, current) => {
+      const bestUnder = underOdds.length > 0 ? underOdds.reduce((best, current) => {
         if (!best) return current
         if (current.points === best.points) {
           return current.price > best.price ? current : best
         }
         return current.points > best.points ? current : best
-      }, null as any)
+      }, underOdds[0]) : null;
 
       // Add debug logging for odds selection
       console.log('Best odds found:', {
