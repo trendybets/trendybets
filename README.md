@@ -29,6 +29,7 @@ This project is automatically deployed to Vercel when changes are pushed to the 
 This project utilizes Vercel Pro features for more frequent cron job execution:
 - Player history sync: Every 6 hours
 - Fixtures completed sync: Every 12 hours
+- Fixtures sync: Every 4 hours
 - Predictions: Every 6 hours, 30 minutes after sync
 
 ## Environment Variables
@@ -130,7 +131,11 @@ The following sync functions are available:
    - Updates the `fixtures_completed` table with completed game results
    - Runs every 12 hours
 
-3. **Run Predictions** (`/api/run-predictions`):
+3. **Fixtures Sync** (`/api/sync-fixtures`):
+   - Updates the `fixtures` table with upcoming game information
+   - Runs every 4 hours
+
+4. **Run Predictions** (`/api/run-predictions`):
    - Executes the prediction algorithm to generate new player prop predictions
    - Runs every 6 hours, 30 minutes after data sync
 
@@ -147,6 +152,9 @@ curl -X POST https://your-domain.com/api/sync-player-history -H "api-token: 2b6t
 
 # Sync player history in batches (recommended to avoid timeouts)
 curl -X POST https://your-domain.com/api/sync-coordinator -H "api-token: 2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0="
+
+# Sync fixtures (upcoming games)
+curl -X POST https://your-domain.com/api/sync-fixtures -H "api-token: 2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0="
 ```
 
 ### Environment Variables
