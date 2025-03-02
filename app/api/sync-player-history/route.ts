@@ -10,8 +10,8 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 // Add this line to tell Next.js this is a dynamic route
 export const dynamic = 'force-dynamic'
 
-// Increase the execution duration to 10 minutes (600 seconds)
-export const maxDuration = 600
+// Increase the execution duration to 5 minutes (300 seconds)
+export const maxDuration = 300
 
 // Helper function to retry failed operations
 async function withRetry<T>(
@@ -313,8 +313,8 @@ export async function POST(request: Request) {
       if (!workerMode && playersToProcess.length > 20) {
         console.log("Spawning workers to process players in parallel");
         
-        // Create worker batches (20 players per worker)
-        const workerSize = 20;
+        // Create worker batches (10 players per worker)
+        const workerSize = 10;
         const workerPromises = [];
         
         for (let i = 0; i < players.length; i += workerSize) {
