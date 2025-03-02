@@ -10,8 +10,8 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 // Add this line to tell Next.js this is a dynamic route
 export const dynamic = 'force-dynamic'
 
-// Increase the execution duration to 5 minutes (300 seconds)
-export const maxDuration = 300
+// Increase the execution duration to 10 minutes (600 seconds)
+export const maxDuration = 600
 
 // Helper function to retry failed operations
 async function withRetry<T>(
@@ -119,16 +119,24 @@ export async function POST(request: Request) {
   // Parse request body to check for player_id parameter and limit parameter
   let playerIdToProcess: string | null = null;
   let playerLimit: number | null = null;
+  let workerMode: boolean = false;
+  let startIndex: number = 0;
+  let endIndex: number = 0;
+  
   try {
     const body = await request.json();
     playerIdToProcess = body.player_id || null;
     playerLimit = body.limit ? parseInt(body.limit, 10) : null;
+    workerMode = body.worker_mode === true;
+    startIndex = body.start_index ? parseInt(body.start_index, 10) : 0;
+    endIndex = body.end_index ? parseInt(body.end_index, 10) : 0;
   } catch (e) {
     // No body or invalid JSON, continue with full sync
   }
 
   console.log("API route called", 
     playerIdToProcess ? `for player ${playerIdToProcess}` : 
+    workerMode ? `as worker for players ${startIndex}-${endIndex}` :
     playerLimit ? `for up to ${playerLimit} players` : "for all players"
   );
   
@@ -288,15 +296,94 @@ export async function POST(request: Request) {
 
     if (playerError) throw playerError;
     
-    // Apply limit if specified
-    const playersToProcess = playerLimit && playerLimit > 0 && playerLimit < players.length 
-      ? players.slice(0, playerLimit) 
-      : players;
+    // If in worker mode, only process the specified range of players
+    let playersToProcess = players;
     
-    console.log(`Found ${players.length} active players, processing ${playersToProcess.length}`);
+    if (workerMode && startIndex >= 0 && endIndex > startIndex && endIndex <= players.length) {
+      playersToProcess = players.slice(startIndex, endIndex);
+      console.log(`Worker mode: Processing players ${startIndex} to ${endIndex-1} (${playersToProcess.length} players)`);
+    } else if (playerLimit && playerLimit > 0 && playerLimit < players.length) {
+      // Apply limit if specified
+      playersToProcess = players.slice(0, playerLimit);
+      console.log(`Found ${players.length} active players, processing ${playersToProcess.length}`);
+    } else {
+      console.log(`Found ${players.length} active players`);
+      
+      // If not in worker mode and processing all players, spawn workers instead
+      if (!workerMode && playersToProcess.length > 20) {
+        console.log("Spawning workers to process players in parallel");
+        
+        // Create worker batches (20 players per worker)
+        const workerSize = 20;
+        const workerPromises = [];
+        
+        for (let i = 0; i < players.length; i += workerSize) {
+          const end = Math.min(i + workerSize, players.length);
+          console.log(`Creating worker for players ${i} to ${end-1}`);
+          
+          // Make a request to this same endpoint but in worker mode
+          const workerPromise = axios({
+            method: 'POST',
+            url: request.url,
+            headers: {
+              'Content-Type': 'application/json',
+              'api-token': serverEnv.CRON_API_TOKEN
+            },
+            data: {
+              worker_mode: true,
+              start_index: i,
+              end_index: end
+            }
+          }).catch(error => {
+            console.error(`Worker for players ${i}-${end-1} failed:`, error.message);
+            return { data: { records_processed: 0 } };
+          });
+          
+          workerPromises.push(workerPromise);
+        }
+        
+        console.log(`Waiting for ${workerPromises.length} workers to complete...`);
+        const workerResults = await Promise.all(workerPromises);
+        
+        // Sum up the total records processed by all workers
+        const totalProcessedRecords = workerResults.reduce((sum, result) => {
+          return sum + (result.data?.records_processed || 0);
+        }, 0);
+        
+        // Update the sync_log to indicate we've completed the sync process
+        await withRetry(async () => {
+          return await supabase
+            .from("sync_log")
+            .insert([{ 
+              sync_type: "player_history",
+              started_at: syncStartTime,
+              completed_at: new Date().toISOString(),
+              status: "completed",
+              last_sync_date: new Date().toISOString(),
+              records_processed: totalProcessedRecords,
+              metadata: {
+                players_processed: players.length,
+                workers_used: workerPromises.length,
+                last_sync_date: lastSyncDate
+              }
+            }])
+            .select();
+        });
+        
+        return NextResponse.json(
+          { 
+            message: `Processed ${players.length} players using ${workerPromises.length} workers since ${lastSyncDate}`,
+            players_processed: players.length,
+            workers_used: workerPromises.length,
+            records_processed: totalProcessedRecords
+          },
+          { status: 200 }
+        );
+      }
+    }
     
-    // Process all players in batches
-    const batchSize = 5; // Process 5 players at a time (reduced from 10)
+    // Process players in batches
+    const batchSize = 5; // Process 5 players at a time
     let totalProcessedRecords = 0;
     
     // Create batches of players
@@ -325,8 +412,8 @@ export async function POST(request: Request) {
       
       // Add a small delay between batches to avoid rate limiting
       if (batchIndex < batches.length - 1) {
-        console.log(`Waiting 3 seconds before processing next batch...`);
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        console.log(`Waiting 1 second before processing next batch...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
     
@@ -335,14 +422,15 @@ export async function POST(request: Request) {
       return await supabase
         .from("sync_log")
         .insert([{ 
-          sync_type: "player_history",
+          sync_type: workerMode ? "player_history_worker" : "player_history",
           started_at: syncStartTime,
           completed_at: new Date().toISOString(),
           status: "completed",
           last_sync_date: new Date().toISOString(),
           records_processed: totalProcessedRecords,
           metadata: {
-            players_processed: players.length,
+            players_processed: playersToProcess.length,
+            worker_range: workerMode ? `${startIndex}-${endIndex}` : undefined,
             last_sync_date: lastSyncDate
           }
         }])
@@ -351,8 +439,8 @@ export async function POST(request: Request) {
     
     return NextResponse.json(
       { 
-        message: `Processed ${players.length} players for history sync since ${lastSyncDate}`,
-        players_processed: players.length,
+        message: `Processed ${playersToProcess.length} players for history sync since ${lastSyncDate}`,
+        players_processed: playersToProcess.length,
         records_processed: totalProcessedRecords
       },
       { status: 200 }
@@ -389,6 +477,9 @@ async function processPlayer(
   try {
     console.log(`[Player ${playerId}] Starting processing since ${lastSyncDate}...`);
     
+    // Format the date for the API request (YYYY-MM-DD)
+    const formattedDate = new Date(lastSyncDate).toISOString().split('T')[0];
+    
     // Add start_date parameter to only get games after last sync
     const apiUrl = `https://api.opticodds.com/api/v3/fixtures/player-results`;
     
@@ -396,14 +487,14 @@ async function processPlayer(
     
     const response = await withRetry(async () => {
       try {
-        console.log(`[Player ${playerId}] Making API request with params: player_id=${playerId}, status=completed, start_date=${lastSyncDate}`);
+        console.log(`[Player ${playerId}] Making API request with params: player_id=${playerId}, status=completed, start_date=${formattedDate}`);
         const res = await axios({
           method: 'GET',
           url: apiUrl,
           params: {
             player_id: playerId,
             status: 'completed',
-            start_date: lastSyncDate,
+            start_date: formattedDate, // Use the formatted date
             key: serverEnv.OPTIC_ODDS_API_KEY
           },
           headers: {
@@ -444,14 +535,14 @@ async function processPlayer(
 
     console.log(`[Player ${playerId}] Found ${json.data.length} fixtures to process`);
     let playerHistoryCount = 0;
-
+    const syncDate = new Date(lastSyncDate);
+    
     // Process each new fixture
     for (const fixtureData of json.data) {
       const { fixture, results } = fixtureData;
       
       // Skip if the game started before our last sync
       const gameDate = new Date(fixture.start_date);
-      const syncDate = new Date(lastSyncDate);
       if (gameDate <= syncDate) {
         console.log(`[Player ${playerId}] Skipping game ${fixture.id} as it's before last sync date`);
         continue;
@@ -469,14 +560,13 @@ async function processPlayer(
         continue;
       }
 
-      // Check if we already have this record
-      const { data: existingRecord, error: checkError } = await withRetry(async () => {
+      // Check if we already have this record - use a more efficient query
+      const { data: existingRecords, error: checkError } = await withRetry(async () => {
         return await supabase
           .from("player_history")
           .select("id")
           .eq("player_id", playerId)
-          .eq("fixture_id", fixture.id)
-          .maybeSingle();
+          .eq("fixture_id", fixture.id);
       });
 
       if (checkError) {
@@ -484,7 +574,7 @@ async function processPlayer(
         continue;
       }
 
-      if (existingRecord) {
+      if (existingRecords && existingRecords.length > 0) {
         console.log(`[Player ${playerId}] Record already exists for fixture ${fixture.id}`);
         continue;
       }
