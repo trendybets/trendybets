@@ -64,8 +64,34 @@ export async function GET(request: NextRequest) {
       OPTIC_API_KEY_set: !!env.OPTIC_ODDS_API_KEY
     });
 
-    // Execute the Python script
-    const python = spawn('python', args, { env });
+    // Try different Python executable names (python3 is more likely to exist on Vercel)
+    const pythonExecutables = ['python3', 'python'];
+    let python;
+    let executableUsed;
+    
+    for (const executable of pythonExecutables) {
+      try {
+        console.log(`Attempting to spawn Python process with executable: ${executable}`);
+        python = spawn(executable, args, { env });
+        executableUsed = executable;
+        break;
+      } catch (error) {
+        console.error(`Failed to spawn with ${executable}:`, error);
+        // Continue to the next executable if this one fails
+      }
+    }
+    
+    if (!python) {
+      console.error('All Python executable attempts failed');
+      return new NextResponse(JSON.stringify({ 
+        error: 'Failed to start Python process. No Python executable found.',
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    
+    console.log(`Successfully spawned Python process using: ${executableUsed}`);
     
     let output = '';
     let errorOutput = '';
