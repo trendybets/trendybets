@@ -41,30 +41,43 @@ async function withRetry<T>(
 
 async function fetchPage(page: number) {
   // Add end_date parameter to only get games up to today
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
   
   // Get start_date for 3 days ago to focus on recent games
   const threeDaysAgo = new Date();
   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
   const recentDate = threeDaysAgo.toISOString().split('T')[0];
   
-  console.log(`Fetching page ${page} of completed fixtures from ${recentDate} to ${today}...`);
+  console.log(`Fetching page ${page} of completed fixtures from ${recentDate} to ${todayStr}...`);
+  
+  // Use 2024 for the season year (2024-2025 NBA season)
+  const seasonYear = '2024';
+  console.log(`Using season year: ${seasonYear} for the 2024-2025 NBA season`);
+  console.log(`Looking for games with dates in 2025 (${recentDate} to ${todayStr})`);
   
   return await withRetry(async () => {
+    const params = {
+      sport: 'basketball',
+      league: 'nba',
+      page: page,
+      season_year: seasonYear,
+      season_type: 'regular season',
+      status: 'completed',
+      start_date: recentDate, // Only get recent games
+      end_date: todayStr,
+      key: process.env.OPTIC_ODDS_API_KEY
+    };
+    
+    console.log('API request params:', JSON.stringify({
+      ...params,
+      key: '[REDACTED]'
+    }, null, 2));
+    
     const res = await axios({
       method: 'GET',
       url: 'https://api.opticodds.com/api/v3/fixtures',
-      params: {
-        sport: 'basketball',
-        league: 'nba',
-        page: page,
-        season_year: '2024',
-        season_type: 'regular season',
-        status: 'completed',
-        start_date: recentDate, // Only get recent games
-        end_date: today,
-        key: process.env.OPTIC_ODDS_API_KEY
-      },
+      params,
       headers: {
         'Content-Type': 'application/json',
         'Accept-Encoding': 'gzip, deflate',
@@ -80,6 +93,9 @@ async function fetchPage(page: number) {
       console.error(`API request failed: ${res.status} ${res.statusText}`);
       throw new Error(`API request failed: ${res.status} ${res.statusText}`);
     }
+    
+    // Log the response data structure
+    console.log(`API response structure: ${res.data ? 'has data' : 'no data'}, ${res.data?.data ? `data array length: ${res.data.data.length}` : 'no data array'}`);
     
     return res.data;
   });
@@ -137,9 +153,11 @@ export async function POST(request: Request) {
       threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
       const recentDate = threeDaysAgo.toISOString();
       
+      console.log(`Checking for fixtures since ${recentDate}`);
+      
       const { data: existingFixtures, error: checkError } = await supabase
         .from("fixtures_completed")
-        .select("id")
+        .select("id, start_date")
         .gte("start_date", recentDate)
         .limit(100);
       
@@ -147,6 +165,11 @@ export async function POST(request: Request) {
         console.error("Error checking existing fixtures:", checkError);
       } else {
         console.log(`Found ${existingFixtures?.length || 0} existing recent fixtures`);
+        
+        // Log a few of the existing fixtures to verify dates
+        if (existingFixtures && existingFixtures.length > 0) {
+          console.log("Sample existing fixtures:", existingFixtures.slice(0, 3).map(f => ({ id: f.id, start_date: f.start_date })));
+        }
         
         // If we already have a significant number of recent fixtures, we can limit our sync
         if (existingFixtures && existingFixtures.length > 30) {
