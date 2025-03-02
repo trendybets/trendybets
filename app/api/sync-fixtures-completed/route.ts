@@ -248,8 +248,8 @@ export async function POST(request: Request) {
         numerical_id: fixture.numerical_id,
         game_id: fixture.game_id,
         start_date: fixture.start_date,
-        home_team_id: fixture.home_competitors[0]?.id,
-        away_team_id: fixture.away_competitors[0]?.id,
+        home_competitors: fixture.home_competitors,
+        away_competitors: fixture.away_competitors,
         home_team_display: fixture.home_team_display,
         away_team_display: fixture.away_team_display,
         status: fixture.status,
@@ -267,8 +267,8 @@ export async function POST(request: Request) {
         away_score_q2: fixture.result?.scores?.away?.periods?.period_2 ?? 0,
         away_score_q3: fixture.result?.scores?.away?.periods?.period_3 ?? 0,
         away_score_q4: fixture.result?.scores?.away?.periods?.period_4 ?? 0,
-        // Store the result as a JSON string instead of a complex object
-        result_json: JSON.stringify(fixture.result),
+        // Store the result object directly instead of as a JSON string
+        result: fixture.result,
         season_type: fixture.season_type || '',
         season_year: fixture.season_year || '',
         season_week: fixture.season_week || '',
