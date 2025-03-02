@@ -1,7 +1,7 @@
 import { PlayerData } from '../types'
 import { serverEnv } from "@/lib/env"
 
-export async function fetchPlayerOdds(fixtureLimit = 2): Promise<PlayerData[]> {
+export async function fetchPlayerOdds(fixtureLimit = 10): Promise<PlayerData[]> {
   try {
     console.log(`Fetching player odds with fixture limit: ${fixtureLimit}`);
     const response = await fetch(`/api/odds?limit=${fixtureLimit}`);
@@ -18,6 +18,16 @@ export async function fetchPlayerOdds(fixtureLimit = 2): Promise<PlayerData[]> {
     // Log a sample player to check the games data
     if (playerData.length > 0) {
       console.log(`Sample player games count: ${playerData[0].games?.length || 0}`);
+      
+      // Log unique fixtures to help debug
+      const fixtures = new Set();
+      playerData.forEach((player: PlayerData) => {
+        if (player.next_game && player.next_game.opponent) {
+          fixtures.add(`${player.player.team} vs ${player.next_game.opponent}`);
+        }
+      });
+      
+      console.log('Unique fixtures found:', Array.from(fixtures));
     }
     
     return playerData;

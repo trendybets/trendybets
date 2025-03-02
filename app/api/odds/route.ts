@@ -222,6 +222,7 @@ export async function GET(request: Request) {
     // Limit the number of fixtures to process
     const limitedFixtures = fixtureId ? fixtures : fixtures.slice(0, limit);
     console.log(`Processing ${limitedFixtures.length} fixtures out of ${fixtures.length} total fixtures`);
+    console.log('Fixtures to process:', limitedFixtures.map((f: any) => `${f.id}: ${f.home_team} vs ${f.away_team}`));
 
     // Use Promise.all to fetch odds for all fixtures in parallel
     const fixtureOddsPromises = limitedFixtures.map(async (fixture: any) => {
@@ -267,7 +268,7 @@ export async function GET(request: Request) {
     const playerDetails = new Map()
     
     // Limit the number of players to process per fixture
-    const limitedPlayerIds = Array.from(playerIds).slice(0, 10); // Process max 10 players per fixture
+    const limitedPlayerIds = Array.from(playerIds).slice(0, 20); // Process max 20 players per fixture (increased from 10)
     
     for (const playerId of limitedPlayerIds) {
       try {
@@ -305,7 +306,7 @@ export async function GET(request: Request) {
         odd.market_id === 'player_assists'
       )
       .filter((odd: any) => limitedPlayerIds.includes(odd.player_id))
-      .slice(0, 20); // Process max 20 odds per fixture
+      .slice(0, 40); // Process max 40 odds per fixture (increased from 20)
     
     const oddsToProcess = limitedOdds.map(async (odd: any) => {
         const key = odd.grouping_key || `${odd.normalized_selection}:${odd.points}`
@@ -410,6 +411,10 @@ export async function GET(request: Request) {
 
     const playerOdds = Array.from(uniqueProps.values())
     console.log(`Successfully processed ${playerOdds.length} player props`)
+    
+    // Log unique teams to help debug
+    const teams = new Set(playerOdds.map((player: any) => player.player?.team || 'Unknown'));
+    console.log('Unique teams found:', Array.from(teams));
 
     // Add pagination metadata
     const response = {
