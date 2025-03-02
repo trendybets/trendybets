@@ -243,39 +243,82 @@ export async function POST(request: Request) {
         }
         return true
       })
-      .map((fixture) => ({
-        id: fixture.id,
-        numerical_id: fixture.numerical_id,
-        game_id: fixture.game_id,
-        start_date: fixture.start_date,
-        // Ensure home_competitors and away_competitors are passed as arrays
-        home_competitors: fixture.home_competitors,
-        away_competitors: fixture.away_competitors,
-        home_team_display: fixture.home_team_display,
-        away_team_display: fixture.away_team_display,
-        status: fixture.status,
-        venue_name: fixture.venue_name || '',
-        venue_location: fixture.venue_location || '',
-        broadcast: fixture.broadcast || '',
-        // Use optional chaining and nullish coalescing for all score fields
-        home_score_total: fixture.result?.scores?.home?.total ?? 0,
-        home_score_q1: fixture.result?.scores?.home?.periods?.period_1 ?? 0,
-        home_score_q2: fixture.result?.scores?.home?.periods?.period_2 ?? 0,
-        home_score_q3: fixture.result?.scores?.home?.periods?.period_3 ?? 0,
-        home_score_q4: fixture.result?.scores?.home?.periods?.period_4 ?? 0,
-        away_score_total: fixture.result?.scores?.away?.total ?? 0,
-        away_score_q1: fixture.result?.scores?.away?.periods?.period_1 ?? 0,
-        away_score_q2: fixture.result?.scores?.away?.periods?.period_2 ?? 0,
-        away_score_q3: fixture.result?.scores?.away?.periods?.period_3 ?? 0,
-        away_score_q4: fixture.result?.scores?.away?.periods?.period_4 ?? 0,
-        // Store the result object directly
-        result: fixture.result,
-        season_type: fixture.season_type || '',
-        season_year: fixture.season_year || '',
-        season_week: fixture.season_week || '',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }))
+      .map((fixture) => {
+        // Ensure home_competitors and away_competitors are properly formatted as arrays
+        const home_competitors = Array.isArray(fixture.home_competitors) 
+          ? fixture.home_competitors 
+          : (fixture.home_competitors ? [fixture.home_competitors] : []);
+          
+        const away_competitors = Array.isArray(fixture.away_competitors) 
+          ? fixture.away_competitors 
+          : (fixture.away_competitors ? [fixture.away_competitors] : []);
+        
+        // Ensure result is a proper JSON object
+        let result = fixture.result;
+        if (result && typeof result === 'string') {
+          try {
+            result = JSON.parse(result);
+          } catch (e) {
+            console.warn(`Failed to parse result string for fixture ${fixture.id}:`, e);
+            // If parsing fails, create a minimal valid structure
+            result = {
+              scores: {
+                home: {
+                  total: fixture.result?.scores?.home?.total ?? 0,
+                  periods: {
+                    period_1: fixture.result?.scores?.home?.periods?.period_1 ?? 0,
+                    period_2: fixture.result?.scores?.home?.periods?.period_2 ?? 0,
+                    period_3: fixture.result?.scores?.home?.periods?.period_3 ?? 0,
+                    period_4: fixture.result?.scores?.home?.periods?.period_4 ?? 0
+                  }
+                },
+                away: {
+                  total: fixture.result?.scores?.away?.total ?? 0,
+                  periods: {
+                    period_1: fixture.result?.scores?.away?.periods?.period_1 ?? 0,
+                    period_2: fixture.result?.scores?.away?.periods?.period_2 ?? 0,
+                    period_3: fixture.result?.scores?.away?.periods?.period_3 ?? 0,
+                    period_4: fixture.result?.scores?.away?.periods?.period_4 ?? 0
+                  }
+                }
+              }
+            };
+          }
+        }
+        
+        return {
+          id: fixture.id,
+          numerical_id: fixture.numerical_id,
+          game_id: fixture.game_id,
+          start_date: fixture.start_date,
+          home_competitors: home_competitors,
+          away_competitors: away_competitors,
+          home_team_display: fixture.home_team_display,
+          away_team_display: fixture.away_team_display,
+          status: fixture.status,
+          venue_name: fixture.venue_name || '',
+          venue_location: fixture.venue_location || '',
+          broadcast: fixture.broadcast || '',
+          // Use optional chaining and nullish coalescing for all score fields
+          home_score_total: fixture.result?.scores?.home?.total ?? 0,
+          home_score_q1: fixture.result?.scores?.home?.periods?.period_1 ?? 0,
+          home_score_q2: fixture.result?.scores?.home?.periods?.period_2 ?? 0,
+          home_score_q3: fixture.result?.scores?.home?.periods?.period_3 ?? 0,
+          home_score_q4: fixture.result?.scores?.home?.periods?.period_4 ?? 0,
+          away_score_total: fixture.result?.scores?.away?.total ?? 0,
+          away_score_q1: fixture.result?.scores?.away?.periods?.period_1 ?? 0,
+          away_score_q2: fixture.result?.scores?.away?.periods?.period_2 ?? 0,
+          away_score_q3: fixture.result?.scores?.away?.periods?.period_3 ?? 0,
+          away_score_q4: fixture.result?.scores?.away?.periods?.period_4 ?? 0,
+          // Store the result object directly
+          result: result,
+          season_type: fixture.season_type || '',
+          season_year: fixture.season_year || '',
+          season_week: fixture.season_week || '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      })
 
     if (validFixtures.length > 0) {
       // Process fixtures in batches to avoid payload size issues
@@ -290,16 +333,25 @@ export async function POST(request: Request) {
       
       // Log the structure of the first fixture for debugging
       if (validFixtures.length > 0) {
+        const firstFixture = validFixtures[0];
         console.log('First fixture structure:', {
-          id: validFixtures[0].id,
-          home_competitors_type: Array.isArray(validFixtures[0].home_competitors) ? 'array' : typeof validFixtures[0].home_competitors,
-          home_competitors_length: Array.isArray(validFixtures[0].home_competitors) ? validFixtures[0].home_competitors.length : 'not an array',
-          away_competitors_type: Array.isArray(validFixtures[0].away_competitors) ? 'array' : typeof validFixtures[0].away_competitors,
-          away_competitors_length: Array.isArray(validFixtures[0].away_competitors) ? validFixtures[0].away_competitors.length : 'not an array',
-          result_type: typeof validFixtures[0].result,
-          sample_home_competitor: validFixtures[0].home_competitors && validFixtures[0].home_competitors[0] ? 
-            JSON.stringify(validFixtures[0].home_competitors[0]) : 'none'
+          id: firstFixture.id,
+          home_competitors_type: Array.isArray(firstFixture.home_competitors) ? 'array' : typeof firstFixture.home_competitors,
+          home_competitors_length: Array.isArray(firstFixture.home_competitors) ? firstFixture.home_competitors.length : 'not an array',
+          away_competitors_type: Array.isArray(firstFixture.away_competitors) ? 'array' : typeof firstFixture.away_competitors,
+          away_competitors_length: Array.isArray(firstFixture.away_competitors) ? firstFixture.away_competitors.length : 'not an array',
+          result_type: typeof firstFixture.result,
+          sample_home_competitor: firstFixture.home_competitors && firstFixture.home_competitors[0] ? 
+            JSON.stringify(firstFixture.home_competitors[0]) : 'none'
         });
+        
+        // Add more detailed logging
+        console.log('First fixture JSON structure:', JSON.stringify({
+          id: firstFixture.id,
+          home_competitors: firstFixture.home_competitors,
+          away_competitors: firstFixture.away_competitors,
+          result: firstFixture.result
+        }, null, 2).substring(0, 1000) + '...');
       }
       
       for (let i = 0; i < batches.length; i++) {
@@ -308,17 +360,51 @@ export async function POST(request: Request) {
         
         try {
           const { error } = await withRetry(async () => {
-            return await supabase
+            // Log the first fixture in the batch for debugging
+            if (batch.length > 0) {
+              console.log(`Batch ${i + 1} first fixture:`, {
+                id: batch[0].id,
+                home_competitors: Array.isArray(batch[0].home_competitors) ? 
+                  `Array with ${batch[0].home_competitors.length} items` : 
+                  typeof batch[0].home_competitors,
+                away_competitors: Array.isArray(batch[0].away_competitors) ? 
+                  `Array with ${batch[0].away_competitors.length} items` : 
+                  typeof batch[0].away_competitors,
+                result: typeof batch[0].result
+              });
+            }
+            
+            const result = await supabase
               .from("fixtures_completed")
               .upsert(batch, { onConflict: 'id' });
+              
+            if (result.error) {
+              console.error(`Error upserting batch ${i + 1}:`, {
+                message: result.error.message,
+                details: result.error.details,
+                hint: result.error.hint,
+                code: result.error.code
+              });
+              
+              // Log the first fixture that might be causing issues
+              if (batch.length > 0) {
+                console.error(`Problematic fixture data sample:`, JSON.stringify({
+                  id: batch[0].id,
+                  home_competitors: batch[0].home_competitors,
+                  away_competitors: batch[0].away_competitors,
+                  result: batch[0].result
+                }).substring(0, 500) + '...');
+              }
+            }
+            
+            return result;
           });
           
           if (error) {
             console.error(`Error upserting batch ${i + 1}:`, error);
             errors.push({
               batch: i + 1,
-              error: error.message,
-              details: error
+              error: error instanceof Error ? error.message : String(error)
             });
           } else {
             successCount += batch.length;
