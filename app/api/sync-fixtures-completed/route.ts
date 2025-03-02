@@ -18,15 +18,23 @@ export const dynamic = 'force-dynamic'
 async function withRetry<T>(
   operation: () => Promise<T>,
   retries = 3,
-  delay = 1000
+  delay = 1000,
+  timeout = 10000 // Add timeout parameter
 ): Promise<T> {
   try {
-    return await operation();
+    // Create a promise that rejects after the timeout
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error(`Operation timed out after ${timeout}ms`)), timeout);
+    });
+    
+    // Race the operation against the timeout
+    return await Promise.race([operation(), timeoutPromise]);
   } catch (error) {
     if (retries <= 0) throw error;
     console.log(`Operation failed, retrying in ${delay}ms... (${retries} retries left)`);
+    console.error('Error details:', error);
     await new Promise(resolve => setTimeout(resolve, delay));
-    return withRetry(operation, retries - 1, delay * 1.5);
+    return withRetry(operation, retries - 1, delay * 1.5, timeout);
   }
 }
 
@@ -198,46 +206,79 @@ export async function POST(request: Request) {
         return true
       })
       .map((fixture) => {
-        // Ensure home_competitors and away_competitors are properly formatted as arrays
-        const home_competitors = Array.isArray(fixture.home_competitors) 
-          ? fixture.home_competitors 
-          : (fixture.home_competitors ? [fixture.home_competitors] : []);
-          
-        const away_competitors = Array.isArray(fixture.away_competitors) 
-          ? fixture.away_competitors 
-          : (fixture.away_competitors ? [fixture.away_competitors] : []);
+        // Ensure home_competitors and away_competitors are properly formatted as arrays of objects
+        let home_competitors;
+        try {
+          if (Array.isArray(fixture.home_competitors)) {
+            home_competitors = fixture.home_competitors;
+          } else if (typeof fixture.home_competitors === 'string') {
+            try {
+              home_competitors = JSON.parse(fixture.home_competitors);
+              if (!Array.isArray(home_competitors)) {
+                home_competitors = [home_competitors];
+              }
+            } catch (e) {
+              console.warn(`Failed to parse home_competitors string for fixture ${fixture.id}:`, e);
+              home_competitors = [];
+            }
+          } else if (fixture.home_competitors) {
+            home_competitors = [fixture.home_competitors];
+          } else {
+            home_competitors = [];
+          }
+        } catch (e) {
+          console.error(`Error processing home_competitors for fixture ${fixture.id}:`, e);
+          home_competitors = [];
+        }
+        
+        let away_competitors;
+        try {
+          if (Array.isArray(fixture.away_competitors)) {
+            away_competitors = fixture.away_competitors;
+          } else if (typeof fixture.away_competitors === 'string') {
+            try {
+              away_competitors = JSON.parse(fixture.away_competitors);
+              if (!Array.isArray(away_competitors)) {
+                away_competitors = [away_competitors];
+              }
+            } catch (e) {
+              console.warn(`Failed to parse away_competitors string for fixture ${fixture.id}:`, e);
+              away_competitors = [];
+            }
+          } else if (fixture.away_competitors) {
+            away_competitors = [fixture.away_competitors];
+          } else {
+            away_competitors = [];
+          }
+        } catch (e) {
+          console.error(`Error processing away_competitors for fixture ${fixture.id}:`, e);
+          away_competitors = [];
+        }
         
         // Ensure result is a proper JSON object
-        let result = fixture.result;
-        if (result && typeof result === 'string') {
-          try {
-            result = JSON.parse(result);
-          } catch (e) {
-            console.warn(`Failed to parse result string for fixture ${fixture.id}:`, e);
-            // If parsing fails, create a minimal valid structure
-            result = {
-              scores: {
-                home: {
-                  total: fixture.result?.scores?.home?.total ?? 0,
-                  periods: {
-                    period_1: fixture.result?.scores?.home?.periods?.period_1 ?? 0,
-                    period_2: fixture.result?.scores?.home?.periods?.period_2 ?? 0,
-                    period_3: fixture.result?.scores?.home?.periods?.period_3 ?? 0,
-                    period_4: fixture.result?.scores?.home?.periods?.period_4 ?? 0
-                  }
-                },
-                away: {
-                  total: fixture.result?.scores?.away?.total ?? 0,
-                  periods: {
-                    period_1: fixture.result?.scores?.away?.periods?.period_1 ?? 0,
-                    period_2: fixture.result?.scores?.away?.periods?.period_2 ?? 0,
-                    period_3: fixture.result?.scores?.away?.periods?.period_3 ?? 0,
-                    period_4: fixture.result?.scores?.away?.periods?.period_4 ?? 0
-                  }
-                }
-              }
-            };
+        let result;
+        try {
+          if (typeof fixture.result === 'string') {
+            try {
+              result = JSON.parse(fixture.result);
+            } catch (e) {
+              console.warn(`Failed to parse result string for fixture ${fixture.id}:`, e);
+              result = null;
+            }
+          } else if (fixture.result && typeof fixture.result === 'object') {
+            result = fixture.result;
+          } else {
+            result = null;
           }
+        } catch (e) {
+          console.error(`Error processing result for fixture ${fixture.id}:`, e);
+          result = null;
+        }
+        
+        // Skip fixtures without scores
+        if (!result || !result.scores) {
+          console.log(`Skipping fixture ${fixture.id} due to missing scores`);
+          return null;
         }
         
         return {
@@ -254,16 +295,16 @@ export async function POST(request: Request) {
           venue_location: fixture.venue_location || '',
           broadcast: fixture.broadcast || '',
           // Use optional chaining and nullish coalescing for all score fields
-          home_score_total: fixture.result?.scores?.home?.total ?? 0,
-          home_score_q1: fixture.result?.scores?.home?.periods?.period_1 ?? 0,
-          home_score_q2: fixture.result?.scores?.home?.periods?.period_2 ?? 0,
-          home_score_q3: fixture.result?.scores?.home?.periods?.period_3 ?? 0,
-          home_score_q4: fixture.result?.scores?.home?.periods?.period_4 ?? 0,
-          away_score_total: fixture.result?.scores?.away?.total ?? 0,
-          away_score_q1: fixture.result?.scores?.away?.periods?.period_1 ?? 0,
-          away_score_q2: fixture.result?.scores?.away?.periods?.period_2 ?? 0,
-          away_score_q3: fixture.result?.scores?.away?.periods?.period_3 ?? 0,
-          away_score_q4: fixture.result?.scores?.away?.periods?.period_4 ?? 0,
+          home_score_total: result?.scores?.home?.total ?? 0,
+          home_score_q1: result?.scores?.home?.periods?.period_1 ?? 0,
+          home_score_q2: result?.scores?.home?.periods?.period_2 ?? 0,
+          home_score_q3: result?.scores?.home?.periods?.period_3 ?? 0,
+          home_score_q4: result?.scores?.home?.periods?.period_4 ?? 0,
+          away_score_total: result?.scores?.away?.total ?? 0,
+          away_score_q1: result?.scores?.away?.periods?.period_1 ?? 0,
+          away_score_q2: result?.scores?.away?.periods?.period_2 ?? 0,
+          away_score_q3: result?.scores?.away?.periods?.period_3 ?? 0,
+          away_score_q4: result?.scores?.away?.periods?.period_4 ?? 0,
           // Store the result object directly
           result: result,
           season_type: fixture.season_type || '',
@@ -273,10 +314,11 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString()
         };
       })
+      .filter(fixture => fixture !== null) // Filter out null fixtures
 
     if (validFixtures.length > 0) {
       // Process fixtures in batches to avoid payload size issues
-      const batchSize = 50;
+      const batchSize = 10; // Reduce batch size to 10
       const batches = [];
       
       for (let i = 0; i < validFixtures.length; i += batchSize) {
@@ -288,42 +330,46 @@ export async function POST(request: Request) {
       // Log the structure of the first fixture for debugging
       if (validFixtures.length > 0) {
         const firstFixture = validFixtures[0];
-        console.log('First fixture structure:', {
-          id: firstFixture.id,
-          home_competitors_type: Array.isArray(firstFixture.home_competitors) ? 'array' : typeof firstFixture.home_competitors,
-          home_competitors_length: Array.isArray(firstFixture.home_competitors) ? firstFixture.home_competitors.length : 'not an array',
-          away_competitors_type: Array.isArray(firstFixture.away_competitors) ? 'array' : typeof firstFixture.away_competitors,
-          away_competitors_length: Array.isArray(firstFixture.away_competitors) ? firstFixture.away_competitors.length : 'not an array',
-          result_type: typeof firstFixture.result,
-          sample_home_competitor: firstFixture.home_competitors && firstFixture.home_competitors[0] ? 
-            JSON.stringify(firstFixture.home_competitors[0]) : 'none'
-        });
-        
-        // Add more detailed logging
-        console.log('First fixture JSON structure:', JSON.stringify({
+        console.log('First fixture structure:', JSON.stringify({
           id: firstFixture.id,
           home_competitors: firstFixture.home_competitors,
           away_competitors: firstFixture.away_competitors,
-          result: firstFixture.result
-        }, null, 2).substring(0, 1000) + '...');
+          result: firstFixture.result ? 
+            {
+              scores: firstFixture.result.scores
+            } : null
+        }, null, 2));
       }
+      
+      let successCount = 0;
+      const errors = [];
       
       for (let i = 0; i < batches.length; i++) {
         const batch = batches[i];
         console.log(`Processing batch ${i + 1} of ${batches.length} (${batch.length} fixtures)`);
         
         try {
-          // Log the full structure of the first fixture for debugging
-          if (batch.length > 0) {
-            console.log(`Batch ${i + 1} first fixture:`, JSON.stringify({
-              id: batch[0].id,
-              home_competitors: batch[0].home_competitors,
-              away_competitors: batch[0].away_competitors,
-              result: batch[0].result,
-              home_score_q1: batch[0].home_score_q1,
-              away_score_q1: batch[0].away_score_q1
-            }, null, 2));
+          // Validate each fixture in the batch
+          const validBatch = batch.filter(fixture => {
+            if (!fixture.id) {
+              console.warn('Skipping fixture with missing ID');
+              return false;
+            }
+            
+            if (!Array.isArray(fixture.home_competitors) || !Array.isArray(fixture.away_competitors)) {
+              console.warn(`Skipping fixture ${fixture.id} with invalid competitors format`);
+              return false;
+            }
+            
+            return true;
+          });
+          
+          if (validBatch.length === 0) {
+            console.warn(`Batch ${i + 1} has no valid fixtures, skipping`);
+            continue;
           }
+          
+          console.log(`Batch ${i + 1} has ${validBatch.length} valid fixtures`);
           
           const { error, data } = await withRetry(async () => {
             console.log(`Executing upsert for batch ${i + 1}...`);
@@ -331,9 +377,18 @@ export async function POST(request: Request) {
             // Log the exact URL being used
             console.log(`Supabase URL: ${SUPABASE_URL}/rest/v1/fixtures_completed`);
             
+            // Log the first fixture in the batch
+            if (validBatch.length > 0) {
+              console.log(`First fixture in batch ${i + 1}:`, JSON.stringify({
+                id: validBatch[0].id,
+                home_competitors: validBatch[0].home_competitors,
+                away_competitors: validBatch[0].away_competitors
+              }, null, 2));
+            }
+            
             const result = await supabase
               .from("fixtures_completed")
-              .upsert(batch, { 
+              .upsert(validBatch, { 
                 onConflict: 'id'
               });
             
@@ -349,7 +404,7 @@ export async function POST(request: Request) {
             }
             
             return result;
-          });
+          }, 3, 1000, 30000); // Increase timeout to 30 seconds
           
           if (error) {
             console.error(`Error upserting batch ${i + 1}:`, error);
@@ -360,7 +415,7 @@ export async function POST(request: Request) {
               code: error.code
             });
           } else {
-            successCount += batch.length;
+            successCount += validBatch.length;
             console.log(`Successfully upserted batch ${i + 1}`);
           }
         } catch (batchError) {
