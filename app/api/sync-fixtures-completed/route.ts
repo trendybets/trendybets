@@ -147,16 +147,16 @@ async function getLastSyncTime(): Promise<string | null> {
 
 export async function POST(request: Request) {
   try {
-    // Verify API token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response('Unauthorized', { status: 401 });
-    }
+    // Verify API token using the same approach as the working fixtures sync
+    const apiToken = request.headers.get('api-token');
     
-    const token = authHeader.split(' ')[1];
-    if (token !== process.env.CRON_API_TOKEN) {
-      console.error('Invalid API token');
-      return new Response('Unauthorized', { status: 401 });
+    // For production, you should use a secure comparison method and store this in an environment variable
+    if (apiToken !== process.env.CRON_API_TOKEN) {
+      console.error('Unauthorized access attempt to sync-fixtures-completed');
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
     
     console.log('Environment check:', {
