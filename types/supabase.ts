@@ -79,6 +79,63 @@ export interface Database {
           season_year: string
           season_week: string
         }
+      },
+      fixtures: {
+        Row: {
+          id: string
+          numerical_id: number
+          game_id: string
+          start_date: string
+          home_team_id: string
+          away_team_id: string
+          home_team_display: string
+          away_team_display: string
+          status: string
+          venue_name: string
+          venue_location: string
+          broadcast: string
+          season_type: string
+          season_year: string
+          season_week: string
+          created_at: string
+          updated_at: string
+        }
+      },
+      teams: {
+        Row: {
+          id: string
+          name: string
+          abbreviation: string
+          logo: string
+          city: string
+          conference: string
+          division: string
+          created_at: string
+          updated_at: string
+        }
+      },
+      odds: {
+        Row: {
+          id: string
+          fixture_id: string
+          sportsbook_id: string
+          market_type: string
+          team_id: string
+          price: number
+          points: number
+          selection_line: string
+          created_at: string
+          updated_at: string
+        }
+      },
+      sportsbook: {
+        Row: {
+          id: string
+          name: string
+          logo: string
+          created_at: string
+          updated_at: string
+        }
       }
     }
   }
