@@ -11,7 +11,7 @@ export default function RunPredictionsPage() {
   const [fixtureId, setFixtureId] = useState('');
   const [dryRun, setDryRun] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'success' | 'error' | 'warning'>('idle');
   const [message, setMessage] = useState('');
   const [output, setOutput] = useState<string[]>([]);
   const [predictions, setPredictions] = useState<number | null>(null);
@@ -52,6 +52,14 @@ export default function RunPredictionsPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        // Special handling for the "Not Implemented" error
+        if (response.status === 501) {
+          setStatus('warning');
+          setMessage(`${data.error}: ${data.message}`);
+          setOutput(["This feature requires Python to be installed on the server.", 
+                     "Please run this locally or contact the administrator to set up a dedicated server."]);
+          return;
+        }
         throw new Error(data.error || 'Failed to run predictions');
       }
 
@@ -163,6 +171,16 @@ export default function RunPredictionsPage() {
                 <div className="flex items-center">
                   <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
                   <h5 className="font-medium">Error</h5>
+                </div>
+                <div className="mt-1 text-sm">{message}</div>
+              </div>
+            )}
+            
+            {status === 'warning' && (
+              <div className="mb-4 p-4 rounded-md border-yellow-500 border bg-yellow-100 dark:bg-yellow-900/20">
+                <div className="flex items-center">
+                  <AlertCircle className="h-4 w-4 text-yellow-500 mr-2" />
+                  <h5 className="font-medium">Warning</h5>
                 </div>
                 <div className="mt-1 text-sm">{message}</div>
               </div>

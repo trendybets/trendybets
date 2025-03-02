@@ -38,6 +38,23 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Check if we're running in Vercel production environment
+    const isVercelProd = process.env.VERCEL_ENV === 'production';
+    
+    if (isVercelProd) {
+      // In Vercel production, we can't run Python directly
+      return new NextResponse(JSON.stringify({ 
+        error: 'Python execution is not supported in this environment',
+        message: 'This endpoint needs to be run on a server with Python installed. Please run this locally or set up a dedicated server for Python execution.',
+        environment: process.env.VERCEL_ENV || 'unknown',
+        dryRun,
+        fixtureId
+      }), {
+        status: 501, // Not Implemented
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     // Build command arguments
     const args = [scriptPath];
     
@@ -173,6 +190,21 @@ export async function POST(request: NextRequest) {
     if (!fs.existsSync(scriptPath)) {
       return new NextResponse(JSON.stringify({ error: 'Prediction script not found' }), {
         status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Check if we're running in Vercel production environment
+    const isVercelProd = process.env.VERCEL_ENV === 'production';
+    
+    if (isVercelProd) {
+      // In Vercel production, we can't run Python directly
+      return new NextResponse(JSON.stringify({ 
+        error: 'Python execution is not supported in this environment',
+        message: 'This endpoint needs to be run on a server with Python installed. Please run this locally or set up a dedicated server for Python execution.',
+        environment: process.env.VERCEL_ENV || 'unknown'
+      }), {
+        status: 501, // Not Implemented
         headers: { 'Content-Type': 'application/json' },
       });
     }
