@@ -40,21 +40,11 @@ async function withRetry<T>(
 }
 
 async function fetchPage(page: number) {
-  // Add end_date parameter to only get games up to today
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
-  
-  // Get start_date for 3 days ago to focus on recent games
-  const threeDaysAgo = new Date();
-  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-  const recentDate = threeDaysAgo.toISOString().split('T')[0];
-  
-  console.log(`Fetching page ${page} of completed fixtures from ${recentDate} to ${todayStr}...`);
+  console.log(`Fetching page ${page} of all completed fixtures...`);
   
   // Use 2024 for the season year (2024-2025 NBA season)
   const seasonYear = '2024';
   console.log(`Using season year: ${seasonYear} for the 2024-2025 NBA season`);
-  console.log(`Looking for games with dates in 2025 (${recentDate} to ${todayStr})`);
   
   return await withRetry(async () => {
     const params = {
@@ -64,8 +54,7 @@ async function fetchPage(page: number) {
       season_year: seasonYear,
       season_type: 'regular season',
       status: 'completed',
-      start_date: recentDate, // Only get recent games
-      end_date: todayStr,
+      // Remove date filtering to get all completed games
       key: process.env.OPTIC_ODDS_API_KEY
     };
     
@@ -101,429 +90,280 @@ async function fetchPage(page: number) {
   });
 }
 
-export async function POST(request: Request) {
-  // Add authentication for cron jobs
-  const apiToken = request.headers.get('api-token');
-  
-  // For production, you should use a secure comparison method and store this in an environment variable
-  if (apiToken !== serverEnv.CRON_API_TOKEN) {
-    console.error('Unauthorized access attempt to sync-fixtures-completed');
-    return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
+// Add a function to store the last sync time
+async function updateLastSyncTime() {
   try {
-    // Log environment variables (without revealing full values)
-    console.log("Environment check:", {
-      SUPABASE_URL_set: !!SUPABASE_URL,
-      SUPABASE_SERVICE_KEY_set: !!SUPABASE_SERVICE_KEY,
-      SUPABASE_URL_length: SUPABASE_URL?.length,
-      SUPABASE_SERVICE_KEY_length: SUPABASE_SERVICE_KEY?.length,
-      NODE_OPTIONS: process.env.NODE_OPTIONS || 'not set',
-      SUPABASE_URL_prefix: SUPABASE_URL?.substring(0, 10) + '...'
-    })
+    const supabase = createClient(
+      process.env.SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_KEY || ''
+    );
     
-    // Create Supabase client with simplified options
-    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
+    // Store the current timestamp as the last sync time
+    const now = new Date().toISOString();
+    
+    const { error } = await supabase
+      .from('sync_metadata')
+      .upsert({ 
+        id: 'fixtures_completed_last_sync',
+        last_sync_time: now,
+        updated_at: now
+      });
+      
+    if (error) {
+      console.error('Error updating last sync time:', error);
+    } else {
+      console.log(`Updated last sync time to ${now}`);
+    }
+  } catch (error) {
+    console.error('Error in updateLastSyncTime:', error);
+  }
+}
+
+// Add a function to get the last sync time
+async function getLastSyncTime(): Promise<string | null> {
+  try {
+    const supabase = createClient(
+      process.env.SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_KEY || ''
+    );
+    
+    const { data, error } = await supabase
+      .from('sync_metadata')
+      .select('last_sync_time')
+      .eq('id', 'fixtures_completed_last_sync')
+      .single();
+      
+    if (error) {
+      console.error('Error getting last sync time:', error);
+      return null;
+    }
+    
+    return data?.last_sync_time || null;
+  } catch (error) {
+    console.error('Error in getLastSyncTime:', error);
+    return null;
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    // Verify API token
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    if (token !== process.env.CRON_API_TOKEN) {
+      console.error('Invalid API token');
+      return new Response('Unauthorized', { status: 401 });
+    }
+    
+    console.log('Environment check:', {
+      SUPABASE_URL_set: !!process.env.SUPABASE_URL,
+      SUPABASE_SERVICE_KEY_set: !!process.env.SUPABASE_SERVICE_KEY,
+      SUPABASE_URL_length: process.env.SUPABASE_URL?.length || 0,
+      SUPABASE_SERVICE_KEY_length: process.env.SUPABASE_SERVICE_KEY?.length || 0,
+      NODE_OPTIONS: process.env.NODE_OPTIONS,
+      SUPABASE_URL_prefix: process.env.SUPABASE_URL ? `${process.env.SUPABASE_URL.substring(0, 10)}...` : 'not set'
+    });
+    
+    // Initialize Supabase client
+    const supabase = createClient(
+      process.env.SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_KEY || ''
+    );
+    
+    console.log('Testing Supabase connection...');
+    const { data: testData, error: testError } = await supabase.from('fixtures_completed').select('count').limit(1);
+    
+    if (testError) {
+      console.error('Supabase connection error:', testError);
+      return new Response(JSON.stringify({ error: 'Supabase connection error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    console.log('Supabase connection successful');
+    
+    // Get the last sync time
+    const lastSyncTime = await getLastSyncTime();
+    if (lastSyncTime) {
+      console.log(`Last sync time: ${lastSyncTime}`);
+    } else {
+      console.log('No previous sync time found');
+    }
+    
+    // Fetch all completed fixtures
+    let allFixtures: any[] = [];
+    let page = 1;
+    let hasMorePages = true;
+    
+    while (hasMorePages && page <= 5) { // Limit to 5 pages to avoid excessive API calls
+      const response = await fetchPage(page);
+      const fixtures = response?.data || [];
+      
+      console.log(`Received ${fixtures.length} fixtures on page ${page}`);
+      
+      if (fixtures.length === 0) {
+        hasMorePages = false;
+      } else {
+        allFixtures = [...allFixtures, ...fixtures];
+        page++;
+      }
+    }
+    
+    console.log(`Fetched ${allFixtures.length} completed fixtures`);
+    
+    // Analyze dates and statuses for debugging
+    const dateAnalysis = {
+      future: 0,
+      past: 0,
+      completed: 0,
+      withScores: 0
+    };
+    
+    const now = new Date();
+    
+    allFixtures.forEach(fixture => {
+      const startDate = new Date(fixture.start_date);
+      if (startDate > now) {
+        dateAnalysis.future++;
+      } else {
+        dateAnalysis.past++;
+      }
+      
+      if (fixture.status === 'completed') {
+        dateAnalysis.completed++;
+      }
+      
+      if (fixture.home_score !== null && fixture.away_score !== null) {
+        dateAnalysis.withScores++;
       }
     });
     
-    // Log a test connection
-    console.log("Testing Supabase connection...");
-    try {
-      const { data, error } = await supabase.from("sync_log").select("id").limit(1);
-      if (error) {
-        console.error("Supabase connection test failed:", error);
-      } else {
-        console.log("Supabase connection successful");
-      }
-    } catch (connError) {
-      console.error("Exception during Supabase connection test:", connError);
-    }
-
-    // Check if we already have recent fixtures in the database
-    console.log("Checking for existing recent fixtures...");
-    try {
-      const threeDaysAgo = new Date();
-      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-      const recentDate = threeDaysAgo.toISOString();
-      
-      console.log(`Checking for fixtures since ${recentDate}`);
-      
-      const { data: existingFixtures, error: checkError } = await supabase
-        .from("fixtures_completed")
-        .select("id, start_date")
-        .gte("start_date", recentDate)
-        .limit(100);
-      
-      if (checkError) {
-        console.error("Error checking existing fixtures:", checkError);
-      } else {
-        console.log(`Found ${existingFixtures?.length || 0} existing recent fixtures`);
-        
-        // Log a few of the existing fixtures to verify dates
-        if (existingFixtures && existingFixtures.length > 0) {
-          console.log("Sample existing fixtures:", existingFixtures.slice(0, 3).map(f => ({ id: f.id, start_date: f.start_date })));
-        }
-        
-        // If we already have a significant number of recent fixtures, we can limit our sync
-        if (existingFixtures && existingFixtures.length > 30) {
-          console.log("Most recent fixtures already exist, limiting sync to just the last day");
-          // Update the fetchPage function to only get the last day
-          const oneDayAgo = new Date();
-          oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-          threeDaysAgo.setDate(oneDayAgo.getDate());
-        }
-      }
-    } catch (checkError) {
-      console.error("Exception checking existing fixtures:", checkError);
+    console.log('Date and Status Analysis:', dateAnalysis);
+    
+    // Filter out fixtures without scores
+    const validFixtures = allFixtures.filter(fixture => 
+      fixture.status === 'completed' && 
+      fixture.home_score !== null && 
+      fixture.away_score !== null
+    );
+    
+    console.log(`Found ${validFixtures.length} valid fixtures with scores`);
+    
+    if (validFixtures.length === 0) {
+      console.log('No valid fixtures to insert');
+      return new Response(JSON.stringify({ message: 'No valid fixtures to insert' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
     
-    // Start fetching fixtures
-    let page = 1;
-    let allFixtures: any[] = [];
-    let hasMorePages = true;
-    let successCount = 0;
-    let errors: any[] = [];
+    // Transform fixtures for database
+    const transformedFixtures = validFixtures.map(fixture => {
+      // Ensure home_competitors and away_competitors are arrays
+      const homeCompetitors = Array.isArray(fixture.home_competitors) 
+        ? fixture.home_competitors 
+        : [fixture.home_competitors].filter(Boolean);
+        
+      const awayCompetitors = Array.isArray(fixture.away_competitors)
+        ? fixture.away_competitors
+        : [fixture.away_competitors].filter(Boolean);
+      
+      return {
+        id: fixture.id,
+        sport: fixture.sport,
+        league: fixture.league,
+        start_date: fixture.start_date,
+        home_team: fixture.home_team,
+        away_team: fixture.away_team,
+        home_score: fixture.home_score ?? 0,
+        away_score: fixture.away_score ?? 0,
+        status: fixture.status,
+        last_updated: fixture.last_updated,
+        home_competitors: homeCompetitors,
+        away_competitors: awayCompetitors,
+        result: fixture.result || null
+      };
+    });
     
-    // Limit to 3 pages for efficiency since we're focusing on recent games
-    const maxPages = 3;
+    // Log the first fixture for debugging
+    if (transformedFixtures.length > 0) {
+      const firstFixture = transformedFixtures[0];
+      console.log('Sample fixture structure:', {
+        id: firstFixture.id,
+        start_date: firstFixture.start_date,
+        home_team: firstFixture.home_team,
+        away_team: firstFixture.away_team,
+        home_score: firstFixture.home_score,
+        away_score: firstFixture.away_score,
+        home_competitors_type: typeof firstFixture.home_competitors,
+        home_competitors_length: Array.isArray(firstFixture.home_competitors) ? firstFixture.home_competitors.length : 'not an array',
+        away_competitors_type: typeof firstFixture.away_competitors,
+        away_competitors_length: Array.isArray(firstFixture.away_competitors) ? firstFixture.away_competitors.length : 'not an array',
+        result_type: typeof firstFixture.result,
+        sample_home_competitor: Array.isArray(firstFixture.home_competitors) && firstFixture.home_competitors.length > 0 
+          ? JSON.stringify(firstFixture.home_competitors[0]) 
+          : 'none'
+      });
+    }
     
-    while (hasMorePages && page <= maxPages) {
+    // Process in smaller batches to avoid payload size issues
+    const batchSize = 10;
+    const batches = [];
+    
+    for (let i = 0; i < transformedFixtures.length; i += batchSize) {
+      batches.push(transformedFixtures.slice(i, i + batchSize));
+    }
+    
+    console.log(`Processing ${batches.length} batches of up to ${batchSize} fixtures each`);
+    
+    let insertedCount = 0;
+    let errorCount = 0;
+    
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      console.log(`Processing batch ${i + 1}/${batches.length} with ${batch.length} fixtures`);
+      
       try {
-        console.log(`Fetching page ${page}...`);
-        const data = await fetchPage(page);
+        const { data, error } = await supabase
+          .from('fixtures_completed')
+          .upsert(batch, { onConflict: 'id' });
         
-        if (!data || !data.data || !Array.isArray(data.data)) {
-          console.error(`Invalid response format on page ${page}`);
-          break;
-        }
-        
-        console.log(`Received ${data.data.length} fixtures on page ${page}`);
-        
-        if (data.data.length === 0) {
-          hasMorePages = false;
-          break;
-        }
-        
-        allFixtures = [...allFixtures, ...data.data];
-        page++;
-        
-        // If we have enough fixtures, we can stop
-        if (allFixtures.length >= 50) {
-          console.log(`Collected ${allFixtures.length} fixtures, which should be sufficient`);
-          hasMorePages = false;
+        if (error) {
+          console.error(`Error upserting batch ${i + 1}:`, error);
+          errorCount++;
+        } else {
+          console.log(`Successfully upserted batch ${i + 1}`);
+          insertedCount += batch.length;
         }
       } catch (error) {
-        console.error(`Error fetching page ${page}:`, error);
-        break;
+        console.error(`Exception upserting batch ${i + 1}:`, error);
+        errorCount++;
       }
     }
-
-    console.log(`Fetched ${allFixtures.length} completed fixtures`)
     
-    // Debug: Log sample fixture
-    if (allFixtures.length > 0) {
-      console.log('Sample fixture structure:', JSON.stringify(allFixtures[0], null, 2))
-    }
-
-    // Debug: Check dates and statuses
-    const dateAnalysis = allFixtures.reduce((acc, fixture) => {
-      const date = new Date(fixture.start_date)
-      const status = fixture.status
-      const hasScores = fixture.result?.scores?.home?.total != null
-      
-      console.log(`Fixture ${fixture.id}:`, {
-        date: fixture.start_date,
-        status,
-        hasScores,
-        resultStructure: fixture.result ? Object.keys(fixture.result) : 'no result',
-        scoresStructure: fixture.result?.scores ? Object.keys(fixture.result.scores) : 'no scores'
-      })
-
-      return {
-        ...acc,
-        future: acc.future + (date > new Date() ? 1 : 0),
-        past: acc.past + (date <= new Date() ? 1 : 0),
-        completed: acc.completed + (status === 'completed' ? 1 : 0),
-        withScores: acc.withScores + (hasScores ? 1 : 0)
-      }
-    }, { future: 0, past: 0, completed: 0, withScores: 0 })
-
-    console.log('Date and Status Analysis:', dateAnalysis)
-
-    // Validate and transform fixtures before upserting
-    const validFixtures = allFixtures
-      .filter(fixture => {
-        const gameDate = new Date(fixture.start_date)
-        const isInPast = gameDate <= new Date()
-        const hasValidResult = fixture.result?.scores?.home?.total != null && 
-                             fixture.result?.scores?.away?.total != null;
-
-        if (!hasValidResult) {
-          console.warn(`Fixture ${fixture.id} details:`, {
-            date: fixture.start_date,
-            status: fixture.status,
-            resultExists: !!fixture.result,
-            scoresExist: !!fixture.result?.scores,
-            homeScores: fixture.result?.scores?.home,
-            awayScores: fixture.result?.scores?.away
-          })
-          return false
-        }
-        return true
-      })
-      .map((fixture) => {
-        // Ensure home_competitors and away_competitors are properly formatted as arrays of objects
-        let home_competitors;
-        try {
-          if (Array.isArray(fixture.home_competitors)) {
-            home_competitors = fixture.home_competitors;
-          } else if (typeof fixture.home_competitors === 'string') {
-            try {
-              home_competitors = JSON.parse(fixture.home_competitors);
-              if (!Array.isArray(home_competitors)) {
-                home_competitors = [home_competitors];
-              }
-            } catch (e) {
-              console.warn(`Failed to parse home_competitors string for fixture ${fixture.id}:`, e);
-              home_competitors = [];
-            }
-          } else if (fixture.home_competitors) {
-            home_competitors = [fixture.home_competitors];
-          } else {
-            home_competitors = [];
-          }
-        } catch (e) {
-          console.error(`Error processing home_competitors for fixture ${fixture.id}:`, e);
-          home_competitors = [];
-        }
-        
-        let away_competitors;
-        try {
-          if (Array.isArray(fixture.away_competitors)) {
-            away_competitors = fixture.away_competitors;
-          } else if (typeof fixture.away_competitors === 'string') {
-            try {
-              away_competitors = JSON.parse(fixture.away_competitors);
-              if (!Array.isArray(away_competitors)) {
-                away_competitors = [away_competitors];
-              }
-            } catch (e) {
-              console.warn(`Failed to parse away_competitors string for fixture ${fixture.id}:`, e);
-              away_competitors = [];
-            }
-          } else if (fixture.away_competitors) {
-            away_competitors = [fixture.away_competitors];
-          } else {
-            away_competitors = [];
-          }
-        } catch (e) {
-          console.error(`Error processing away_competitors for fixture ${fixture.id}:`, e);
-          away_competitors = [];
-        }
-        
-        // Ensure result is a proper JSON object
-        let result;
-        try {
-          if (typeof fixture.result === 'string') {
-            try {
-              result = JSON.parse(fixture.result);
-            } catch (e) {
-              console.warn(`Failed to parse result string for fixture ${fixture.id}:`, e);
-              result = null;
-            }
-          } else if (fixture.result && typeof fixture.result === 'object') {
-            result = fixture.result;
-          } else {
-            result = null;
-          }
-        } catch (e) {
-          console.error(`Error processing result for fixture ${fixture.id}:`, e);
-          result = null;
-        }
-        
-        // Skip fixtures without scores
-        if (!result || !result.scores) {
-          console.log(`Skipping fixture ${fixture.id} due to missing scores`);
-          return null;
-        }
-        
-        return {
-          id: fixture.id,
-          numerical_id: fixture.numerical_id,
-          game_id: fixture.game_id,
-          start_date: fixture.start_date,
-          home_competitors: home_competitors,
-          away_competitors: away_competitors,
-          home_team_display: fixture.home_team_display,
-          away_team_display: fixture.away_team_display,
-          status: fixture.status,
-          venue_name: fixture.venue_name || '',
-          venue_location: fixture.venue_location || '',
-          broadcast: fixture.broadcast || '',
-          // Use optional chaining and nullish coalescing for all score fields
-          home_score_total: result?.scores?.home?.total ?? 0,
-          home_score_q1: result?.scores?.home?.periods?.period_1 ?? 0,
-          home_score_q2: result?.scores?.home?.periods?.period_2 ?? 0,
-          home_score_q3: result?.scores?.home?.periods?.period_3 ?? 0,
-          home_score_q4: result?.scores?.home?.periods?.period_4 ?? 0,
-          away_score_total: result?.scores?.away?.total ?? 0,
-          away_score_q1: result?.scores?.away?.periods?.period_1 ?? 0,
-          away_score_q2: result?.scores?.away?.periods?.period_2 ?? 0,
-          away_score_q3: result?.scores?.away?.periods?.period_3 ?? 0,
-          away_score_q4: result?.scores?.away?.periods?.period_4 ?? 0,
-          // Store the result object directly
-          result: result,
-          season_type: fixture.season_type || '',
-          season_year: fixture.season_year || '',
-          season_week: fixture.season_week || '',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-      })
-      .filter(fixture => fixture !== null) // Filter out null fixtures
-
-    if (validFixtures.length > 0) {
-      // Process fixtures in batches to avoid payload size issues
-      const batchSize = 10; // Reduce batch size to 10
-      const batches = [];
-      
-      for (let i = 0; i < validFixtures.length; i += batchSize) {
-        batches.push(validFixtures.slice(i, i + batchSize));
-      }
-      
-      console.log(`Processing ${batches.length} batches of fixtures (batch size: ${batchSize})`);
-      
-      // Log the structure of the first fixture for debugging
-      if (validFixtures.length > 0) {
-        const firstFixture = validFixtures[0];
-        console.log('First fixture structure:', JSON.stringify({
-          id: firstFixture.id,
-          home_competitors: firstFixture.home_competitors,
-          away_competitors: firstFixture.away_competitors,
-          result: firstFixture.result ? 
-            {
-              scores: firstFixture.result.scores
-            } : null
-        }, null, 2));
-      }
-      
-      for (let i = 0; i < batches.length; i++) {
-        const batch = batches[i];
-        console.log(`Processing batch ${i + 1} of ${batches.length} (${batch.length} fixtures)`);
-        
-        try {
-          // Validate each fixture in the batch
-          const validBatch = batch.filter(fixture => {
-            if (!fixture.id) {
-              console.warn('Skipping fixture with missing ID');
-              return false;
-            }
-            
-            if (!Array.isArray(fixture.home_competitors) || !Array.isArray(fixture.away_competitors)) {
-              console.warn(`Skipping fixture ${fixture.id} with invalid competitors format`);
-              return false;
-            }
-            
-            return true;
-          });
-          
-          if (validBatch.length === 0) {
-            console.warn(`Batch ${i + 1} has no valid fixtures, skipping`);
-            continue;
-          }
-          
-          console.log(`Batch ${i + 1} has ${validBatch.length} valid fixtures`);
-          
-          const { error, data } = await withRetry(async () => {
-            console.log(`Executing upsert for batch ${i + 1}...`);
-            
-            // Log the exact URL being used
-            console.log(`Supabase URL: ${SUPABASE_URL}/rest/v1/fixtures_completed`);
-            
-            // Log the first fixture in the batch
-            if (validBatch.length > 0) {
-              console.log(`First fixture in batch ${i + 1}:`, JSON.stringify({
-                id: validBatch[0].id,
-                home_competitors: validBatch[0].home_competitors,
-                away_competitors: validBatch[0].away_competitors
-              }, null, 2));
-            }
-            
-            const result = await supabase
-              .from("fixtures_completed")
-              .upsert(validBatch, { 
-                onConflict: 'id'
-              });
-            
-            if (result.error) {
-              console.error(`Upsert error for batch ${i + 1}:`, {
-                message: result.error.message,
-                details: result.error.details,
-                hint: result.error.hint,
-                code: result.error.code
-              });
-            } else {
-              console.log(`Upsert successful for batch ${i + 1}`);
-            }
-            
-            return result;
-          }, 3, 1000, 30000); // Increase timeout to 30 seconds
-          
-          if (error) {
-            console.error(`Error upserting batch ${i + 1}:`, error);
-            errors.push({
-              batch: i + 1,
-              error: error instanceof Error ? error.message : String(error),
-              details: error.details,
-              code: error.code
-            });
-          } else {
-            successCount += validBatch.length;
-            console.log(`Successfully upserted batch ${i + 1}`);
-          }
-        } catch (batchError) {
-          console.error(`Exception processing batch ${i + 1}:`, batchError);
-          errors.push({
-            batch: i + 1,
-            error: batchError instanceof Error ? batchError.message : String(batchError)
-          });
-        }
-      }
-    }
-
-    // Update sync_log
-    await withRetry(async () => {
-      return await supabase
-        .from("sync_log")
-        .insert([{ 
-          sync_type: "fixtures_completed",
-          started_at: new Date().toISOString(),
-          completed_at: new Date().toISOString(),
-          status: "completed",
-          records_processed: successCount,
-          errors: errors.length > 0 ? errors : null
-        }]);
+    // Update the last sync time
+    await updateLastSyncTime();
+    
+    return new Response(JSON.stringify({
+      message: `Processed ${transformedFixtures.length} fixtures, inserted/updated ${insertedCount}, errors: ${errorCount}`,
+      total: transformedFixtures.length,
+      inserted: insertedCount,
+      errors: errorCount
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
     });
-
-    return NextResponse.json({ 
-      message: `${successCount} fixtures synced successfully`,
-      skipped: errors.length,
-      errors: errors.length > 0 ? errors : null,
-      count: successCount,
-      pages: page - 1
-    })
+    
   } catch (error) {
-    console.error('Error syncing fixtures:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error occurred" },
-      { status: 500 }
-    )
+    console.error('Error in sync-fixtures-completed:', error);
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 } 
