@@ -15,7 +15,7 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 // Add this line to tell Next.js this is a dynamic route with increased timeout
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60; // Set maximum execution time to 60 seconds
+export const maxDuration = 300; // Increase maximum execution time to 300 seconds (5 minutes)
 
 // Helper function to retry failed operations
 async function withRetry<T>(
@@ -97,7 +97,13 @@ async function updateLastSyncTime(recordsProcessed: number) {
   try {
     const supabase = createClient(
       SUPABASE_URL,
-      SUPABASE_SERVICE_KEY
+      SUPABASE_SERVICE_KEY,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
     );
     
     // Store the current timestamp as the last sync time
@@ -130,7 +136,13 @@ async function getLastSyncTime(): Promise<string | null> {
   try {
     const supabase = createClient(
       SUPABASE_URL,
-      SUPABASE_SERVICE_KEY
+      SUPABASE_SERVICE_KEY,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
     );
     
     const { data, error } = await supabase
@@ -182,7 +194,13 @@ export async function POST(request: Request) {
     // Initialize Supabase client
     const supabase = createClient(
       SUPABASE_URL,
-      SUPABASE_SERVICE_KEY
+      SUPABASE_SERVICE_KEY,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
     );
     
     console.log('Testing Supabase connection...');
@@ -210,22 +228,38 @@ export async function POST(request: Request) {
     let allFixtures: any[] = [];
     let page = 1;
     let hasMorePages = true;
+    const MAX_PAGES = 100; // Set a reasonable upper limit to prevent infinite loops
     
-    while (hasMorePages && page <= 5) { // Limit to 5 pages to avoid excessive API calls
-      const response = await fetchPage(page);
-      const fixtures = response?.data || [];
-      
-      console.log(`Received ${fixtures.length} fixtures on page ${page}`);
-      
-      if (fixtures.length === 0) {
-        hasMorePages = false;
-      } else {
-        allFixtures = [...allFixtures, ...fixtures];
-        page++;
+    while (hasMorePages && page <= MAX_PAGES) { // Increased from 5 pages to MAX_PAGES
+      try {
+        const response = await fetchPage(page);
+        const fixtures = response?.data || [];
+        
+        console.log(`Received ${fixtures.length} fixtures on page ${page}`);
+        
+        if (fixtures.length === 0) {
+          hasMorePages = false;
+          console.log('No more fixtures found, stopping pagination');
+        } else {
+          allFixtures = [...allFixtures, ...fixtures];
+          page++;
+          
+          // Add a small delay between API calls to avoid rate limiting
+          if (hasMorePages) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+      } catch (error) {
+        console.error(`Error fetching page ${page}:`, error);
+        hasMorePages = false; // Stop on error
       }
     }
     
-    console.log(`Fetched ${allFixtures.length} completed fixtures`);
+    if (page > MAX_PAGES) {
+      console.log(`Reached maximum page limit of ${MAX_PAGES}, stopping pagination`);
+    }
+    
+    console.log(`Fetched ${allFixtures.length} completed fixtures from ${page - 1} pages`);
     
     // Analyze dates and statuses for debugging
     const dateAnalysis = {
@@ -364,10 +398,21 @@ export async function POST(request: Request) {
     
     let insertedCount = 0;
     let errorCount = 0;
+    let lastBatchLogged = 0;
+    const logInterval = Math.max(1, Math.floor(batches.length / 10)); // Log progress at 10% intervals
     
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
-      console.log(`Processing batch ${i + 1}/${batches.length} with ${batch.length} fixtures`);
+      
+      // Only log every logInterval batches to reduce console spam
+      const shouldLog = i === 0 || i === batches.length - 1 || 
+                       (i - lastBatchLogged) >= logInterval || 
+                       i % 50 === 0;
+      
+      if (shouldLog) {
+        console.log(`Processing batch ${i + 1}/${batches.length} with ${batch.length} fixtures (${Math.round((i + 1) / batches.length * 100)}% complete)`);
+        lastBatchLogged = i;
+      }
       
       try {
         const { data, error } = await supabase
@@ -378,8 +423,15 @@ export async function POST(request: Request) {
           console.error(`Error upserting batch ${i + 1}:`, error);
           errorCount++;
         } else {
-          console.log(`Successfully upserted batch ${i + 1}`);
+          if (shouldLog) {
+            console.log(`Successfully upserted batch ${i + 1}`);
+          }
           insertedCount += batch.length;
+        }
+        
+        // Add a small delay between batches to avoid overwhelming the database
+        if (i < batches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       } catch (error) {
         console.error(`Exception upserting batch ${i + 1}:`, error);
