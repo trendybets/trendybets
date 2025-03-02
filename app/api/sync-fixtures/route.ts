@@ -181,15 +181,34 @@ export async function POST(request: Request) {
       // Add custom fetch implementation with DNS resolution options
       global: {
         fetch: (url, options) => {
+          // Log the URL (with API key redacted)
           console.log(`Fetching URL: ${url.toString().replace(/apikey=[^&]+/, 'apikey=REDACTED')}`);
+          
+          // Parse the URL to get the query parameters
+          const urlObj = new URL(url.toString());
+          const apiKey = urlObj.searchParams.get('apikey') || SUPABASE_SERVICE_KEY;
+          
+          // Create new headers with the API key
+          const newHeaders = new Headers(options?.headers || {});
+          
+          // Ensure API key is in headers
+          if (!newHeaders.has('apikey')) {
+            newHeaders.set('apikey', apiKey);
+          }
+          
+          // Always set the Authorization header with the API key
+          if (!newHeaders.has('Authorization')) {
+            newHeaders.set('Authorization', `Bearer ${apiKey}`);
+          }
+          
+          // Add additional headers for better connectivity
+          newHeaders.set('Accept-Encoding', 'gzip, deflate');
+          newHeaders.set('Connection', 'keep-alive');
+          
+          // Return the fetch with updated headers
           return fetch(url, {
             ...options,
-            // Force IPv4 DNS resolution
-            headers: {
-              ...options?.headers,
-              'Accept-Encoding': 'gzip, deflate',
-              'Connection': 'keep-alive'
-            }
+            headers: newHeaders
           });
         }
       }
@@ -200,10 +219,19 @@ export async function POST(request: Request) {
     console.log("Attempting to access fixtures table...")
     try {
       const { data: tableCheck, error: tableError } = await withRetry(async () => {
-        return await supabase
+        console.log("Executing table check query...")
+        const result = await supabase
           .from("fixtures")
           .select("id")
           .limit(1);
+        
+        console.log("Table check query completed", {
+          hasData: !!result.data,
+          dataLength: result.data?.length,
+          hasError: !!result.error
+        });
+        
+        return result;
       });
 
       if (tableError) {
