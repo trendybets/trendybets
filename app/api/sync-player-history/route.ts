@@ -10,6 +10,9 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 // Add this line to tell Next.js this is a dynamic route
 export const dynamic = 'force-dynamic'
 
+// Increase the execution duration to 5 minutes (300 seconds)
+export const maxDuration = 300
+
 // Helper function to retry failed operations
 async function withRetry<T>(
   operation: () => Promise<T>,
@@ -113,16 +116,21 @@ export async function POST(request: Request) {
     });
   }
 
-  // Parse request body to check for player_id parameter
+  // Parse request body to check for player_id parameter and limit parameter
   let playerIdToProcess: string | null = null;
+  let playerLimit: number | null = null;
   try {
     const body = await request.json();
     playerIdToProcess = body.player_id || null;
+    playerLimit = body.limit ? parseInt(body.limit, 10) : null;
   } catch (e) {
     // No body or invalid JSON, continue with full sync
   }
 
-  console.log("API route called", playerIdToProcess ? `for player ${playerIdToProcess}` : "for all players");
+  console.log("API route called", 
+    playerIdToProcess ? `for player ${playerIdToProcess}` : 
+    playerLimit ? `for up to ${playerLimit} players` : "for all players"
+  );
   
   // Log environment variables (without revealing full values)
   console.log("Environment check:", {
@@ -279,16 +287,22 @@ export async function POST(request: Request) {
     });
 
     if (playerError) throw playerError;
-    console.log(`Found ${players.length} active players`);
+    
+    // Apply limit if specified
+    const playersToProcess = playerLimit && playerLimit > 0 && playerLimit < players.length 
+      ? players.slice(0, playerLimit) 
+      : players;
+    
+    console.log(`Found ${players.length} active players, processing ${playersToProcess.length}`);
     
     // Process all players in batches
-    const batchSize = 10; // Process 10 players at a time
+    const batchSize = 5; // Process 5 players at a time (reduced from 10)
     let totalProcessedRecords = 0;
     
     // Create batches of players
     const batches = [];
-    for (let i = 0; i < players.length; i += batchSize) {
-      batches.push(players.slice(i, i + batchSize));
+    for (let i = 0; i < playersToProcess.length; i += batchSize) {
+      batches.push(playersToProcess.slice(i, i + batchSize));
     }
     
     console.log(`Created ${batches.length} batches of players to process`);
@@ -311,8 +325,8 @@ export async function POST(request: Request) {
       
       // Add a small delay between batches to avoid rate limiting
       if (batchIndex < batches.length - 1) {
-        console.log(`Waiting 2 seconds before processing next batch...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log(`Waiting 3 seconds before processing next batch...`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
     }
     
@@ -373,49 +387,62 @@ async function processPlayer(
   supabase: SupabaseClient<Database>
 ): Promise<number> {
   try {
-    console.log(`Fetching recent history for player ${playerId} since ${lastSyncDate}...`);
+    console.log(`[Player ${playerId}] Starting processing since ${lastSyncDate}...`);
     
     // Add start_date parameter to only get games after last sync
     const apiUrl = `https://api.opticodds.com/api/v3/fixtures/player-results`;
     
-    console.log(`Fetching from API URL with axios: ${apiUrl}`);
-    console.log(`Using API key: ${serverEnv.OPTIC_ODDS_API_KEY ? 'API key is set' : 'API key is missing'}`);
+    console.log(`[Player ${playerId}] Fetching from API URL: ${apiUrl}`);
     
     const response = await withRetry(async () => {
-      const res = await axios({
-        method: 'GET',
-        url: apiUrl,
-        params: {
-          player_id: playerId,
-          status: 'completed',
-          start_date: lastSyncDate,
-          key: serverEnv.OPTIC_ODDS_API_KEY
-        },
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept-Encoding': 'gzip, deflate',
-          'Connection': 'keep-alive'
-        },
-        timeout: 15000, // 15 second timeout
-        // Force IPv4
-        family: 4
-      });
-      
-      if (res.status !== 200) {
-        console.error(`API request failed: ${res.status} ${res.statusText}`);
-        throw new Error(`API request failed: ${res.status} ${res.statusText}`);
+      try {
+        console.log(`[Player ${playerId}] Making API request with params: player_id=${playerId}, status=completed, start_date=${lastSyncDate}`);
+        const res = await axios({
+          method: 'GET',
+          url: apiUrl,
+          params: {
+            player_id: playerId,
+            status: 'completed',
+            start_date: lastSyncDate,
+            key: serverEnv.OPTIC_ODDS_API_KEY
+          },
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive'
+          },
+          timeout: 15000, // 15 second timeout
+          // Force IPv4
+          family: 4
+        });
+        
+        if (res.status !== 200) {
+          console.error(`[Player ${playerId}] API request failed: ${res.status} ${res.statusText}`);
+          throw new Error(`API request failed: ${res.status} ${res.statusText}`);
+        }
+        
+        return res;
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          console.error(`[Player ${playerId}] Axios error:`, {
+            message: error.message,
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data
+          });
+        }
+        throw error;
       }
-      
-      return res;
     });
     
     const json: APIResponse = response.data;
     
     if (!json.data?.length) {
-      console.log(`No new games for player ${playerId} since ${lastSyncDate}`);
+      console.log(`[Player ${playerId}] No new games since ${lastSyncDate}`);
       return 0;
     }
 
+    console.log(`[Player ${playerId}] Found ${json.data.length} fixtures to process`);
     let playerHistoryCount = 0;
 
     // Process each new fixture
@@ -426,18 +453,24 @@ async function processPlayer(
       const gameDate = new Date(fixture.start_date);
       const syncDate = new Date(lastSyncDate);
       if (gameDate <= syncDate) {
-        console.log(`Skipping game ${fixture.id} as it's before last sync date`);
+        console.log(`[Player ${playerId}] Skipping game ${fixture.id} as it's before last sync date`);
         continue;
       }
       
       const playerResult = results.find(r => r.player.id === playerId);
-      if (!playerResult) continue;
+      if (!playerResult) {
+        console.log(`[Player ${playerId}] No player result found for fixture ${fixture.id}`);
+        continue;
+      }
       
       const allStats = playerResult.stats.find(s => s.period === 'all');
-      if (!allStats) continue;
+      if (!allStats) {
+        console.log(`[Player ${playerId}] No 'all' period stats found for fixture ${fixture.id}`);
+        continue;
+      }
 
       // Check if we already have this record
-      const { data: existingRecord } = await withRetry(async () => {
+      const { data: existingRecord, error: checkError } = await withRetry(async () => {
         return await supabase
           .from("player_history")
           .select("id")
@@ -446,8 +479,13 @@ async function processPlayer(
           .maybeSingle();
       });
 
+      if (checkError) {
+        console.error(`[Player ${playerId}] Error checking for existing record:`, checkError);
+        continue;
+      }
+
       if (existingRecord) {
-        console.log(`Record already exists for player ${playerId} and fixture ${fixture.id}`);
+        console.log(`[Player ${playerId}] Record already exists for fixture ${fixture.id}`);
         continue;
       }
 
@@ -497,18 +535,18 @@ async function processPlayer(
       });
 
       if (insertError) {
-        console.error(`Error inserting history for player ${playerId}:`, insertError);
+        console.error(`[Player ${playerId}] Error inserting history for fixture ${fixture.id}:`, insertError);
         continue;
       }
 
       playerHistoryCount++;
-      console.log(`Added new history record for player ${playerId}, fixture ${fixture.id}`);
+      console.log(`[Player ${playerId}] Added new history record for fixture ${fixture.id}`);
     }
     
-    console.log(`Completed sync for player ${playerId}: ${playerHistoryCount} new records`);
+    console.log(`[Player ${playerId}] Completed sync: ${playerHistoryCount} new records`);
     return playerHistoryCount;
   } catch (error) {
-    console.error(`Error processing player ${playerId}:`, error);
+    console.error(`[Player ${playerId}] Error processing:`, error);
     return 0;
   }
 } 
