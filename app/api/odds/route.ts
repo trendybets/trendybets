@@ -184,11 +184,12 @@ export async function GET(request: Request) {
     const fixtureId = url.searchParams.get('fixture_id');
     const limit = parseInt(url.searchParams.get('limit') || '10'); // Default to 10 fixtures
     
-    // First get active fixtures
-    const fixturesUrl = `https://api.opticodds.com/api/v3/fixtures?` +
+    // First get active fixtures - updated to match the provided endpoint
+    const fixturesUrl = `https://api.opticodds.com/api/v3/fixtures/active?` +
+      `sport=basketball&` +
       `league=nba&` +
-      `status=unplayed&` +
-      (fixtureId ? `id=${fixtureId}&` : '') +
+      `is_live=false&` +
+      (fixtureId ? `fixture_id=${fixtureId}&` : '') +
       `key=${serverEnv.OPTIC_ODDS_API_KEY}`
     
     console.log('Fetching fixtures from:', fixturesUrl.replace(serverEnv.OPTIC_ODDS_API_KEY, '[REDACTED]'))
@@ -219,14 +220,23 @@ export async function GET(request: Request) {
       return NextResponse.json([])
     }
 
-    // Limit the number of fixtures to process
-    const limitedFixtures = fixtureId ? fixtures : fixtures.slice(0, limit);
+    // Log all available fixtures to help debug
+    console.log('All available fixtures:', fixtures.map((f: any) => 
+      `${f.id}: ${f.home_team_display} vs ${f.away_team_display} (${f.status})`
+    ));
+
+    // Process all fixtures or limit based on the parameter
+    const limitedFixtures = fixtureId ? fixtures.filter((f: any) => f.id === fixtureId) : 
+                           limit > 0 ? fixtures.slice(0, limit) : fixtures;
+    
     console.log(`Processing ${limitedFixtures.length} fixtures out of ${fixtures.length} total fixtures`);
-    console.log('Fixtures to process:', limitedFixtures.map((f: any) => `${f.id}: ${f.home_team} vs ${f.away_team}`));
+    console.log('Fixtures to process:', limitedFixtures.map((f: any) => 
+      `${f.id}: ${f.home_team_display} vs ${f.away_team_display} (${f.status})`
+    ));
 
     // Use Promise.all to fetch odds for all fixtures in parallel
     const fixtureOddsPromises = limitedFixtures.map(async (fixture: any) => {
-      console.log(`Processing fixture ${fixture.id} - ${fixture.home_team} vs ${fixture.away_team}`)
+      console.log(`Processing fixture ${fixture.id} - ${fixture.home_team_display} vs ${fixture.away_team_display}`)
       
       const oddsUrl = `https://api.opticodds.com/api/v3/fixtures/odds?` +
         `sportsbook=draftkings&` +
@@ -267,8 +277,13 @@ export async function GET(request: Request) {
     const playerIds = new Set(allFixtureOdds.map((odd: any) => odd.player_id)) as Set<string>
     const playerDetails = new Map()
     
+    // Increase the number of players to process per fixture
+    const maxPlayersPerFixture = 30; // Increased from 20
+    console.log(`Processing up to ${maxPlayersPerFixture} players per fixture`);
+    
     // Limit the number of players to process per fixture
-    const limitedPlayerIds = Array.from(playerIds).slice(0, 20); // Process max 20 players per fixture (increased from 10)
+    const limitedPlayerIds = Array.from(playerIds).slice(0, maxPlayersPerFixture);
+    console.log(`Found ${playerIds.size} unique players, processing ${limitedPlayerIds.length}`);
     
     for (const playerId of limitedPlayerIds) {
       try {
@@ -298,7 +313,10 @@ export async function GET(request: Request) {
     }
     
     // Process all odds first to get unique props
-    // Limit the number of odds to process
+    // Increase the limit of odds to process
+    const maxOddsPerFixture = 60; // Increased from 40
+    console.log(`Processing up to ${maxOddsPerFixture} odds per fixture`);
+    
     const limitedOdds = allFixtureOdds
       .filter((odd: any) => 
         odd.market_id === 'player_points' || 
@@ -306,7 +324,9 @@ export async function GET(request: Request) {
         odd.market_id === 'player_assists'
       )
       .filter((odd: any) => limitedPlayerIds.includes(odd.player_id))
-      .slice(0, 40); // Process max 40 odds per fixture (increased from 20)
+      .slice(0, maxOddsPerFixture); // Process more odds per fixture
+    
+    console.log(`Found ${allFixtureOdds.length} total odds, processing ${limitedOdds.length} after filtering`);
     
     const oddsToProcess = limitedOdds.map(async (odd: any) => {
         const key = odd.grouping_key || `${odd.normalized_selection}:${odd.points}`

@@ -28,6 +28,16 @@ export async function fetchPlayerOdds(fixtureLimit = 10): Promise<PlayerData[]> 
       });
       
       console.log('Unique fixtures found:', Array.from(fixtures));
+      
+      // Count players per fixture
+      const fixturePlayerCounts: Record<string, number> = {};
+      playerData.forEach((player: PlayerData) => {
+        if (player.next_game && player.next_game.opponent) {
+          const fixtureString = `${player.player.team} vs ${player.next_game.opponent}`;
+          fixturePlayerCounts[fixtureString] = (fixturePlayerCounts[fixtureString] || 0) + 1;
+        }
+      });
+      console.log('Players per fixture:', fixturePlayerCounts);
     }
     
     return playerData;
