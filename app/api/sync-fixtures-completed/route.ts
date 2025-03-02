@@ -4,7 +4,11 @@ import type { Database } from "@/types/supabase"
 import { serverEnv } from "@/lib/env"
 import axios from 'axios'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+// Ensure the URL has the https:// protocol
+let SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+if (SUPABASE_URL && !SUPABASE_URL.startsWith('http')) {
+  SUPABASE_URL = `https://${SUPABASE_URL}`
+}
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 // Add this line to tell Next.js this is a dynamic route
@@ -86,79 +90,29 @@ export async function POST(request: Request) {
       SUPABASE_SERVICE_KEY_set: !!SUPABASE_SERVICE_KEY,
       SUPABASE_URL_length: SUPABASE_URL?.length,
       SUPABASE_SERVICE_KEY_length: SUPABASE_SERVICE_KEY?.length,
-      NODE_OPTIONS: process.env.NODE_OPTIONS || 'not set'
+      NODE_OPTIONS: process.env.NODE_OPTIONS || 'not set',
+      SUPABASE_URL_prefix: SUPABASE_URL?.substring(0, 10) + '...'
     })
     
-    // Create Supabase client with improved fetch implementation
+    // Create Supabase client with simplified options
     const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
-      },
-      // Add custom fetch implementation with DNS resolution options
-      global: {
-        fetch: (url, options) => {
-          // Log the URL (with API key redacted)
-          console.log(`Fetching URL: ${url.toString().replace(/apikey=[^&]+/, 'apikey=REDACTED')}`);
-          
-          // Parse the URL to get the query parameters
-          const urlObj = new URL(url.toString());
-          const apiKey = urlObj.searchParams.get('apikey') || SUPABASE_SERVICE_KEY;
-          
-          // Create new headers with the API key
-          const newHeaders = new Headers(options?.headers || {});
-          
-          // Ensure API key is in headers
-          if (!newHeaders.has('apikey')) {
-            newHeaders.set('apikey', apiKey);
-          }
-          
-          // Always set the Authorization header with the API key
-          if (!newHeaders.has('Authorization')) {
-            newHeaders.set('Authorization', `Bearer ${apiKey}`);
-          }
-          
-          // Add additional headers for better connectivity
-          newHeaders.set('Accept-Encoding', 'gzip, deflate');
-          newHeaders.set('Connection', 'keep-alive');
-          
-          // Return the fetch with updated headers
-          return fetch(url, {
-            ...options,
-            headers: newHeaders
-          });
-        }
       }
-    })
+    });
     
-    // First, verify we can access the table
-    console.log("Attempting to access fixtures_completed table...")
+    // Log a test connection
+    console.log("Testing Supabase connection...");
     try {
-      const { data: tableCheck, error: tableError } = await withRetry(async () => {
-        console.log("Executing table check query...")
-        const result = await supabase
-          .from("fixtures_completed")
-          .select("id")
-          .limit(1);
-        
-        console.log("Table check query completed", {
-          hasData: !!result.data,
-          dataLength: result.data?.length,
-          hasError: !!result.error
-        });
-        
-        return result;
-      });
-
-      if (tableError) {
-        console.error("Table check error:", tableError)
-        throw new Error(`Failed to access fixtures_completed table: ${tableError.message}`)
+      const { data, error } = await supabase.from("sync_log").select("id").limit(1);
+      if (error) {
+        console.error("Supabase connection test failed:", error);
+      } else {
+        console.log("Supabase connection successful");
       }
-
-      console.log("Table check successful", tableCheck)
-    } catch (tableAccessError) {
-      console.error("Error during table access:", tableAccessError)
-      throw new Error(`Table access error: ${tableAccessError instanceof Error ? tableAccessError.message : String(tableAccessError)}`)
+    } catch (connError) {
+      console.error("Exception during Supabase connection test:", connError);
     }
 
     let allFixtures: any[] = []
@@ -359,42 +313,39 @@ export async function POST(request: Request) {
         console.log(`Processing batch ${i + 1} of ${batches.length} (${batch.length} fixtures)`);
         
         try {
-          const { error } = await withRetry(async () => {
-            // Log the first fixture in the batch for debugging
-            if (batch.length > 0) {
-              console.log(`Batch ${i + 1} first fixture:`, {
-                id: batch[0].id,
-                home_competitors: Array.isArray(batch[0].home_competitors) ? 
-                  `Array with ${batch[0].home_competitors.length} items` : 
-                  typeof batch[0].home_competitors,
-                away_competitors: Array.isArray(batch[0].away_competitors) ? 
-                  `Array with ${batch[0].away_competitors.length} items` : 
-                  typeof batch[0].away_competitors,
-                result: typeof batch[0].result
-              });
-            }
+          // Log the full structure of the first fixture for debugging
+          if (batch.length > 0) {
+            console.log(`Batch ${i + 1} first fixture:`, JSON.stringify({
+              id: batch[0].id,
+              home_competitors: batch[0].home_competitors,
+              away_competitors: batch[0].away_competitors,
+              result: batch[0].result,
+              home_score_q1: batch[0].home_score_q1,
+              away_score_q1: batch[0].away_score_q1
+            }, null, 2));
+          }
+          
+          const { error, data } = await withRetry(async () => {
+            console.log(`Executing upsert for batch ${i + 1}...`);
+            
+            // Log the exact URL being used
+            console.log(`Supabase URL: ${SUPABASE_URL}/rest/v1/fixtures_completed`);
             
             const result = await supabase
               .from("fixtures_completed")
-              .upsert(batch, { onConflict: 'id' });
-              
+              .upsert(batch, { 
+                onConflict: 'id'
+              });
+            
             if (result.error) {
-              console.error(`Error upserting batch ${i + 1}:`, {
+              console.error(`Upsert error for batch ${i + 1}:`, {
                 message: result.error.message,
                 details: result.error.details,
                 hint: result.error.hint,
                 code: result.error.code
               });
-              
-              // Log the first fixture that might be causing issues
-              if (batch.length > 0) {
-                console.error(`Problematic fixture data sample:`, JSON.stringify({
-                  id: batch[0].id,
-                  home_competitors: batch[0].home_competitors,
-                  away_competitors: batch[0].away_competitors,
-                  result: batch[0].result
-                }).substring(0, 500) + '...');
-              }
+            } else {
+              console.log(`Upsert successful for batch ${i + 1}`);
             }
             
             return result;
@@ -404,7 +355,9 @@ export async function POST(request: Request) {
             console.error(`Error upserting batch ${i + 1}:`, error);
             errors.push({
               batch: i + 1,
-              error: error instanceof Error ? error.message : String(error)
+              error: error instanceof Error ? error.message : String(error),
+              details: error.details,
+              code: error.code
             });
           } else {
             successCount += batch.length;
