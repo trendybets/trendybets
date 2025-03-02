@@ -11,8 +11,9 @@ if (SUPABASE_URL && !SUPABASE_URL.startsWith('http')) {
 }
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
-// Add this line to tell Next.js this is a dynamic route
+// Add this line to tell Next.js this is a dynamic route with increased timeout
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60; // Set maximum execution time to 60 seconds
 
 // Helper function to retry failed operations
 async function withRetry<T>(
@@ -42,7 +43,12 @@ async function fetchPage(page: number) {
   // Add end_date parameter to only get games up to today
   const today = new Date().toISOString().split('T')[0];
   
-  console.log(`Fetching page ${page} of completed fixtures...`);
+  // Get start_date for 3 days ago to focus on recent games
+  const threeDaysAgo = new Date();
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+  const recentDate = threeDaysAgo.toISOString().split('T')[0];
+  
+  console.log(`Fetching page ${page} of completed fixtures from ${recentDate} to ${today}...`);
   
   return await withRetry(async () => {
     const res = await axios({
@@ -55,6 +61,7 @@ async function fetchPage(page: number) {
         season_year: '2024',
         season_type: 'regular season',
         status: 'completed',
+        start_date: recentDate, // Only get recent games
         end_date: today,
         key: process.env.OPTIC_ODDS_API_KEY
       },
@@ -123,23 +130,76 @@ export async function POST(request: Request) {
       console.error("Exception during Supabase connection test:", connError);
     }
 
-    let allFixtures: any[] = []
-    let page = 1
-    let hasMorePages = true
-    let successCount = 0
-    let errors: any[] = []
-
-    // Fetch all pages
-    while (hasMorePages) {
-      const data = await fetchPage(page)
+    // Check if we already have recent fixtures in the database
+    console.log("Checking for existing recent fixtures...");
+    try {
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+      const recentDate = threeDaysAgo.toISOString();
       
-      if (!data.data || data.data.length === 0) {
-        hasMorePages = false
-        break
+      const { data: existingFixtures, error: checkError } = await supabase
+        .from("fixtures_completed")
+        .select("id")
+        .gte("start_date", recentDate)
+        .limit(100);
+      
+      if (checkError) {
+        console.error("Error checking existing fixtures:", checkError);
+      } else {
+        console.log(`Found ${existingFixtures?.length || 0} existing recent fixtures`);
+        
+        // If we already have a significant number of recent fixtures, we can limit our sync
+        if (existingFixtures && existingFixtures.length > 30) {
+          console.log("Most recent fixtures already exist, limiting sync to just the last day");
+          // Update the fetchPage function to only get the last day
+          const oneDayAgo = new Date();
+          oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+          threeDaysAgo.setDate(oneDayAgo.getDate());
+        }
       }
-
-      allFixtures = [...allFixtures, ...data.data]
-      page++
+    } catch (checkError) {
+      console.error("Exception checking existing fixtures:", checkError);
+    }
+    
+    // Start fetching fixtures
+    let page = 1;
+    let allFixtures: any[] = [];
+    let hasMorePages = true;
+    let successCount = 0;
+    let errors: any[] = [];
+    
+    // Limit to 3 pages for efficiency since we're focusing on recent games
+    const maxPages = 3;
+    
+    while (hasMorePages && page <= maxPages) {
+      try {
+        console.log(`Fetching page ${page}...`);
+        const data = await fetchPage(page);
+        
+        if (!data || !data.data || !Array.isArray(data.data)) {
+          console.error(`Invalid response format on page ${page}`);
+          break;
+        }
+        
+        console.log(`Received ${data.data.length} fixtures on page ${page}`);
+        
+        if (data.data.length === 0) {
+          hasMorePages = false;
+          break;
+        }
+        
+        allFixtures = [...allFixtures, ...data.data];
+        page++;
+        
+        // If we have enough fixtures, we can stop
+        if (allFixtures.length >= 50) {
+          console.log(`Collected ${allFixtures.length} fixtures, which should be sufficient`);
+          hasMorePages = false;
+        }
+      } catch (error) {
+        console.error(`Error fetching page ${page}:`, error);
+        break;
+      }
     }
 
     console.log(`Fetched ${allFixtures.length} completed fixtures`)
@@ -190,16 +250,6 @@ export async function POST(request: Request) {
             scoresExist: !!fixture.result?.scores,
             homeScores: fixture.result?.scores?.home,
             awayScores: fixture.result?.scores?.away
-          })
-          errors.push({ 
-            id: fixture.id, 
-            error: 'Missing score totals',
-            details: {
-              hasResult: !!fixture.result,
-              hasScores: !!fixture.result?.scores,
-              homeScores: fixture.result?.scores?.home,
-              awayScores: fixture.result?.scores?.away
-            }
           })
           return false
         }
@@ -340,9 +390,6 @@ export async function POST(request: Request) {
             } : null
         }, null, 2));
       }
-      
-      let successCount = 0;
-      const errors = [];
       
       for (let i = 0; i < batches.length; i++) {
         const batch = batches[i];
