@@ -24,16 +24,17 @@ export default function TrendyPropsView() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [errorDetails, setErrorDetails] = useState<string | null>(null)
-  const [hasMore, setHasMore] = useState(false)
-  const [fixtureLimit, setFixtureLimit] = useState(2) // Start with 2 fixtures
-
+  
   useEffect(() => {
     async function loadPlayerOdds() {
       try {
         setIsLoading(true)
         setError(null)
         setErrorDetails(null)
-        const odds = await fetchPlayerOdds(fixtureLimit)
+        
+        // Fetch all available fixtures by setting a high limit
+        // You can adjust this number based on your needs
+        const odds = await fetchPlayerOdds(10) // Load up to 10 fixtures at once
         console.log('Fetched odds:', odds) // Debug log
         
         // Check if we have games data and how many games per player
@@ -49,26 +50,18 @@ export default function TrendyPropsView() {
         }
         
         setPlayerOdds(odds || [])
-        // If we got data back, assume there might be more
-        setHasMore(odds && odds.length > 0)
       } catch (err) {
         console.error('Error loading player odds:', err)
         setError(err instanceof Error ? err.message : 'Failed to load player odds')
         setErrorDetails(err instanceof Error && err.stack ? err.stack : null)
         setPlayerOdds([])
-        setHasMore(false)
       } finally {
         setIsLoading(false)
       }
     }
 
     loadPlayerOdds()
-  }, [fixtureLimit])
-
-  // Function to load more fixtures
-  const loadMore = () => {
-    setFixtureLimit(prev => prev + 2) // Increase by 2 fixtures each time
-  }
+  }, []) // Only run on component mount
 
   // Get filtered data
   const filteredData = useMemo(() => {
@@ -184,8 +177,6 @@ export default function TrendyPropsView() {
           <TrendsTable 
             data={filteredData} 
             isLoading={isLoading && playerOdds.length > 0} 
-            hasMore={hasMore}
-            onLoadMore={loadMore}
           />
         </div>
 
@@ -193,8 +184,6 @@ export default function TrendyPropsView() {
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <ProjectionsTable 
             data={filteredData} 
-            hasMore={hasMore}
-            onLoadMore={loadMore}
             isLoading={isLoading && playerOdds.length > 0}
           />
         </div>

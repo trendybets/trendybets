@@ -3,8 +3,8 @@ import { serverEnv } from "@/lib/env"
 
 // Add this line to tell Next.js this is a dynamic route
 export const dynamic = 'force-dynamic'
-// Increase the maximum duration for this route
-export const maxDuration = 60; // 60 seconds instead of the default 10
+// Increase the maximum duration for this route to handle loading all fixtures
+export const maxDuration = 120; // 2 minutes timeout
 
 // Helper function to calculate averages from player results
 async function fetchPlayerResults(playerId: string, statType: string): Promise<{
@@ -182,7 +182,7 @@ export async function GET(request: Request) {
     // Get query parameters
     const url = new URL(request.url);
     const fixtureId = url.searchParams.get('fixture_id');
-    const limit = parseInt(url.searchParams.get('limit') || '2'); // Default to 2 fixtures
+    const limit = parseInt(url.searchParams.get('limit') || '10'); // Default to 10 fixtures
     
     // First get active fixtures
     const fixturesUrl = `https://api.opticodds.com/api/v3/fixtures?` +
@@ -198,7 +198,7 @@ export async function GET(request: Request) {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       },
-      next: { revalidate: 300 } // Cache for 5 minutes
+      next: { revalidate: 1800 } // Cache for 30 minutes
     })
 
     if (!fixturesResponse.ok) {
@@ -223,9 +223,8 @@ export async function GET(request: Request) {
     const limitedFixtures = fixtureId ? fixtures : fixtures.slice(0, limit);
     console.log(`Processing ${limitedFixtures.length} fixtures out of ${fixtures.length} total fixtures`);
 
-    // Then get odds for each fixture
-    const allPlayerOdds = []
-    for (const fixture of limitedFixtures) {
+    // Use Promise.all to fetch odds for all fixtures in parallel
+    const fixtureOddsPromises = limitedFixtures.map(async (fixture: any) => {
       console.log(`Processing fixture ${fixture.id} - ${fixture.home_team} vs ${fixture.away_team}`)
       
       const oddsUrl = `https://api.opticodds.com/api/v3/fixtures/odds?` +
@@ -237,180 +236,188 @@ export async function GET(request: Request) {
         `is_main=true&` +
         `key=${serverEnv.OPTIC_ODDS_API_KEY}`
 
-      const response = await fetch(oddsUrl)
-      
-      if (!response.ok) {
-        console.error(`Failed to fetch odds for fixture ${fixture.id}:`, response.status)
-        continue
-      }
-
-      const data = await response.json()
-      const fixtureOdds = data.data?.[0]?.odds || []
-      console.log(`Found ${fixtureOdds.length} odds for fixture ${fixture.id}`)
-      
-      if (fixtureOdds.length === 0) {
-        console.warn(`No odds found for fixture ${fixture.id}, skipping`)
-        continue
-      }
-
-      // Create a map to store unique props by grouping key
-      const uniqueProps = new Map()
-      
-      // Fetch player details for all unique players first
-      const playerIds = new Set(fixtureOdds.map((odd: any) => odd.player_id)) as Set<string>
-      const playerDetails = new Map()
-      
-      // Limit the number of players to process per fixture
-      const limitedPlayerIds = Array.from(playerIds).slice(0, 10); // Process max 10 players per fixture
-      
-      for (const playerId of limitedPlayerIds) {
-        try {
-          const playerUrl = `https://api.opticodds.com/api/v3/players?` +
-            `sport=basketball&` +
-            `league=nba&` +
-            `id=${playerId}&` +
-            `key=${serverEnv.OPTIC_ODDS_API_KEY}`
-          
-          const playerResponse = await fetch(playerUrl, {
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-            },
-            next: { revalidate: 3600 } // Cache for 1 hour
-          })
-          
-          if (playerResponse.ok) {
-            const playerData = await playerResponse.json()
-            if (playerData.data?.[0]) {
-              playerDetails.set(playerId, playerData.data[0])
-            }
-          }
-        } catch (error) {
-          console.error(`Failed to fetch details for player ${playerId}:`, error)
-        }
-      }
-      
-      // Process all odds first to get unique props
-      // Limit the number of odds to process
-      const limitedOdds = fixtureOdds
-        .filter((odd: any) => 
-          odd.market_id === 'player_points' || 
-          odd.market_id === 'player_rebounds' || 
-          odd.market_id === 'player_assists'
-        )
-        .filter((odd: any) => limitedPlayerIds.includes(odd.player_id))
-        .slice(0, 20); // Process max 20 odds per fixture
-      
-      const oddsToProcess = limitedOdds.map(async (odd: any) => {
-          const key = odd.grouping_key || `${odd.normalized_selection}:${odd.points}`
-          if (uniqueProps.has(key)) return null
-
-          const playerDetail = playerDetails.get(odd.player_id)
-          const statType = odd.market_id.replace('player_', '').charAt(0).toUpperCase() + 
-                          odd.market_id.replace('player_', '').slice(1)
-
-          // Fetch player results and calculate averages
-          const playerStats = await fetchPlayerResults(odd.player_id, statType)
-          
-          // Calculate hit rates now that we have the line
-          const gameStats = playerStats.gameStats || []
-          const last5Games = gameStats.slice(0, 5)
-          const last10Games = gameStats.slice(0, 10)
-          const allGames = gameStats
-
-          const calculateHitRate = (arr: number[], line: number) =>
-            arr.length ? arr.filter(stat => stat > line).length / arr.length : 0
-
-          const hitRates = {
-            last5: calculateHitRate(last5Games, odd.points),
-            last10: calculateHitRate(last10Games, odd.points),
-            season: calculateHitRate(allGames, odd.points)
-          }
-
-          return {
-            key,
-            data: {
-              id: odd.id,
-              player: {
-                id: odd.player_id,
-                name: playerDetail?.name || odd.selection || 'Unknown',
-                team: playerDetail?.team?.name || odd.team_id || 'Unknown',
-                position: playerDetail?.position || 'Unknown',
-                image_url: playerDetail?.logo || `https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/${odd.player_id}.png`,
-              },
-              stat_type: statType,
-              line: parseFloat(odd.points) || 0,
-              averages: {
-                last5: parseFloat(playerStats.last5.toFixed(1)) || 0,
-                last10: parseFloat(playerStats.last10.toFixed(1)) || 0,
-                season: parseFloat(playerStats.season.toFixed(1)) || 0,
-              },
-              hit_rates: {
-                last5: parseFloat(hitRates.last5.toFixed(3)) || 0,
-                last10: parseFloat(hitRates.last10.toFixed(3)) || 0,
-                season: parseFloat(hitRates.season.toFixed(3)) || 0,
-              },
-              current_streak: parseInt(playerStats.currentStreak.toString()) || 0,
-              recommended_bet: {
-                type: playerStats.last5 > odd.points ? 'over' : 'under',
-                confidence: hitRates.last5 > 0.7 ? 'high' : 
-                           hitRates.last5 > 0.6 ? 'medium' : 'low',
-                reason: `${Math.round((hitRates.last5 || 0) * 100)}% hit rate in L5`,
-              },
-              next_game: {
-                opponent: fixture.away_team_display,
-                date: fixture.start_date,
-              },
-              trend_strength: parseFloat((Math.abs((playerStats.last5 - odd.points) / odd.points)).toFixed(3)) || 0,
-              games: gameStats.slice(0, 20).map(stat => { // Increase limit to 20 games for Last 20 filter
-                const gameData = {
-                  points: 0,
-                  assists: 0,
-                  total_rebounds: 0,
-                  date: fixture.start_date
-                }
-                
-                switch (statType.toLowerCase()) {
-                  case 'points':
-                    gameData.points = stat
-                    break
-                  case 'assists':
-                    gameData.assists = stat
-                    break
-                  case 'rebounds':
-                  case 'total_rebounds': // Add this case to handle both formats
-                    gameData.total_rebounds = stat
-                    break
-                }
-                
-                return gameData
-              }),
-            }
-          }
+      try {
+        const response = await fetch(oddsUrl, {
+          next: { revalidate: 1800 } // Cache for 30 minutes
         })
+        
+        if (!response.ok) {
+          console.error(`Failed to fetch odds for fixture ${fixture.id}:`, response.status)
+          return []
+        }
 
-      // Wait for all player stats to be processed
-      const processedOdds = await Promise.all(oddsToProcess)
-      
-      // Add processed odds to the uniqueProps map
-      processedOdds
-        .filter(Boolean)
-        .forEach(odd => uniqueProps.set(odd.key, odd.data))
+        const data = await response.json()
+        const fixtureOdds = data.data?.[0]?.odds || []
+        console.log(`Found ${fixtureOdds.length} odds for fixture ${fixture.id}`)
+        return fixtureOdds
+      } catch (error) {
+        console.error(`Error fetching odds for fixture ${fixture.id}:`, error)
+        return []
+      }
+    })
 
-      const playerOdds = Array.from(uniqueProps.values())
-      console.log(`Successfully processed ${playerOdds.length} player props for fixture ${fixture.id}`)
-      allPlayerOdds.push(...playerOdds)
-    }
-
-    console.log('Total player odds collected:', allPlayerOdds.length)
+    const allFixtureOddsArrays = await Promise.all(fixtureOddsPromises)
+    const allFixtureOdds = allFixtureOddsArrays.flat()
     
+    // Create a map to store unique props by grouping key
+    const uniqueProps = new Map()
+    
+    // Fetch player details for all unique players first
+    const playerIds = new Set(allFixtureOdds.map((odd: any) => odd.player_id)) as Set<string>
+    const playerDetails = new Map()
+    
+    // Limit the number of players to process per fixture
+    const limitedPlayerIds = Array.from(playerIds).slice(0, 10); // Process max 10 players per fixture
+    
+    for (const playerId of limitedPlayerIds) {
+      try {
+        const playerUrl = `https://api.opticodds.com/api/v3/players?` +
+          `sport=basketball&` +
+          `league=nba&` +
+          `id=${playerId}&` +
+          `key=${serverEnv.OPTIC_ODDS_API_KEY}`
+        
+        const playerResponse = await fetch(playerUrl, {
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          next: { revalidate: 3600 } // Cache for 1 hour
+        })
+        
+        if (playerResponse.ok) {
+          const playerData = await playerResponse.json()
+          if (playerData.data?.[0]) {
+            playerDetails.set(playerId, playerData.data[0])
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to fetch details for player ${playerId}:`, error)
+      }
+    }
+    
+    // Process all odds first to get unique props
+    // Limit the number of odds to process
+    const limitedOdds = allFixtureOdds
+      .filter((odd: any) => 
+        odd.market_id === 'player_points' || 
+        odd.market_id === 'player_rebounds' || 
+        odd.market_id === 'player_assists'
+      )
+      .filter((odd: any) => limitedPlayerIds.includes(odd.player_id))
+      .slice(0, 20); // Process max 20 odds per fixture
+    
+    const oddsToProcess = limitedOdds.map(async (odd: any) => {
+        const key = odd.grouping_key || `${odd.normalized_selection}:${odd.points}`
+        if (uniqueProps.has(key)) return null
+
+        const playerDetail = playerDetails.get(odd.player_id)
+        const statType = odd.market_id.replace('player_', '').charAt(0).toUpperCase() + 
+                        odd.market_id.replace('player_', '').slice(1)
+
+        // Fetch player results and calculate averages
+        const playerStats = await fetchPlayerResults(odd.player_id, statType)
+        
+        // Calculate hit rates now that we have the line
+        const gameStats = playerStats.gameStats || []
+        const last5Games = gameStats.slice(0, 5)
+        const last10Games = gameStats.slice(0, 10)
+        const allGames = gameStats
+
+        const calculateHitRate = (arr: number[], line: number) =>
+          arr.length ? arr.filter(stat => stat > line).length / arr.length : 0
+
+        const hitRates = {
+          last5: calculateHitRate(last5Games, odd.points),
+          last10: calculateHitRate(last10Games, odd.points),
+          season: calculateHitRate(allGames, odd.points)
+        }
+        
+        // Find the fixture for this odd
+        const fixtureForOdd = limitedFixtures.find((f: any) => f.id === odd.fixture_id) || limitedFixtures[0]
+        const fixtureDate = fixtureForOdd?.start_date || new Date().toISOString()
+        const fixtureOpponent = fixtureForOdd?.away_team_display || 'Unknown'
+
+        return {
+          key,
+          data: {
+            id: odd.id,
+            player: {
+              id: odd.player_id,
+              name: playerDetail?.name || odd.selection || 'Unknown',
+              team: playerDetail?.team?.name || odd.team_id || 'Unknown',
+              position: playerDetail?.position || 'Unknown',
+              image_url: playerDetail?.logo || `https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/${odd.player_id}.png`,
+            },
+            stat_type: statType,
+            line: parseFloat(odd.points) || 0,
+            averages: {
+              last5: parseFloat(playerStats.last5.toFixed(1)) || 0,
+              last10: parseFloat(playerStats.last10.toFixed(1)) || 0,
+              season: parseFloat(playerStats.season.toFixed(1)) || 0,
+            },
+            hit_rates: {
+              last5: parseFloat(hitRates.last5.toFixed(3)) || 0,
+              last10: parseFloat(hitRates.last10.toFixed(3)) || 0,
+              season: parseFloat(hitRates.season.toFixed(3)) || 0,
+            },
+            current_streak: parseInt(playerStats.currentStreak.toString()) || 0,
+            recommended_bet: {
+              type: playerStats.last5 > odd.points ? 'over' : 'under',
+              confidence: hitRates.last5 > 0.7 ? 'high' : 
+                         hitRates.last5 > 0.6 ? 'medium' : 'low',
+              reason: `${Math.round((hitRates.last5 || 0) * 100)}% hit rate in L5`,
+            },
+            next_game: {
+              opponent: fixtureOpponent,
+              date: fixtureDate,
+            },
+            trend_strength: parseFloat((Math.abs((playerStats.last5 - odd.points) / odd.points)).toFixed(3)) || 0,
+            games: gameStats.slice(0, 20).map(stat => { // Increase limit to 20 games for Last 20 filter
+              const gameData = {
+                points: 0,
+                assists: 0,
+                total_rebounds: 0,
+                date: fixtureDate
+              }
+              
+              switch (statType.toLowerCase()) {
+                case 'points':
+                  gameData.points = stat
+                  break
+                case 'assists':
+                  gameData.assists = stat
+                  break
+                case 'rebounds':
+                case 'total_rebounds': // Add this case to handle both formats
+                  gameData.total_rebounds = stat
+                  break
+              }
+              
+              return gameData
+            }),
+          }
+        }
+      })
+
+    // Wait for all player stats to be processed
+    const processedOdds = await Promise.all(oddsToProcess)
+    
+    // Add processed odds to the uniqueProps map
+    processedOdds
+      .filter((odd): odd is { key: string, data: any } => odd !== null)
+      .forEach(odd => uniqueProps.set(odd.key, odd.data))
+
+    const playerOdds = Array.from(uniqueProps.values())
+    console.log(`Successfully processed ${playerOdds.length} player props`)
+
     // Add pagination metadata
     const response = {
-      data: allPlayerOdds,
+      data: playerOdds,
       meta: {
         total_fixtures: fixtures.length,
         processed_fixtures: limitedFixtures.length,
-        total_odds: allPlayerOdds.length,
+        total_odds: playerOdds.length,
         has_more: limitedFixtures.length < fixtures.length
       }
     };

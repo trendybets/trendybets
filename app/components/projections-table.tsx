@@ -1,14 +1,12 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { PlayerData } from '../types'
 import { calculateProjection, getAllCustomProjections } from '../lib/projections'
 import { createClient } from '@supabase/supabase-js'
 
 interface ProjectionsTableProps {
   data: PlayerData[]
-  hasMore?: boolean
-  onLoadMore?: () => void
   isLoading?: boolean
 }
 
@@ -39,39 +37,13 @@ function normalizeStatType(statType: string): string {
   return statType.charAt(0).toUpperCase() + statType.slice(1);
 }
 
-export function ProjectionsTable({ data, hasMore = false, onLoadMore, isLoading = false }: ProjectionsTableProps) {
+export function ProjectionsTable({ data, isLoading = false }: ProjectionsTableProps) {
   const [customProjections, setCustomProjections] = useState<CustomProjection[]>([])
   const [loading, setLoading] = useState(true)
   const [sportsbookLogo, setSportsbookLogo] = useState<string | null>(null)
   const [edgeSortDirection, setEdgeSortDirection] = useState<SortDirection>(null)
   const [selectedStatType, setSelectedStatType] = useState<string | null>(null)
-  const loaderRef = useRef<HTMLDivElement>(null);
-
-  // Set up intersection observer for infinite scrolling
-  useEffect(() => {
-    if (!hasMore || !onLoadMore || isLoading || loading) return;
-    
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          onLoadMore();
-        }
-      },
-      { threshold: 0.5 }
-    );
-    
-    const currentLoaderRef = loaderRef.current;
-    if (currentLoaderRef) {
-      observer.observe(currentLoaderRef);
-    }
-    
-    return () => {
-      if (currentLoaderRef) {
-        observer.unobserve(currentLoaderRef);
-      }
-    };
-  }, [hasMore, onLoadMore, isLoading, loading]);
-
+  
   // Fetch custom projections and sportsbook logo on component mount
   useEffect(() => {
     async function fetchData() {
@@ -393,22 +365,6 @@ export function ProjectionsTable({ data, hasMore = false, onLoadMore, isLoading 
               )}
             </tbody>
           </table>
-          
-          {/* Infinite Scroll Loader */}
-          {hasMore && onLoadMore && (
-            <div 
-              ref={loaderRef} 
-              className="py-4 flex justify-center items-center"
-            >
-              {isLoading || loading ? (
-                <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-              ) : (
-                <div className="h-8 flex items-center justify-center text-sm text-gray-500">
-                  Scroll for more
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </div>
