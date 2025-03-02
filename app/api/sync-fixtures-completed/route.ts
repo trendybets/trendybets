@@ -9,6 +9,8 @@ let SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 if (SUPABASE_URL && !SUPABASE_URL.startsWith('http')) {
   SUPABASE_URL = `https://${SUPABASE_URL}`
 }
+
+// Use the correct environment variable for the service key
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 // Add this line to tell Next.js this is a dynamic route with increased timeout
@@ -94,8 +96,8 @@ async function fetchPage(page: number) {
 async function updateLastSyncTime() {
   try {
     const supabase = createClient(
-      process.env.SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_KEY || ''
+      SUPABASE_URL,
+      SUPABASE_SERVICE_KEY
     );
     
     // Store the current timestamp as the last sync time
@@ -123,8 +125,8 @@ async function updateLastSyncTime() {
 async function getLastSyncTime(): Promise<string | null> {
   try {
     const supabase = createClient(
-      process.env.SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_KEY || ''
+      SUPABASE_URL,
+      SUPABASE_SERVICE_KEY
     );
     
     const { data, error } = await supabase
@@ -160,18 +162,18 @@ export async function POST(request: Request) {
     }
     
     console.log('Environment check:', {
-      SUPABASE_URL_set: !!process.env.SUPABASE_URL,
-      SUPABASE_SERVICE_KEY_set: !!process.env.SUPABASE_SERVICE_KEY,
-      SUPABASE_URL_length: process.env.SUPABASE_URL?.length || 0,
-      SUPABASE_SERVICE_KEY_length: process.env.SUPABASE_SERVICE_KEY?.length || 0,
+      SUPABASE_URL_set: !!SUPABASE_URL,
+      SUPABASE_SERVICE_KEY_set: !!SUPABASE_SERVICE_KEY,
+      SUPABASE_URL_length: SUPABASE_URL?.length || 0,
+      SUPABASE_SERVICE_KEY_length: SUPABASE_SERVICE_KEY?.length || 0,
       NODE_OPTIONS: process.env.NODE_OPTIONS,
-      SUPABASE_URL_prefix: process.env.SUPABASE_URL ? `${process.env.SUPABASE_URL.substring(0, 10)}...` : 'not set'
+      SUPABASE_URL_prefix: SUPABASE_URL ? `${SUPABASE_URL.substring(0, 10)}...` : 'not set'
     });
     
     // Initialize Supabase client
     const supabase = createClient(
-      process.env.SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_KEY || ''
+      SUPABASE_URL,
+      SUPABASE_SERVICE_KEY
     );
     
     console.log('Testing Supabase connection...');
