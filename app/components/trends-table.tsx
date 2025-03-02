@@ -32,6 +32,8 @@ export interface GameStats {
 interface TrendsTableProps {
   data: PlayerData[]
   isLoading?: boolean
+  hasMore?: boolean
+  onLoadMore?: () => void
 }
 
 type TimeframeKey = 'last5' | 'last10' | 'last20'
@@ -48,13 +50,14 @@ const getOpponentTeam = (player: Player, nextGame: NextGame | undefined) => {
   return nextGame.opponent;
 }
 
-export function TrendsTable({ data, isLoading = false }: Omit<TrendsTableProps, 'hasMore' | 'onLoadMore'>) {
+export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMore }: TrendsTableProps) {
   // Default to Last 5 Games for initial load
   const [timeframe, setTimeframe] = useState('L5')
   const [statType, setStatType] = useState('All Props')
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerData | null>(null)
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
+  const loaderRef = useRef<HTMLDivElement>(null);
   
   // Log the data we're receiving
   useEffect(() => {
@@ -63,6 +66,31 @@ export function TrendsTable({ data, isLoading = false }: Omit<TrendsTableProps, 
       console.log(`Sample player games count: ${data[0].games?.length || 0}`);
     }
   }, [data]);
+  
+  // Set up intersection observer for infinite scrolling
+  useEffect(() => {
+    if (!hasMore || !onLoadMore || isLoading) return;
+    
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          onLoadMore();
+        }
+      },
+      { threshold: 0.5 }
+    );
+    
+    const currentLoaderRef = loaderRef.current;
+    if (currentLoaderRef) {
+      observer.observe(currentLoaderRef);
+    }
+    
+    return () => {
+      if (currentLoaderRef) {
+        observer.unobserve(currentLoaderRef);
+      }
+    };
+  }, [hasMore, onLoadMore, isLoading]);
   
   // Helper function to get timeframe number
   const getTimeframeNumber = (tf: string) => {
@@ -450,6 +478,22 @@ export function TrendsTable({ data, isLoading = false }: Omit<TrendsTableProps, 
                   ))}
                 </tbody>
               </table>
+              
+              {/* Infinite Scroll Loader */}
+              {hasMore && (
+                <div 
+                  ref={loaderRef} 
+                  className="py-4 flex justify-center items-center"
+                >
+                  {isLoading ? (
+                    <div className="animate-spin h-5 w-5 md:h-6 md:w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                  ) : (
+                    <div className="h-6 md:h-8 flex items-center justify-center text-xs md:text-sm text-gray-500">
+                      Scroll for more
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ) : (
