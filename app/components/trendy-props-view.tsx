@@ -34,9 +34,8 @@ export default function TrendyPropsView() {
         setError(null)
         setErrorDetails(null)
         
-        // Fetch all available fixtures by setting a high limit
-        // You can adjust this number based on your needs
-        const odds = await fetchPlayerOdds(10) // Load up to 10 fixtures at once
+        // Fetch all available fixtures by setting limit to 0 (no limit)
+        const odds = await fetchPlayerOdds(0) // Load all available fixtures
         console.log('Fetched odds:', odds.length, 'player entries') // Debug log
         
         // Check if we have games data and how many games per player

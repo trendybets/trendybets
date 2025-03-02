@@ -1,9 +1,9 @@
 import { PlayerData } from '../types'
 import { serverEnv } from "@/lib/env"
 
-export async function fetchPlayerOdds(fixtureLimit = 10): Promise<PlayerData[]> {
+export async function fetchPlayerOdds(fixtureLimit = 0): Promise<PlayerData[]> {
   try {
-    console.log(`Fetching player odds with fixture limit: ${fixtureLimit}`);
+    console.log(`Fetching player odds with fixture limit: ${fixtureLimit === 0 ? 'ALL' : fixtureLimit}`);
     const response = await fetch(`/api/odds?limit=${fixtureLimit}`);
     
     if (!response.ok) {

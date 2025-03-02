@@ -4,7 +4,7 @@ import { serverEnv } from "@/lib/env"
 // Add this line to tell Next.js this is a dynamic route
 export const dynamic = 'force-dynamic'
 // Increase the maximum duration for this route to handle loading all fixtures
-export const maxDuration = 120; // 2 minutes timeout
+export const maxDuration = 300; // 5 minutes timeout (increased from 2 minutes)
 
 // Helper function to calculate averages from player results
 async function fetchPlayerResults(playerId: string, statType: string): Promise<{
