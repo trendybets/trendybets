@@ -21,6 +21,10 @@ import {
 type Fixture = Database['public']['Tables']['fixtures']['Row'] & {
   home_team: Database['public']['Tables']['teams']['Row']
   away_team: Database['public']['Tables']['teams']['Row']
+  away_record?: string
+  home_record?: string
+  away_team_abbreviation?: string
+  home_team_abbreviation?: string
 }
 
 type BaseOdds = Database['public']['Tables']['odds']['Row'] & {
@@ -30,6 +34,8 @@ type BaseOdds = Database['public']['Tables']['odds']['Row'] & {
 
 // Add the transformed fields
 type TransformedOdds = BaseOdds & {
+  market_id: string
+  market: string
   spread_points: number | null
   money_line: number
   total_points: number | null
@@ -189,7 +195,7 @@ export function GameCard({ fixture, selectedSportsbook, onSelect, isSelected, od
       const sportsbooks = ['DraftKings', 'Caesars', 'BetMGM', 'bet365']
       
       return sportsbooks.map(book => {
-        const bookOdds = odds.filter(o => o.sportsbook === book)
+        const bookOdds = odds.filter(o => o.sportsbook.name === book)
         console.log(`\nProcessing ${book}:`, bookOdds)
         
         // Log moneyline search criteria
