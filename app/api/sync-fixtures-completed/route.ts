@@ -92,8 +92,8 @@ async function fetchPage(page: number) {
   });
 }
 
-// Add a function to store the last sync time
-async function updateLastSyncTime() {
+// Update the last sync time
+async function updateLastSyncTime(recordsProcessed: number) {
   try {
     const supabase = createClient(
       SUPABASE_URL,
@@ -101,20 +101,24 @@ async function updateLastSyncTime() {
     );
     
     // Store the current timestamp as the last sync time
-    const now = new Date().toISOString();
+    const now = new Date();
     
     const { error } = await supabase
-      .from('sync_metadata')
-      .upsert({ 
-        id: 'fixtures_completed_last_sync',
-        last_sync_time: now,
-        updated_at: now
+      .from('sync_log')
+      .insert({
+        sync_type: 'fixtures_completed',
+        started_at: now.toISOString(),
+        completed_at: now.toISOString(),
+        status: 'completed',
+        last_sync_date: now.toISOString().split('T')[0],
+        records_processed: recordsProcessed,
+        metadata: { last_sync_time: now.toISOString() }
       });
       
     if (error) {
       console.error('Error updating last sync time:', error);
     } else {
-      console.log(`Updated last sync time to ${now}`);
+      console.log(`Updated last sync time to ${now.toISOString()} with ${recordsProcessed} records processed`);
     }
   } catch (error) {
     console.error('Error in updateLastSyncTime:', error);
@@ -130,17 +134,22 @@ async function getLastSyncTime(): Promise<string | null> {
     );
     
     const { data, error } = await supabase
-      .from('sync_metadata')
-      .select('last_sync_time')
-      .eq('id', 'fixtures_completed_last_sync')
-      .single();
+      .from('sync_log')
+      .select('completed_at, last_sync_date')
+      .eq('sync_type', 'fixtures_completed')
+      .order('completed_at', { ascending: false })
+      .limit(1);
       
     if (error) {
       console.error('Error getting last sync time:', error);
       return null;
     }
     
-    return data?.last_sync_time || null;
+    if (data && data.length > 0) {
+      return data[0].completed_at;
+    }
+    
+    return null;
   } catch (error) {
     console.error('Error in getLastSyncTime:', error);
     return null;
@@ -275,20 +284,50 @@ export async function POST(request: Request) {
         ? fixture.away_competitors
         : [fixture.away_competitors].filter(Boolean);
       
+      // Extract scores from the result object if available
+      const homeScoreTotal = fixture.home_score ?? 0;
+      const awayScoreTotal = fixture.away_score ?? 0;
+      
+      // Extract quarter scores if available
+      const homeScoreQ1 = fixture.result?.scores?.home?.periods?.period_1 ?? 0;
+      const homeScoreQ2 = fixture.result?.scores?.home?.periods?.period_2 ?? 0;
+      const homeScoreQ3 = fixture.result?.scores?.home?.periods?.period_3 ?? 0;
+      const homeScoreQ4 = fixture.result?.scores?.home?.periods?.period_4 ?? 0;
+      
+      const awayScoreQ1 = fixture.result?.scores?.away?.periods?.period_1 ?? 0;
+      const awayScoreQ2 = fixture.result?.scores?.away?.periods?.period_2 ?? 0;
+      const awayScoreQ3 = fixture.result?.scores?.away?.periods?.period_3 ?? 0;
+      const awayScoreQ4 = fixture.result?.scores?.away?.periods?.period_4 ?? 0;
+      
       return {
         id: fixture.id,
-        sport: fixture.sport,
-        league: fixture.league,
+        numerical_id: fixture.numerical_id,
+        game_id: fixture.game_id,
         start_date: fixture.start_date,
-        home_team: fixture.home_team,
-        away_team: fixture.away_team,
-        home_score: fixture.home_score ?? 0,
-        away_score: fixture.away_score ?? 0,
-        status: fixture.status,
-        last_updated: fixture.last_updated,
         home_competitors: homeCompetitors,
         away_competitors: awayCompetitors,
-        result: fixture.result || null
+        home_team_display: fixture.home_team || '',
+        away_team_display: fixture.away_team || '',
+        status: fixture.status,
+        venue_name: fixture.venue_name || '',
+        venue_location: fixture.venue_location || '',
+        broadcast: fixture.broadcast || '',
+        home_score_total: homeScoreTotal,
+        home_score_q1: homeScoreQ1,
+        home_score_q2: homeScoreQ2,
+        home_score_q3: homeScoreQ3,
+        home_score_q4: homeScoreQ4,
+        away_score_total: awayScoreTotal,
+        away_score_q1: awayScoreQ1,
+        away_score_q2: awayScoreQ2,
+        away_score_q3: awayScoreQ3,
+        away_score_q4: awayScoreQ4,
+        result: fixture.result || null,
+        season_type: fixture.season_type || '',
+        season_year: fixture.season_year || '',
+        season_week: fixture.season_week || '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
     });
     
@@ -298,10 +337,10 @@ export async function POST(request: Request) {
       console.log('Sample fixture structure:', {
         id: firstFixture.id,
         start_date: firstFixture.start_date,
-        home_team: firstFixture.home_team,
-        away_team: firstFixture.away_team,
-        home_score: firstFixture.home_score,
-        away_score: firstFixture.away_score,
+        home_team: firstFixture.home_team_display,
+        away_team: firstFixture.away_team_display,
+        home_score: firstFixture.home_score_total,
+        away_score: firstFixture.away_score_total,
         home_competitors_type: typeof firstFixture.home_competitors,
         home_competitors_length: Array.isArray(firstFixture.home_competitors) ? firstFixture.home_competitors.length : 'not an array',
         away_competitors_type: typeof firstFixture.away_competitors,
@@ -348,8 +387,8 @@ export async function POST(request: Request) {
       }
     }
     
-    // Update the last sync time
-    await updateLastSyncTime();
+    // Update the last sync time with the number of records processed
+    await updateLastSyncTime(insertedCount);
     
     return new Response(JSON.stringify({
       message: `Processed ${transformedFixtures.length} fixtures, inserted/updated ${insertedCount}, errors: ${errorCount}`,
