@@ -248,6 +248,7 @@ export async function POST(request: Request) {
         numerical_id: fixture.numerical_id,
         game_id: fixture.game_id,
         start_date: fixture.start_date,
+        // Ensure home_competitors and away_competitors are passed as arrays
         home_competitors: fixture.home_competitors,
         away_competitors: fixture.away_competitors,
         home_team_display: fixture.home_team_display,
@@ -267,7 +268,7 @@ export async function POST(request: Request) {
         away_score_q2: fixture.result?.scores?.away?.periods?.period_2 ?? 0,
         away_score_q3: fixture.result?.scores?.away?.periods?.period_3 ?? 0,
         away_score_q4: fixture.result?.scores?.away?.periods?.period_4 ?? 0,
-        // Store the result object directly instead of as a JSON string
+        // Store the result object directly
         result: fixture.result,
         season_type: fixture.season_type || '',
         season_year: fixture.season_year || '',
@@ -286,6 +287,20 @@ export async function POST(request: Request) {
       }
       
       console.log(`Processing ${batches.length} batches of fixtures (batch size: ${batchSize})`);
+      
+      // Log the structure of the first fixture for debugging
+      if (validFixtures.length > 0) {
+        console.log('First fixture structure:', {
+          id: validFixtures[0].id,
+          home_competitors_type: Array.isArray(validFixtures[0].home_competitors) ? 'array' : typeof validFixtures[0].home_competitors,
+          home_competitors_length: Array.isArray(validFixtures[0].home_competitors) ? validFixtures[0].home_competitors.length : 'not an array',
+          away_competitors_type: Array.isArray(validFixtures[0].away_competitors) ? 'array' : typeof validFixtures[0].away_competitors,
+          away_competitors_length: Array.isArray(validFixtures[0].away_competitors) ? validFixtures[0].away_competitors.length : 'not an array',
+          result_type: typeof validFixtures[0].result,
+          sample_home_competitor: validFixtures[0].home_competitors && validFixtures[0].home_competitors[0] ? 
+            JSON.stringify(validFixtures[0].home_competitors[0]) : 'none'
+        });
+      }
       
       for (let i = 0; i < batches.length; i++) {
         const batch = batches[i];
