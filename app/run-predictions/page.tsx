@@ -15,6 +15,7 @@ export default function RunPredictionsPage() {
   const [message, setMessage] = useState('');
   const [output, setOutput] = useState<string[]>([]);
   const [predictions, setPredictions] = useState<number | null>(null);
+  const [apiToken, setApiToken] = useState('');
 
   const runPredictions = async () => {
     setLoading(true);
@@ -44,7 +45,7 @@ export default function RunPredictionsPage() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'api-token': 'YOUR_SECRET_API_TOKEN', // Would normally come from environment variable
+          'api-token': apiToken || '2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0=', // Use the CRON API token
         },
       });
 
@@ -91,6 +92,20 @@ export default function RunPredictionsPage() {
                 />
                 <p className="text-sm text-muted-foreground">
                   Leave empty to run predictions for all upcoming fixtures
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="api-token">API Token (Optional)</Label>
+                <Input
+                  id="api-token"
+                  type="password"
+                  placeholder="Enter API token if needed"
+                  value={apiToken}
+                  onChange={(e) => setApiToken(e.target.value)}
+                />
+                <p className="text-sm text-muted-foreground">
+                  Leave empty to use the default token
                 </p>
               </div>
               

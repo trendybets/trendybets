@@ -8,13 +8,17 @@ from supabase import create_client
 from datetime import datetime
 import argparse
 
-# Supabase setup
-SUPABASE_URL = "https://hvegilvwwvdmivnphlyo.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2ZWdpbHZ3d3ZkbWl2bnBobHlvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczOTY1NjgxNCwiZXhwIjoyMDU1MjMyODE0fQ.6GV2B4ciNiMGOnnRXOMznwD1aNqYUQmHxuuWrdc3U44"
+# Supabase setup - use environment variables
+SUPABASE_URL = os.environ.get("NEXT_PUBLIC_SUPABASE_URL", "https://hvegilvwwvdmivnphlyo.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2ZWdpbHZ3d3ZkbWl2bnBobHlvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczOTY1NjgxNCwiZXhwIjoyMDU1MjMyODE0fQ.6GV2B4ciNiMGOnnRXOMznwD1aNqYUQmHxuuWrdc3U44")
+
+print(f"Using Supabase URL: {SUPABASE_URL}")
+print(f"Supabase key is set: {bool(SUPABASE_KEY)}")
 
 try:
     # Create a simple Supabase client without any extra options
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    print("Successfully connected to Supabase")
 except TypeError as e:
     if 'proxy' in str(e):
         print("ERROR: Compatibility issue detected with Supabase client.")

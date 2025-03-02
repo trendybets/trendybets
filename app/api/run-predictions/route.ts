@@ -5,6 +5,7 @@ import fs from 'fs';
 import { serverEnv } from "@/lib/env"
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // 5 minutes timeout
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,8 +49,23 @@ export async function GET(request: NextRequest) {
       args.push('--fixture_id', fixtureId);
     }
 
+    // Set up environment variables for the Python process
+    const env = {
+      ...process.env,
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+      OPTIC_ODDS_API_KEY: process.env.OPTIC_ODDS_API_KEY,
+      PYTHONUNBUFFERED: '1' // Ensure Python output is not buffered
+    };
+
+    console.log('Environment check for Python process:', {
+      SUPABASE_URL_set: !!env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_KEY_set: !!env.SUPABASE_SERVICE_ROLE_KEY,
+      OPTIC_API_KEY_set: !!env.OPTIC_ODDS_API_KEY
+    });
+
     // Execute the Python script
-    const python = spawn('python', args);
+    const python = spawn('python', args, { env });
     
     let output = '';
     let errorOutput = '';
@@ -135,8 +151,23 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Set up environment variables for the Python process
+    const env = {
+      ...process.env,
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+      OPTIC_ODDS_API_KEY: process.env.OPTIC_ODDS_API_KEY,
+      PYTHONUNBUFFERED: '1' // Ensure Python output is not buffered
+    };
+
+    console.log('Environment check for Python process:', {
+      SUPABASE_URL_set: !!env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_KEY_set: !!env.SUPABASE_SERVICE_ROLE_KEY,
+      OPTIC_API_KEY_set: !!env.OPTIC_ODDS_API_KEY
+    });
+
     // Execute the Python script
-    const python = spawn('python', [scriptPath]);
+    const python = spawn('python', [scriptPath], { env });
     
     let output = '';
     let errorOutput = '';
