@@ -151,7 +151,7 @@ export async function POST(request: Request) {
     const apiToken = request.headers.get('api-token');
     
     // For production, you should use a secure comparison method and store this in an environment variable
-    if (apiToken !== process.env.CRON_API_TOKEN) {
+    if (apiToken !== serverEnv.CRON_API_TOKEN) {
       console.error('Unauthorized access attempt to sync-fixtures-completed');
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
