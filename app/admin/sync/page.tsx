@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "sonner"
 
+// API token should be fetched from environment in a real app
+// For demo purposes, we're using a constant
+const API_TOKEN = "2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0="
+
 export default function SyncPage() {
   const [syncingTeams, setSyncingTeams] = useState(false)
   const [syncingPlayers, setSyncingPlayers] = useState(false)
@@ -16,6 +20,7 @@ export default function SyncPage() {
   const [syncingPlayerOdds, setSyncingPlayerOdds] = useState(false)
   const [syncingCompletedFixtures, setSyncingCompletedFixtures] = useState(false)
   const [syncingFixtureResults, setSyncingFixtureResults] = useState(false)
+  const [syncingCoordinator, setSyncingCoordinator] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleTeamSync = async () => {
@@ -24,6 +29,9 @@ export default function SyncPage() {
     try {
       const response = await fetch("/api/sync-teams", {
         method: "POST",
+        headers: {
+          "api-token": API_TOKEN
+        }
       })
       const data = await response.json()
 
@@ -47,6 +55,9 @@ export default function SyncPage() {
     try {
       const response = await fetch("/api/sync-players", {
         method: "POST",
+        headers: {
+          "api-token": API_TOKEN
+        }
       })
       const data = await response.json()
 
@@ -70,6 +81,9 @@ export default function SyncPage() {
     try {
       const response = await fetch("/api/sync-sportsbooks", {
         method: "POST",
+        headers: {
+          "api-token": API_TOKEN
+        }
       })
       const data = await response.json()
 
@@ -93,6 +107,9 @@ export default function SyncPage() {
     try {
       const response = await fetch("/api/sync-markets", {
         method: "POST",
+        headers: {
+          "api-token": API_TOKEN
+        }
       })
       const data = await response.json()
 
@@ -116,6 +133,9 @@ export default function SyncPage() {
     try {
       const response = await fetch("/api/sync-player-history", {
         method: "POST",
+        headers: {
+          "api-token": API_TOKEN
+        }
       })
       const data = await response.json()
 
@@ -140,7 +160,7 @@ export default function SyncPage() {
       const response = await fetch("/api/sync-fixtures", {
         method: "POST",
         headers: {
-          "api-token": "2b6tTNGbvjjmKOxcx1ElR/7Vr5olIlRXyhLWbt5dhk0="
+          "api-token": API_TOKEN
         }
       })
       const data = await response.json()
@@ -165,6 +185,9 @@ export default function SyncPage() {
     try {
       const response = await fetch("/api/sync-odds", {
         method: "POST",
+        headers: {
+          "api-token": API_TOKEN
+        }
       })
       const data = await response.json()
 
@@ -188,6 +211,9 @@ export default function SyncPage() {
     try {
       const response = await fetch("/api/sync-player-odds", {
         method: "POST",
+        headers: {
+          "api-token": API_TOKEN
+        }
       })
       const data = await response.json()
 
@@ -211,6 +237,9 @@ export default function SyncPage() {
     try {
       const response = await fetch("/api/sync-fixtures-completed", {
         method: "POST",
+        headers: {
+          "api-token": API_TOKEN
+        }
       })
       const data = await response.json()
 
@@ -234,6 +263,9 @@ export default function SyncPage() {
     try {
       const response = await fetch("/api/sync-fixture-results", {
         method: "POST",
+        headers: {
+          "api-token": API_TOKEN
+        }
       })
       const data = await response.json()
 
@@ -251,6 +283,32 @@ export default function SyncPage() {
     }
   }
 
+  const handleCoordinatorSync = async () => {
+    setSyncingCoordinator(true)
+    setError(null)
+    try {
+      const response = await fetch("/api/sync-coordinator", {
+        method: "POST",
+        headers: {
+          "api-token": API_TOKEN
+        }
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to run sync coordinator")
+      }
+
+      toast.success(data.message)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to run sync coordinator"
+      setError(errorMessage)
+      toast.error(errorMessage)
+    } finally {
+      setSyncingCoordinator(false)
+    }
+  }
+
   return (
     <div className="container mx-auto p-4">
       <Card>
@@ -261,7 +319,7 @@ export default function SyncPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             <Button onClick={handleTeamSync} disabled={syncingTeams}>
               {syncingTeams ? "Syncing Teams..." : "Sync Teams"}
             </Button>
@@ -291,6 +349,9 @@ export default function SyncPage() {
             </Button>
             <Button onClick={handleFixtureResultsSync} disabled={syncingFixtureResults}>
               {syncingFixtureResults ? "Syncing Fixture Results..." : "Sync Fixture Results"}
+            </Button>
+            <Button onClick={handleCoordinatorSync} disabled={syncingCoordinator} variant="outline" className="col-span-2">
+              {syncingCoordinator ? "Running Sync Coordinator..." : "Run Sync Coordinator"}
             </Button>
           </div>
           {error && (

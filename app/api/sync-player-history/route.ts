@@ -2,12 +2,29 @@ import { NextResponse } from "next/server"
 import { createClient, SupabaseClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/supabase"
 import { serverEnv } from "@/lib/env"
+import axios from 'axios'
 
-const SUPABASE_URL = 'https://hvegilvwwvdmivnphlyo.supabase.co'
-const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2ZWdpbHZ3d3ZkbWl2bnBobHlvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczOTY1NjgxNCwiZXhwIjoyMDU1MjMyODE0fQ.6GV2B4ciNiMGOnnRXOMznwD1aNqYUQmHxuuWrdc3U44'
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 // Add this line to tell Next.js this is a dynamic route
 export const dynamic = 'force-dynamic'
+
+// Helper function to retry failed operations
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  retries = 3,
+  delay = 1000
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (retries <= 0) throw error;
+    console.log(`Operation failed, retrying in ${delay}ms... (${retries} retries left)`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+    return withRetry(operation, retries - 1, delay * 1.5);
+  }
+}
 
 interface Stats {
   fouls: number
@@ -106,26 +123,109 @@ export async function POST(request: Request) {
   }
 
   console.log("API route called", playerIdToProcess ? `for player ${playerIdToProcess}` : "for all players");
-  const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+  
+  // Log environment variables (without revealing full values)
+  console.log("Environment check:", {
+    SUPABASE_URL_set: !!SUPABASE_URL,
+    SUPABASE_SERVICE_KEY_set: !!SUPABASE_SERVICE_KEY,
+    SUPABASE_URL_length: SUPABASE_URL?.length,
+    SUPABASE_SERVICE_KEY_length: SUPABASE_SERVICE_KEY?.length,
+    NODE_OPTIONS: process.env.NODE_OPTIONS || 'not set'
+  })
+  
+  // Create Supabase client with improved fetch implementation
+  const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    // Add custom fetch implementation with DNS resolution options
+    global: {
+      fetch: (url, options) => {
+        // Log the URL (with API key redacted)
+        console.log(`Fetching URL: ${url.toString().replace(/apikey=[^&]+/, 'apikey=REDACTED')}`);
+        
+        // Parse the URL to get the query parameters
+        const urlObj = new URL(url.toString());
+        const apiKey = urlObj.searchParams.get('apikey') || SUPABASE_SERVICE_KEY;
+        
+        // Create new headers with the API key
+        const newHeaders = new Headers(options?.headers || {});
+        
+        // Ensure API key is in headers
+        if (!newHeaders.has('apikey')) {
+          newHeaders.set('apikey', apiKey);
+        }
+        
+        // Always set the Authorization header with the API key
+        if (!newHeaders.has('Authorization')) {
+          newHeaders.set('Authorization', `Bearer ${apiKey}`);
+        }
+        
+        // Add additional headers for better connectivity
+        newHeaders.set('Accept-Encoding', 'gzip, deflate');
+        newHeaders.set('Connection', 'keep-alive');
+        
+        // Return the fetch with updated headers
+        return fetch(url, {
+          ...options,
+          headers: newHeaders
+        });
+      }
+    }
+  })
+  
   const syncStartTime = new Date().toISOString()
   
   try {
+    // First, verify we can access the table
+    console.log("Attempting to access player_history table...")
+    try {
+      const { data: tableCheck, error: tableError } = await withRetry(async () => {
+        console.log("Executing table check query...")
+        const result = await supabase
+          .from("player_history")
+          .select("id")
+          .limit(1);
+        
+        console.log("Table check query completed", {
+          hasData: !!result.data,
+          dataLength: result.data?.length,
+          hasError: !!result.error
+        });
+        
+        return result;
+      });
+
+      if (tableError) {
+        console.error("Table check error:", tableError)
+        throw new Error(`Failed to access player_history table: ${tableError.message}`)
+      }
+
+      console.log("Table check successful", tableCheck)
+    } catch (tableAccessError) {
+      console.error("Error during table access:", tableAccessError)
+      throw new Error(`Table access error: ${tableAccessError instanceof Error ? tableAccessError.message : String(tableAccessError)}`)
+    }
+    
     // Get the last sync timestamp with correct column names
-    const { data: lastSync } = await supabase
-      .from("sync_log")
-      .select(`
-        id,
-        sync_type,
-        started_at,
-        completed_at,
-        status,
-        last_sync_date,
-        records_processed
-      `)
-      .eq("sync_type", "player_history")
-      .eq("status", "completed")
-      .order("last_sync_date", { ascending: false })
-      .limit(1)
+    const { data: lastSync } = await withRetry(async () => {
+      return await supabase
+        .from("sync_log")
+        .select(`
+          id,
+          sync_type,
+          started_at,
+          completed_at,
+          status,
+          last_sync_date,
+          records_processed
+        `)
+        .eq("sync_type", "player_history")
+        .eq("status", "completed")
+        .order("last_sync_date", { ascending: false })
+        .limit(1);
+    });
 
     // Use yesterday's date if no last sync found, otherwise use last sync date
     const lastSyncDate = lastSync?.[0]?.last_sync_date || 
@@ -142,21 +242,23 @@ export async function POST(request: Request) {
       totalHistoryRecords = playerHistoryCount;
       
       // Update sync_log for this specific player
-      await supabase
-        .from("sync_log")
-        .insert([{ 
-          sync_type: "player_history_single",
-          started_at: syncStartTime,
-          completed_at: new Date().toISOString(),
-          status: "completed",
-          last_sync_date: new Date().toISOString(),
-          records_processed: totalHistoryRecords,
-          metadata: {
-            player_id: playerIdToProcess,
-            games_processed: totalHistoryRecords
-          }
-        }])
-        .select();
+      await withRetry(async () => {
+        return await supabase
+          .from("sync_log")
+          .insert([{ 
+            sync_type: "player_history_single",
+            started_at: syncStartTime,
+            completed_at: new Date().toISOString(),
+            status: "completed",
+            last_sync_date: new Date().toISOString(),
+            records_processed: totalHistoryRecords,
+            metadata: {
+              player_id: playerIdToProcess,
+              games_processed: totalHistoryRecords
+            }
+          }])
+          .select();
+      });
         
       return NextResponse.json(
         { 
@@ -169,31 +271,35 @@ export async function POST(request: Request) {
     }
     
     // Otherwise, get all active players and queue them for processing
-    const { data: players, error: playerError } = await supabase
-      .from("players")
-      .select("id")
-      .eq("is_active", true);
+    const { data: players, error: playerError } = await withRetry(async () => {
+      return await supabase
+        .from("players")
+        .select("id")
+        .eq("is_active", true);
+    });
 
     if (playerError) throw playerError;
     console.log(`Found ${players.length} active players`);
     
     // Instead of processing all players, just return the list of players to process
     // and update the sync_log to indicate we've started the sync process
-    await supabase
-      .from("sync_log")
-      .insert([{ 
-        sync_type: "player_history_coordinator",
-        started_at: syncStartTime,
-        completed_at: new Date().toISOString(),
-        status: "completed",
-        last_sync_date: new Date().toISOString(),
-        records_processed: 0,
-        metadata: {
-          players_to_process: players.length,
-          last_sync_date: lastSyncDate
-        }
-      }])
-      .select();
+    await withRetry(async () => {
+      return await supabase
+        .from("sync_log")
+        .insert([{ 
+          sync_type: "player_history_coordinator",
+          started_at: syncStartTime,
+          completed_at: new Date().toISOString(),
+          status: "completed",
+          last_sync_date: new Date().toISOString(),
+          records_processed: 0,
+          metadata: {
+            players_to_process: players.length,
+            last_sync_date: lastSyncDate
+          }
+        }])
+        .select();
+    });
     
     return NextResponse.json(
       { 
@@ -206,17 +312,19 @@ export async function POST(request: Request) {
     // Add error logging to sync_log
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
     
-    await supabase
-      .from("sync_log")
-      .insert([{
-        sync_type: playerIdToProcess ? "player_history_single" : "player_history",
-        started_at: syncStartTime,
-        completed_at: new Date().toISOString(),
-        status: "error",
-        error: errorMessage,
-        records_processed: 0,
-        metadata: playerIdToProcess ? { player_id: playerIdToProcess } : undefined
-      }]);
+    await withRetry(async () => {
+      return await supabase
+        .from("sync_log")
+        .insert([{
+          sync_type: playerIdToProcess ? "player_history_single" : "player_history",
+          started_at: syncStartTime,
+          completed_at: new Date().toISOString(),
+          status: "error",
+          error: errorMessage,
+          records_processed: 0,
+          metadata: playerIdToProcess ? { player_id: playerIdToProcess } : undefined
+        }]);
+    });
 
     console.error("Sync error:", error);
     return NextResponse.json({ error: errorMessage }, { status: 500 });
@@ -233,20 +341,40 @@ async function processPlayer(
     console.log(`Fetching recent history for player ${playerId} since ${lastSyncDate}...`);
     
     // Add start_date parameter to only get games after last sync
-    const apiUrl = `https://api.opticodds.com/api/v3/fixtures/player-results?` + 
-      `player_id=${playerId}` +
-      `&status=completed` +
-      `&start_date=${lastSyncDate}` +
-      `&key=${process.env.OPTIC_ODDS_API_KEY}`;
-
-    const response = await fetch(apiUrl);
+    const apiUrl = `https://api.opticodds.com/api/v3/fixtures/player-results`;
     
-    if (!response.ok) {
-      console.error(`Failed to fetch history for player ${playerId}: ${response.statusText}`);
-      return 0;
-    }
+    console.log(`Fetching from API URL with axios: ${apiUrl}`);
+    console.log(`Using API key: ${serverEnv.OPTIC_ODDS_API_KEY ? 'API key is set' : 'API key is missing'}`);
     
-    const json = await response.json() as APIResponse;
+    const response = await withRetry(async () => {
+      const res = await axios({
+        method: 'GET',
+        url: apiUrl,
+        params: {
+          player_id: playerId,
+          status: 'completed',
+          start_date: lastSyncDate,
+          key: serverEnv.OPTIC_ODDS_API_KEY
+        },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept-Encoding': 'gzip, deflate',
+          'Connection': 'keep-alive'
+        },
+        timeout: 15000, // 15 second timeout
+        // Force IPv4
+        family: 4
+      });
+      
+      if (res.status !== 200) {
+        console.error(`API request failed: ${res.status} ${res.statusText}`);
+        throw new Error(`API request failed: ${res.status} ${res.statusText}`);
+      }
+      
+      return res;
+    });
+    
+    const json: APIResponse = response.data;
     
     if (!json.data?.length) {
       console.log(`No new games for player ${playerId} since ${lastSyncDate}`);
@@ -274,12 +402,14 @@ async function processPlayer(
       if (!allStats) continue;
 
       // Check if we already have this record
-      const { data: existingRecord } = await supabase
-        .from("player_history")
-        .select("id")
-        .eq("player_id", playerId)
-        .eq("fixture_id", fixture.id)
-        .maybeSingle();
+      const { data: existingRecord } = await withRetry(async () => {
+        return await supabase
+          .from("player_history")
+          .select("id")
+          .eq("player_id", playerId)
+          .eq("fixture_id", fixture.id)
+          .maybeSingle();
+      });
 
       if (existingRecord) {
         console.log(`Record already exists for player ${playerId} and fixture ${fixture.id}`);
@@ -325,9 +455,11 @@ async function processPlayer(
       };
 
       // Insert the new record
-      const { error: insertError } = await supabase
-        .from("player_history")
-        .insert(historyRecord);
+      const { error: insertError } = await withRetry(async () => {
+        return await supabase
+          .from("player_history")
+          .insert(historyRecord);
+      });
 
       if (insertError) {
         console.error(`Error inserting history for player ${playerId}:`, insertError);
