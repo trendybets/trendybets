@@ -281,20 +281,54 @@ export async function POST(request: Request) {
     if (playerError) throw playerError;
     console.log(`Found ${players.length} active players`);
     
-    // Instead of processing all players, just return the list of players to process
-    // and update the sync_log to indicate we've started the sync process
+    // Process all players in batches
+    const batchSize = 10; // Process 10 players at a time
+    let totalProcessedRecords = 0;
+    
+    // Create batches of players
+    const batches = [];
+    for (let i = 0; i < players.length; i += batchSize) {
+      batches.push(players.slice(i, i + batchSize));
+    }
+    
+    console.log(`Created ${batches.length} batches of players to process`);
+    
+    // Process each batch
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      console.log(`Processing batch ${batchIndex + 1}/${batches.length} with ${batch.length} players`);
+      
+      // Process players in parallel within each batch
+      const batchResults = await Promise.all(
+        batch.map(player => processPlayer(player.id, lastSyncDate, supabase))
+      );
+      
+      // Sum up the total records processed in this batch
+      const batchTotal = batchResults.reduce((sum, count) => sum + count, 0);
+      totalProcessedRecords += batchTotal;
+      
+      console.log(`Batch ${batchIndex + 1} complete: processed ${batchTotal} records`);
+      
+      // Add a small delay between batches to avoid rate limiting
+      if (batchIndex < batches.length - 1) {
+        console.log(`Waiting 2 seconds before processing next batch...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+    
+    // Update the sync_log to indicate we've completed the sync process
     await withRetry(async () => {
       return await supabase
         .from("sync_log")
         .insert([{ 
-          sync_type: "player_history_coordinator",
+          sync_type: "player_history",
           started_at: syncStartTime,
           completed_at: new Date().toISOString(),
           status: "completed",
           last_sync_date: new Date().toISOString(),
-          records_processed: 0,
+          records_processed: totalProcessedRecords,
           metadata: {
-            players_to_process: players.length,
+            players_processed: players.length,
             last_sync_date: lastSyncDate
           }
         }])
@@ -303,8 +337,9 @@ export async function POST(request: Request) {
     
     return NextResponse.json(
       { 
-        message: `Queued ${players.length} players for history sync since ${lastSyncDate}`,
-        players: players.map(p => p.id)
+        message: `Processed ${players.length} players for history sync since ${lastSyncDate}`,
+        players_processed: players.length,
+        records_processed: totalProcessedRecords
       },
       { status: 200 }
     );
