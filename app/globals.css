@@ -13,17 +13,192 @@
     font-size: 1rem;
     @apply bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100;
   }
+
+  /* Enhanced typography for sports betting feel */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold tracking-tight;
+  }
+
+  h1 {
+    @apply text-3xl md:text-4xl;
+  }
+
+  h2 {
+    @apply text-2xl md:text-3xl;
+  }
+
+  h3 {
+    @apply text-xl md:text-2xl;
+  }
 }
 
 @layer components {
   .container {
     @apply max-w-[1200px] mx-auto px-4;
   }
+
+  /* Sports betting card styles */
+  .sports-card {
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden;
+  }
+
+  .sports-card-header {
+    @apply px-4 py-3 border-b border-gray-200 flex justify-between items-center bg-gray-50;
+  }
+
+  .sports-card-body {
+    @apply p-4;
+  }
+
+  /* Odds display styling */
+  .odds-badge {
+    @apply inline-flex items-center justify-center px-2.5 py-1 rounded-md text-sm font-medium;
+  }
+
+  .odds-badge-positive {
+    @apply bg-green-100 text-green-800;
+  }
+
+  .odds-badge-negative {
+    @apply bg-red-100 text-red-800;
+  }
+
+  .odds-badge-neutral {
+    @apply bg-gray-100 text-gray-800;
+  }
+
+  /* Stat badges for player stats */
+  .stat-badge {
+    @apply inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-medium;
+  }
+
+  .stat-badge-primary {
+    @apply bg-blue-100 text-blue-800;
+  }
+
+  .stat-badge-secondary {
+    @apply bg-purple-100 text-purple-800;
+  }
+
+  .stat-badge-success {
+    @apply bg-green-100 text-green-800;
+  }
+
+  .stat-badge-danger {
+    @apply bg-red-100 text-red-800;
+  }
+
+  .stat-badge-warning {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+
+  /* Team pill for team names */
+  .team-pill {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-sm font-medium;
+  }
+
+  /* Trend indicators */
+  .trend-up {
+    @apply text-green-600;
+  }
+
+  .trend-down {
+    @apply text-red-600;
+  }
+
+  .trend-neutral {
+    @apply text-gray-600;
+  }
+
+  /* ESPN-style buttons */
+  .espn-button {
+    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors;
+  }
+
+  .espn-button-primary {
+    @apply bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500;
+  }
+
+  .espn-button-secondary {
+    @apply bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-500;
+  }
+
+  /* Game time indicator */
+  .game-time {
+    @apply inline-flex items-center text-sm text-gray-600 font-medium;
+  }
+
+  /* Live indicator */
+  .live-indicator {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 before:content-[''] before:w-2 before:h-2 before:bg-red-500 before:rounded-full before:mr-1 before:animate-pulse;
+  }
+
+  /* Matchup display */
+  .matchup-display {
+    @apply flex items-center justify-between;
+  }
+
+  .team-logo-container {
+    @apply relative w-10 h-10 bg-gray-100 rounded-full overflow-hidden flex-shrink-0 border border-gray-200;
+  }
+
+  /* Action Network style tables */
+  .action-table {
+    @apply w-full text-sm text-left text-gray-700;
+  }
+
+  .action-table thead {
+    @apply text-xs text-gray-600 uppercase bg-gray-100;
+  }
+
+  .action-table th {
+    @apply px-4 py-2 font-medium;
+  }
+
+  .action-table td {
+    @apply px-4 py-3 border-b border-gray-200;
+  }
+
+  .action-table tbody tr:hover {
+    @apply bg-gray-50;
+  }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Team gradient backgrounds */
+  .team-gradient-overlay {
+    @apply absolute inset-0 opacity-10 mix-blend-overlay;
+  }
+
+  /* Scrollbar styling */
+  .custom-scrollbar {
+    @apply scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400;
+  }
+
+  /* Highlight effect for selected items */
+  .highlight-pulse {
+    @apply animate-pulse;
+  }
+
+  /* Betting slip animation */
+  .betting-slip-enter {
+    @apply transition-all duration-300 ease-out transform translate-y-4 opacity-0;
+  }
+
+  .betting-slip-enter-active {
+    @apply transform translate-y-0 opacity-100;
+  }
+
+  .betting-slip-exit {
+    @apply transition-all duration-300 ease-in transform translate-y-0 opacity-100;
+  }
+
+  .betting-slip-exit-active {
+    @apply transform translate-y-4 opacity-0;
   }
 }
 
@@ -54,6 +229,14 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
+
+    /* Sports betting specific colors */
+    --odds-positive: 142 76% 36%;
+    --odds-negative: 0 84% 60%;
+    --odds-neutral: 220 14% 96%;
+    --team-primary: 214 100% 50%;
+    --team-secondary: 262 83% 58%;
+    --live-indicator: 0 84% 60%;
   }
   .dark {
     --background: 0 0% 3.9%;
@@ -80,6 +263,14 @@
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+
+    /* Sports betting specific colors - dark mode */
+    --odds-positive: 142 76% 45%;
+    --odds-negative: 0 84% 70%;
+    --odds-neutral: 220 14% 20%;
+    --team-primary: 214 100% 60%;
+    --team-secondary: 262 83% 68%;
+    --live-indicator: 0 84% 70%;
   }
 }
 
@@ -117,4 +308,87 @@
 
 #scrollableDiv::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+
+/* Team color gradients - ESPN style */
+.team-gradient {
+  @apply relative overflow-hidden;
+}
+
+/* NBA Team Colors */
+.team-gradient-lakers::before {
+  content: '';
+  @apply absolute inset-0 opacity-10;
+  background: linear-gradient(135deg, #552583 0%, #FDB927 100%);
+}
+
+.team-gradient-celtics::before {
+  content: '';
+  @apply absolute inset-0 opacity-10;
+  background: linear-gradient(135deg, #007A33 0%, #BA9653 100%);
+}
+
+.team-gradient-warriors::before {
+  content: '';
+  @apply absolute inset-0 opacity-10;
+  background: linear-gradient(135deg, #1D428A 0%, #FFC72C 100%);
+}
+
+.team-gradient-heat::before {
+  content: '';
+  @apply absolute inset-0 opacity-10;
+  background: linear-gradient(135deg, #98002E 0%, #F9A01B 100%);
+}
+
+/* Action Network style stat highlights */
+.stat-highlight {
+  @apply relative inline-block;
+}
+
+.stat-highlight::after {
+  content: '';
+  @apply absolute bottom-0 left-0 w-full h-1 bg-blue-500 opacity-30;
+}
+
+.stat-highlight-positive::after {
+  @apply bg-green-500;
+}
+
+.stat-highlight-negative::after {
+  @apply bg-red-500;
+}
+
+/* ESPN-style loading indicators */
+.loading-pulse {
+  @apply relative overflow-hidden;
+}
+
+.loading-pulse::after {
+  content: '';
+  @apply absolute top-0 left-0 right-0 bottom-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Action Network style tooltips */
+.sports-tooltip {
+  @apply absolute z-10 p-2 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 invisible transition-opacity duration-200;
+  max-width: 200px;
+}
+
+.sports-tooltip-trigger:hover + .sports-tooltip {
+  @apply opacity-100 visible;
+}
+
+/* ESPN-style notification badge */
+.notification-badge {
+  @apply absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white;
 }
