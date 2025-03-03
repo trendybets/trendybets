@@ -235,7 +235,7 @@ export default function TrendyPropsView() {
 
   if (isLoading && playerOdds.length === 0) {
     return (
-      <div className="container mx-auto p-4">
+      <div className="container mx-auto p-4 bg-white">
         <div className="p-8 text-center text-gray-600">
           <div className="animate-spin inline-block w-6 h-6 border-2 border-current border-t-transparent rounded-full mb-2" />
           <div>Loading player odds...</div>
@@ -246,7 +246,7 @@ export default function TrendyPropsView() {
 
   if (playerOdds.length === 0 && !isLoading) {
     return (
-      <div className="container mx-auto p-4">
+      <div className="container mx-auto p-4 bg-white">
         <div className="p-8 text-center text-gray-600">
           <div className="text-xl font-medium mb-2">No player odds available</div>
           <div className="text-sm">Please try again later</div>
@@ -256,7 +256,7 @@ export default function TrendyPropsView() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-8">
+    <div className="container mx-auto py-6 space-y-8 bg-white">
       <div className="flex flex-col space-y-4">
         <h1 className="text-3xl font-bold">Trendy Props</h1>
         <p className="text-muted-foreground">
