@@ -182,7 +182,7 @@ export async function GET(request: Request) {
     // Get query parameters
     const url = new URL(request.url);
     const fixtureId = url.searchParams.get('fixture_id');
-    const limit = parseInt(url.searchParams.get('limit') || '10'); // Default to 10 fixtures
+    const limit = parseInt(url.searchParams.get('limit') || '0'); // Default to 0 (no limit)
     
     // First get active fixtures - updated to match the provided endpoint
     const fixturesUrl = `https://api.opticodds.com/api/v3/fixtures/active?` +
@@ -199,7 +199,7 @@ export async function GET(request: Request) {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       },
-      next: { revalidate: 1800 } // Cache for 30 minutes
+      cache: 'no-store' // Disable caching to ensure fresh data
     })
 
     if (!fixturesResponse.ok) {
@@ -225,7 +225,7 @@ export async function GET(request: Request) {
       `${f.id}: ${f.home_team_display} vs ${f.away_team_display} (${f.status})`
     ));
 
-    // Process all fixtures or limit based on the parameter
+    // IMPORTANT: Process ALL fixtures, don't limit unless explicitly requested
     const limitedFixtures = fixtureId ? fixtures.filter((f: any) => f.id === fixtureId) : 
                            limit > 0 ? fixtures.slice(0, limit) : fixtures;
     
@@ -249,7 +249,7 @@ export async function GET(request: Request) {
 
       try {
         const response = await fetch(oddsUrl, {
-          next: { revalidate: 1800 } // Cache for 30 minutes
+          cache: 'no-store' // Disable caching to ensure fresh data
         })
         
         if (!response.ok) {
@@ -260,7 +260,12 @@ export async function GET(request: Request) {
         const data = await response.json()
         const fixtureOdds = data.data?.[0]?.odds || []
         console.log(`Found ${fixtureOdds.length} odds for fixture ${fixture.id}`)
-        return fixtureOdds
+        return fixtureOdds.map((odd: any) => ({
+          ...odd,
+          fixture_id: fixture.id,
+          home_team_display: fixture.home_team_display,
+          away_team_display: fixture.away_team_display
+        }))
       } catch (error) {
         console.error(`Error fetching odds for fixture ${fixture.id}:`, error)
         return []

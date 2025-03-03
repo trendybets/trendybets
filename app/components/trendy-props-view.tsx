@@ -40,7 +40,6 @@ export default function TrendyPropsView() {
         
         // Fetch all available fixtures by setting limit to 0 (no limit)
         const odds = await fetchPlayerOdds(0) // Load all available fixtures
-        console.log('Fetched odds:', odds.length, 'player entries') // Debug log
         
         // Store all player odds for pagination
         setAllPlayerOdds(odds || [])
@@ -50,44 +49,20 @@ export default function TrendyPropsView() {
         setPage(1)
         setHasMore(odds && odds.length > PAGE_SIZE)
         
-        // Check if we have games data and how many games per player
-        if (odds && odds.length > 0) {
-          const gamesCounts = odds.map(player => player.games?.length || 0);
-          console.log('Games per player:', gamesCounts);
-          // Add safety check before using spread operator
-          if (gamesCounts.length > 0) {
-            console.log('Max games available:', Math.max(...gamesCounts));
-          } else {
-            console.log('No games data available');
+        // Extract unique fixtures
+        const fixtureSet = new Set<string>();
+        odds.forEach(player => {
+          if (player.next_game && player.next_game.opponent) {
+            fixtureSet.add(`${player.player.team} vs ${player.next_game.opponent}`);
           }
-          
-          // Extract unique fixtures
-          const fixtureSet = new Set<string>();
-          odds.forEach(player => {
-            if (player.next_game && player.next_game.opponent) {
-              fixtureSet.add(`${player.player.team} vs ${player.next_game.opponent}`);
-            }
-          });
-          
-          const fixtureList = Array.from(fixtureSet);
-          console.log('Available fixtures:', fixtureList);
-          
-          // Count players per fixture
-          const fixturePlayerCounts: Record<string, number> = {};
-          odds.forEach(player => {
-            if (player.next_game && player.next_game.opponent) {
-              const fixtureString = `${player.player.team} vs ${player.next_game.opponent}`;
-              fixturePlayerCounts[fixtureString] = (fixturePlayerCounts[fixtureString] || 0) + 1;
-            }
-          });
-          console.log('Players per fixture:', fixturePlayerCounts);
-          
-          setFixtures(fixtureList);
-          
-          // If there are multiple fixtures, set the default to "all" to show all players
-          if (fixtureList.length > 1) {
-            setFilters(prev => ({...prev, fixture: 'all'}));
-          }
+        });
+        
+        const fixtureList = Array.from(fixtureSet);
+        setFixtures(fixtureList);
+        
+        // If there are multiple fixtures, set the default to "all" to show all players
+        if (fixtureList.length > 1) {
+          setFilters(prev => ({...prev, fixture: 'all'}));
         }
       } catch (err) {
         console.error('Error loading player odds:', err)
@@ -126,8 +101,6 @@ export default function TrendyPropsView() {
     setPage(nextPage);
     setHasMore(end < filtered.length);
     setIsLoading(false);
-    
-    console.log(`Loaded page ${nextPage}, showing ${nextPageData.length} of ${filtered.length} total players`);
   };
 
   // Function to get filtered data
@@ -150,9 +123,6 @@ export default function TrendyPropsView() {
         typeof (item.hit_rates as any).last10 === 'number' &&
         typeof (item.hit_rates as any).season === 'number';
       
-      if (!isValid) {
-        console.log('Invalid item:', item);
-      }
       return isValid;
     });
 
@@ -184,7 +154,6 @@ export default function TrendyPropsView() {
 
   // Get filtered data
   const filteredData = useMemo(() => {
-    console.log('Filtering data from playerOdds:', playerOdds.length) // Debug log with count
     return getFilteredData(playerOdds);
   }, [playerOdds, filters]);
 
@@ -209,8 +178,6 @@ export default function TrendyPropsView() {
     setPage(1);
     setPlayerOdds(filtered.slice(0, PAGE_SIZE));
     setHasMore(filtered.length > PAGE_SIZE);
-    
-    console.log(`Filter changed, showing ${Math.min(PAGE_SIZE, filtered.length)} of ${filtered.length} total players`);
   }, [filters]);
 
   if (isLoading && playerOdds.length === 0) {
@@ -265,71 +232,63 @@ export default function TrendyPropsView() {
         </div>
       )}
       
-      {/* Debug Information */}
-      <div className="bg-gray-100 p-4 rounded-lg mb-4">
-        <h3 className="text-lg font-semibold mb-2">Filters</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Stat Type Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Prop Type</label>
-            <Select
-              value={filters.stat}
-              onValueChange={(value) => setFilters(prev => ({ ...prev, stat: value }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select stat type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Props</SelectItem>
-                {availableStats.map(stat => (
-                  <SelectItem key={stat} value={stat.toLowerCase()}>{stat}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
-          {/* Team Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Team</label>
-            <Select
-              value={filters.team}
-              onValueChange={(value) => setFilters(prev => ({ ...prev, team: value }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select team" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Teams</SelectItem>
-                {availableTeams.map(team => (
-                  <SelectItem key={team} value={team.toLowerCase()}>{team}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
-          {/* Fixture Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fixture</label>
-            <Select
-              value={filters.fixture}
-              onValueChange={(value) => setFilters(prev => ({ ...prev, fixture: value }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select fixture" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Fixtures</SelectItem>
-                {fixtures.map(fixture => (
-                  <SelectItem key={fixture} value={fixture}>{fixture}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      {/* Filters Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {/* Prop Type Filter */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Prop Type</label>
+          <Select
+            value={filters.stat}
+            onValueChange={(value) => setFilters(prev => ({ ...prev, stat: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select prop type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Props</SelectItem>
+              {availableStats.map(stat => (
+                <SelectItem key={stat} value={stat.toLowerCase()}>{stat}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         
-        <div className="mt-2 text-sm text-gray-600">
-          <p>Showing {filteredData.length} players from {fixtures.length} fixtures</p>
-          <p>Total players available: {allPlayerOdds.length}</p>
+        {/* Team Filter */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Team</label>
+          <Select
+            value={filters.team}
+            onValueChange={(value) => setFilters(prev => ({ ...prev, team: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select team" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Teams</SelectItem>
+              {availableTeams.map(team => (
+                <SelectItem key={team} value={team.toLowerCase()}>{team}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        {/* Fixture Filter */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Fixture</label>
+          <Select
+            value={filters.fixture}
+            onValueChange={(value) => setFilters(prev => ({ ...prev, fixture: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select fixture" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Fixtures</SelectItem>
+              {fixtures.map(fixture => (
+                <SelectItem key={fixture} value={fixture}>{fixture}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

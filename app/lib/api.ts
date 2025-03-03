@@ -3,8 +3,10 @@ import { serverEnv } from "@/lib/env"
 
 export async function fetchPlayerOdds(fixtureLimit = 0): Promise<PlayerData[]> {
   try {
-    console.log(`Fetching player odds with fixture limit: ${fixtureLimit === 0 ? 'ALL' : fixtureLimit}`);
-    const response = await fetch(`/api/odds?limit=${fixtureLimit}`);
+    // Fetch all fixtures by default (limit=0)
+    const response = await fetch(`/api/odds?limit=${fixtureLimit}`, {
+      cache: 'no-store' // Disable caching to ensure fresh data
+    });
     
     if (!response.ok) {
       throw new Error(`Failed to fetch player odds: ${response.status} ${response.statusText}`);
@@ -12,33 +14,6 @@ export async function fetchPlayerOdds(fixtureLimit = 0): Promise<PlayerData[]> {
     
     const responseData = await response.json();
     const playerData = responseData.data || [];
-    
-    console.log(`Received ${playerData.length} player odds entries`);
-    
-    // Log a sample player to check the games data
-    if (playerData.length > 0) {
-      console.log(`Sample player games count: ${playerData[0].games?.length || 0}`);
-      
-      // Log unique fixtures to help debug
-      const fixtures = new Set();
-      playerData.forEach((player: PlayerData) => {
-        if (player.next_game && player.next_game.opponent) {
-          fixtures.add(`${player.player.team} vs ${player.next_game.opponent}`);
-        }
-      });
-      
-      console.log('Unique fixtures found:', Array.from(fixtures));
-      
-      // Count players per fixture
-      const fixturePlayerCounts: Record<string, number> = {};
-      playerData.forEach((player: PlayerData) => {
-        if (player.next_game && player.next_game.opponent) {
-          const fixtureString = `${player.player.team} vs ${player.next_game.opponent}`;
-          fixturePlayerCounts[fixtureString] = (fixturePlayerCounts[fixtureString] || 0) + 1;
-        }
-      });
-      console.log('Players per fixture:', fixturePlayerCounts);
-    }
     
     return playerData;
   } catch (error) {
@@ -80,7 +55,7 @@ export async function fetchActiveFixtures() {
     `key=${serverEnv.OPTIC_ODDS_API_KEY}`
 
   const response = await fetch(url, {
-    next: { revalidate: 300 } // Cache for 5 minutes
+    cache: 'no-store' // Disable caching to ensure fresh data
   })
 
   if (!response.ok) {
@@ -99,7 +74,7 @@ export async function fetchTeams() {
     `key=${serverEnv.OPTIC_ODDS_API_KEY}`
 
   const response = await fetch(url, {
-    next: { revalidate: 86400 } // Cache for 24 hours
+    cache: 'no-store' // Disable caching to ensure fresh data
   })
 
   if (!response.ok) {
@@ -125,7 +100,7 @@ export async function fetchFixtureOdds(fixtureId: string) {
     `key=${serverEnv.OPTIC_ODDS_API_KEY}`
 
   const response = await fetch(url, {
-    next: { revalidate: 60 } // Cache for 1 minute
+    cache: 'no-store' // Disable caching to ensure fresh data
   })
 
   if (!response.ok) {
@@ -138,7 +113,9 @@ export async function fetchFixtureOdds(fixtureId: string) {
 
 // Main function to get all game data
 export async function fetchGames() {
-  const response = await fetch('/api/games')
+  const response = await fetch('/api/games', {
+    cache: 'no-store' // Disable caching to ensure fresh data
+  })
   
   if (!response.ok) {
     const errorData = await response.json()
