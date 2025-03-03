@@ -182,7 +182,7 @@ export async function GET(request: Request) {
     // Get query parameters
     const url = new URL(request.url);
     const fixtureId = url.searchParams.get('fixture_id');
-    const limit = parseInt(url.searchParams.get('limit') || '0'); // Default to 0 (no limit)
+    const limit = parseInt(url.searchParams.get('limit') || '2'); // Default to 2 fixtures
     
     console.log(`API request received with fixtureId=${fixtureId}, limit=${limit}`);
     
@@ -460,15 +460,31 @@ export async function GET(request: Request) {
           // Determine if the player's team is home or away, then set opponent accordingly
           const playerTeam = playerDetail?.team?.name || odd.team_id || 'Unknown';
           
-          if (playerTeam === homeTeam) {
+          // Helper function to normalize team names for comparison
+          const normalizeTeamName = (name: string) => {
+            if (!name) return '';
+            return name.toLowerCase()
+              .replace(/\s+/g, '') // Remove spaces
+              .replace(/\./g, '')  // Remove periods
+              .replace(/-/g, '')   // Remove hyphens
+              .replace(/^the/i, ''); // Remove leading "the"
+          };
+          
+          // Compare normalized team names
+          const isHomeTeam = normalizeTeamName(playerTeam) === normalizeTeamName(homeTeam);
+          const isAwayTeam = normalizeTeamName(playerTeam) === normalizeTeamName(awayTeam);
+          
+          if (isHomeTeam) {
             fixtureOpponent = awayTeam;
-          } else if (playerTeam === awayTeam) {
+          } else if (isAwayTeam) {
             fixtureOpponent = homeTeam;
           } else {
             // If we can't determine, use the default away_team_display
             fixtureOpponent = fixtureForOdd.away_team_display;
-            console.warn(`Could not determine opponent for player ${odd.player_id} (${playerDetail?.name || 'Unknown'}) with team ${playerTeam}`);
+            console.log(`Could not match player team "${playerTeam}" to either home "${homeTeam}" or away "${awayTeam}"`);
           }
+          
+          console.log(`Player ${playerDetail?.name || odd.selection || 'Unknown'} - Team: ${playerTeam}, Opponent: ${fixtureOpponent}, Home: ${homeTeam}, Away: ${awayTeam}`);
         } else {
           fixtureOpponent = 'Unknown';
         }
