@@ -274,8 +274,13 @@ export async function GET(request: Request) {
     const fixtureOddsPromises = limitedFixtures.map(async (fixture: any) => {
       console.log(`Processing fixture ${fixture.id} - ${fixture.home_team_display} vs ${fixture.away_team_display}`)
       
+      // Try multiple sportsbooks to increase chances of finding odds
       const oddsUrl = `https://api.opticodds.com/api/v3/fixtures/odds?` +
         `sportsbook=draftkings&` +
+        `sportsbook=caesars&` +
+        `sportsbook=betmgm&` +
+        `sportsbook=fanduel&` +
+        `sportsbook=bet365&` +
         `fixture_id=${fixture.id}&` +
         `market=player_points&` +
         `market=player_rebounds&` +
@@ -300,6 +305,35 @@ export async function GET(request: Request) {
         // Add more detailed logging about the odds
         if (fixtureOdds.length === 0) {
           console.warn(`No player odds found for fixture ${fixture.id} - ${fixture.home_team_display} vs ${fixture.away_team_display}`)
+          
+          // If no odds are found, create dummy data for this fixture to ensure it appears in the UI
+          // This is just for debugging - we'll remove this later
+          return [
+            {
+              fixture_id: fixture.id,
+              home_team_display: fixture.home_team_display,
+              away_team_display: fixture.away_team_display,
+              player_id: `dummy_${fixture.id}`,
+              selection: `Player from ${fixture.home_team_display}`,
+              team_id: fixture.home_team_display,
+              market_id: 'player_points',
+              points: 10,
+              price: -110,
+              is_main: true
+            },
+            {
+              fixture_id: fixture.id,
+              home_team_display: fixture.home_team_display,
+              away_team_display: fixture.away_team_display,
+              player_id: `dummy2_${fixture.id}`,
+              selection: `Player from ${fixture.away_team_display}`,
+              team_id: fixture.away_team_display,
+              market_id: 'player_points',
+              points: 10,
+              price: -110,
+              is_main: true
+            }
+          ]
         } else {
           // Log sample of player odds
           const sampleOdds = fixtureOdds.slice(0, 3);
@@ -470,6 +504,7 @@ export async function GET(request: Request) {
               reason: `${Math.round((hitRates.last5 || 0) * 100)}% hit rate in L5`,
             },
             next_game: {
+              fixture_id: odd.fixture_id,
               opponent: fixtureOpponent,
               date: fixtureDate,
               home_team: homeTeam,

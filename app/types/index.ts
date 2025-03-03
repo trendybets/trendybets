@@ -7,6 +7,7 @@ export interface Player {
 }
 
 export interface NextGame {
+  fixture_id?: string
   opponent: string
   date: string
   home_team: string
