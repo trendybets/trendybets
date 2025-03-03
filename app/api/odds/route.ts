@@ -227,6 +227,16 @@ export async function GET(request: Request) {
       `${f.id}: ${f.home_team_display} vs ${f.away_team_display} (${f.status})`
     ));
 
+    // Add more detailed logging about the fixtures
+    console.log('Detailed fixtures data:', fixtures.map((f: any) => ({
+      id: f.id,
+      home: f.home_team_display,
+      away: f.away_team_display,
+      status: f.status,
+      start_date: f.start_date,
+      has_odds: f.has_odds
+    })));
+
     // IMPORTANT: Process ALL fixtures, don't limit unless explicitly requested
     // Ensure we're not accidentally limiting fixtures when limit=0
     let limitedFixtures;
@@ -286,6 +296,21 @@ export async function GET(request: Request) {
         const data = await response.json()
         const fixtureOdds = data.data?.[0]?.odds || []
         console.log(`Found ${fixtureOdds.length} odds for fixture ${fixture.id}`)
+        
+        // Add more detailed logging about the odds
+        if (fixtureOdds.length === 0) {
+          console.warn(`No player odds found for fixture ${fixture.id} - ${fixture.home_team_display} vs ${fixture.away_team_display}`)
+        } else {
+          // Log sample of player odds
+          const sampleOdds = fixtureOdds.slice(0, 3);
+          console.log(`Sample odds for fixture ${fixture.id}:`, sampleOdds.map((odd: any) => ({
+            player_id: odd.player_id,
+            selection: odd.selection,
+            market_id: odd.market_id,
+            points: odd.points
+          })));
+        }
+        
         return fixtureOdds.map((odd: any) => ({
           ...odd,
           fixture_id: fixture.id,
@@ -495,9 +520,19 @@ export async function GET(request: Request) {
     
     // Log unique fixtures in the processed data
     const processedFixtures = new Set(playerOdds
-      .filter((player: any) => player.next_game && player.next_game.opponent)
-      .map((player: any) => `${player.player.team} vs ${player.next_game.opponent}`));
+      .filter((player: any) => player.next_game && player.next_game.home_team && player.next_game.away_team)
+      .map((player: any) => `${player.next_game.home_team} vs ${player.next_game.away_team}`));
     console.log('Unique fixtures in processed data:', Array.from(processedFixtures));
+    
+    // Count players per fixture
+    const fixturePlayerCounts: Record<string, number> = {};
+    playerOdds.forEach((player: any) => {
+      if (player.next_game && player.next_game.home_team && player.next_game.away_team) {
+        const fixtureString = `${player.next_game.home_team} vs ${player.next_game.away_team}`;
+        fixturePlayerCounts[fixtureString] = (fixturePlayerCounts[fixtureString] || 0) + 1;
+      }
+    });
+    console.log('Players per fixture:', fixturePlayerCounts);
     
     // Check if we're only returning players from one fixture
     if (processedFixtures.size === 1 && limitedFixtures.length > 1) {

@@ -69,7 +69,11 @@ export default function TrendyPropsView() {
         odds.forEach(player => {
           if (player.next_game && player.next_game.home_team && player.next_game.away_team) {
             // Use the actual home and away teams from the fixture data
-            fixtureSet.add(`${player.next_game.home_team} vs ${player.next_game.away_team}`);
+            const fixtureString = `${player.next_game.home_team} vs ${player.next_game.away_team}`;
+            fixtureSet.add(fixtureString);
+            console.log(`Adding fixture: ${fixtureString} for player ${player.player.name}`);
+          } else {
+            console.warn(`Missing next_game data for player ${player.player.name}:`, player.next_game);
           }
         });
         
@@ -78,6 +82,14 @@ export default function TrendyPropsView() {
           fixtureCount: fixtureList.length,
           fixtures: fixtureList
         });
+        
+        // Log a sample of players to see their next_game data
+        const samplePlayers = odds.slice(0, 5);
+        console.log('Sample players next_game data:', samplePlayers.map(player => ({
+          name: player.player.name,
+          team: player.player.team,
+          next_game: player.next_game
+        })));
         
         setFixtures(fixtureList);
         
