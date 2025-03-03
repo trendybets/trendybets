@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { ProjectionsTable } from './projections-table'
 import { PlayerData } from '../types'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertCircle } from 'lucide-react'
@@ -123,8 +122,8 @@ export default function TrendyProjectionsView() {
 
       {isLoading ? (
         <div className="space-y-4">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-96 w-full" />
+          <div className="h-12 w-full bg-gray-200 animate-pulse rounded"></div>
+          <div className="h-96 w-full bg-gray-200 animate-pulse rounded"></div>
         </div>
       ) : (
         <ProjectionsTable 
