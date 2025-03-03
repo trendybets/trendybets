@@ -388,7 +388,31 @@ export async function GET(request: Request) {
         // Find the fixture for this odd
         const fixtureForOdd = limitedFixtures.find((f: any) => f.id === odd.fixture_id) || limitedFixtures[0]
         const fixtureDate = fixtureForOdd?.start_date || new Date().toISOString()
-        const fixtureOpponent = fixtureForOdd?.away_team_display || 'Unknown'
+        
+        // Correctly determine the opponent based on the player's team
+        let fixtureOpponent = '';
+        let homeTeam = '';
+        let awayTeam = '';
+        
+        if (fixtureForOdd) {
+          homeTeam = fixtureForOdd.home_team_display;
+          awayTeam = fixtureForOdd.away_team_display;
+          
+          // Determine if the player's team is home or away, then set opponent accordingly
+          const playerTeam = playerDetail?.team?.name || odd.team_id || 'Unknown';
+          
+          if (playerTeam === homeTeam) {
+            fixtureOpponent = awayTeam;
+          } else if (playerTeam === awayTeam) {
+            fixtureOpponent = homeTeam;
+          } else {
+            // If we can't determine, use the default away_team_display
+            fixtureOpponent = fixtureForOdd.away_team_display;
+            console.warn(`Could not determine opponent for player ${odd.player_id} (${playerDetail?.name || 'Unknown'}) with team ${playerTeam}`);
+          }
+        } else {
+          fixtureOpponent = 'Unknown';
+        }
 
         return {
           key,
@@ -423,6 +447,8 @@ export async function GET(request: Request) {
             next_game: {
               opponent: fixtureOpponent,
               date: fixtureDate,
+              home_team: homeTeam,
+              away_team: awayTeam
             },
             trend_strength: parseFloat((Math.abs((playerStats.last5 - odd.points) / odd.points)).toFixed(3)) || 0,
             games: gameStats.slice(0, 20).map(stat => { // Increase limit to 20 games for Last 20 filter

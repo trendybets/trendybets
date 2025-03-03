@@ -67,8 +67,9 @@ export default function TrendyPropsView() {
         // Extract unique fixtures
         const fixtureSet = new Set<string>();
         odds.forEach(player => {
-          if (player.next_game && player.next_game.opponent) {
-            fixtureSet.add(`${player.player.team} vs ${player.next_game.opponent}`);
+          if (player.next_game && player.next_game.home_team && player.next_game.away_team) {
+            // Use the actual home and away teams from the fixture data
+            fixtureSet.add(`${player.next_game.home_team} vs ${player.next_game.away_team}`);
           }
         });
         
@@ -166,8 +167,8 @@ export default function TrendyPropsView() {
     // Apply fixture filter
     if (filters.fixture !== 'all') {
       filtered = filtered.filter(item => {
-        if (!item.next_game || !item.next_game.opponent) return false;
-        const fixtureString = `${item.player.team} vs ${item.next_game.opponent}`;
+        if (!item.next_game || !item.next_game.home_team || !item.next_game.away_team) return false;
+        const fixtureString = `${item.next_game.home_team} vs ${item.next_game.away_team}`;
         return fixtureString === filters.fixture;
       });
     }
