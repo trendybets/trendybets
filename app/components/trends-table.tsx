@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useRef, useEffect } from 'react'
+import { useMemo, useState, useRef, useEffect, Dispatch, SetStateAction } from 'react'
 import {
   createColumnHelper,
   flexRender,
@@ -19,6 +19,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 export interface GameStats {
   points: number
@@ -34,6 +41,18 @@ interface TrendsTableProps {
   isLoading?: boolean
   hasMore?: boolean
   onLoadMore?: () => void
+  availableTeams?: string[]
+  availableFixtures?: string[]
+  filters?: {
+    stat: string
+    team: string
+    fixture: string
+  }
+  setFilters?: Dispatch<SetStateAction<{
+    stat: string
+    team: string
+    fixture: string
+  }>>
 }
 
 type TimeframeKey = 'last5' | 'last10' | 'last20'
@@ -50,7 +69,7 @@ const getOpponentTeam = (player: Player, nextGame: NextGame | undefined) => {
   return nextGame.opponent;
 }
 
-export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMore }: TrendsTableProps) {
+export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMore, availableTeams, availableFixtures, filters, setFilters }: TrendsTableProps) {
   // Default to Last 5 Games for initial load
   const [timeframe, setTimeframe] = useState('L5')
   const [statType, setStatType] = useState('All Props')
@@ -260,8 +279,8 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                 {/* Player Info */}
                 <div className="flex-1 min-w-0 md:min-w-[240px]">
                   <div className="flex flex-col md:flex-row md:items-baseline md:space-x-1">
-                    <span className="font-medium text-sm md:text-base text-gray-900 truncate max-w-[180px] md:max-w-full">{info.getValue().name}</span>
-                    <span className="text-xs text-gray-500 truncate max-w-[180px] md:max-w-full">{info.getValue().position} • {info.getValue().team}</span>
+                    <span className="font-medium text-sm md:text-base text-gray-900 truncate max-w-[180px] md:max-w-none">{info.getValue().name}</span>
+                    <span className="text-xs text-gray-500 truncate max-w-[180px] md:max-w-none">{info.getValue().position} • {info.getValue().team}</span>
                   </div>
                 </div>
               </div>
@@ -434,6 +453,54 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                 </div>
               </div>
             </div>
+            
+            {/* Team Filter Dropdown - Only show if props are provided */}
+            {filters && setFilters && availableTeams && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs md:text-sm text-white">Team:</span>
+                <div className="relative">
+                  <select
+                    value={filters.team}
+                    onChange={(e) => setFilters(prev => ({ ...prev, team: e.target.value }))}
+                    className="appearance-none bg-white border border-gray-300 rounded-md py-1 md:py-2 pl-2 pr-8 md:pl-3 md:pr-10 text-xs md:text-sm leading-5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="all">All Teams</option>
+                    {availableTeams.map(team => (
+                      <option key={team} value={team.toLowerCase()}>{team}</option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                    <svg className="h-3 w-3 md:h-4 md:w-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Fixture Filter Dropdown - Only show if props are provided */}
+            {filters && setFilters && availableFixtures && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs md:text-sm text-white">Fixture:</span>
+                <div className="relative">
+                  <select
+                    value={filters.fixture}
+                    onChange={(e) => setFilters(prev => ({ ...prev, fixture: e.target.value }))}
+                    className="appearance-none bg-white border border-gray-300 rounded-md py-1 md:py-2 pl-2 pr-8 md:pl-3 md:pr-10 text-xs md:text-sm leading-5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="all">All Fixtures</option>
+                    {availableFixtures.map(fixture => (
+                      <option key={fixture} value={fixture}>{fixture}</option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                    <svg className="h-3 w-3 md:h-4 md:w-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

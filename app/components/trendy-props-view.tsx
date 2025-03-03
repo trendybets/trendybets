@@ -235,7 +235,7 @@ export default function TrendyPropsView() {
 
   if (isLoading && playerOdds.length === 0) {
     return (
-      <div className="container mx-auto p-4 bg-white">
+      <div className="container mx-auto p-4">
         <div className="p-8 text-center text-gray-600">
           <div className="animate-spin inline-block w-6 h-6 border-2 border-current border-t-transparent rounded-full mb-2" />
           <div>Loading player odds...</div>
@@ -246,7 +246,7 @@ export default function TrendyPropsView() {
 
   if (playerOdds.length === 0 && !isLoading) {
     return (
-      <div className="container mx-auto p-4 bg-white">
+      <div className="container mx-auto p-4">
         <div className="p-8 text-center text-gray-600">
           <div className="text-xl font-medium mb-2">No player odds available</div>
           <div className="text-sm">Please try again later</div>
@@ -256,10 +256,10 @@ export default function TrendyPropsView() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-8 bg-white">
+    <div className="container mx-auto py-6 space-y-8">
       <div className="flex flex-col space-y-4">
-        <h1 className="text-3xl font-bold">Trendy Props</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-3xl font-bold text-black">Trendy Props</h1>
+        <p className="text-gray-700 font-medium">
           Player trends and statistics for upcoming games
         </p>
       </div>
@@ -272,71 +272,16 @@ export default function TrendyPropsView() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        {/* Stat Type Filter */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Stat Type</label>
-          <Select
-            value={filters.stat}
-            onValueChange={(value) => setFilters(prev => ({ ...prev, stat: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select stat type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Props</SelectItem>
-              {availableStats.map(stat => (
-                <SelectItem key={stat} value={stat.toLowerCase()}>{stat}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        {/* Team Filter */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Team</label>
-          <Select
-            value={filters.team}
-            onValueChange={(value) => setFilters(prev => ({ ...prev, team: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select team" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Teams</SelectItem>
-              {availableTeams.map(team => (
-                <SelectItem key={team} value={team.toLowerCase()}>{team}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        {/* Fixture Filter */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Fixture</label>
-          <Select
-            value={filters.fixture}
-            onValueChange={(value) => setFilters(prev => ({ ...prev, fixture: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select fixture" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Fixtures</SelectItem>
-              {fixtures.map(fixture => (
-                <SelectItem key={fixture} value={fixture}>{fixture}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <TrendsTable 
           data={filteredData} 
           isLoading={isLoading && playerOdds.length > 0}
           hasMore={hasMore}
           onLoadMore={loadMoreData}
+          availableTeams={availableTeams}
+          availableFixtures={fixtures}
+          filters={filters}
+          setFilters={setFilters}
         />
       </div>
     </div>
