@@ -245,6 +245,35 @@ interface TableRow {
   }
 }
 
+// Define types for the streaming data
+interface OddsEvent {
+  id: string
+  fixture_id: string
+  game_id: string
+  market: string
+  market_id: string
+  name: string
+  selection: string
+  selection_line: string
+  points: number
+  price: number
+  sportsbook: string
+  timestamp: number
+  is_live: boolean
+  is_main: boolean
+  league: string
+  league_id: string
+  is_home?: boolean
+}
+
+interface StreamEvent {
+  type: 'odds' | 'locked-odds' | 'ping' | 'connected' | 'message'
+  data: OddsEvent[] | string
+  entry_id?: string
+  timestamp: number
+  id: number
+}
+
 export default function TrendyGamesView() {
   const [games, setGames] = useState<Game[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -285,9 +314,42 @@ export default function TrendyGamesView() {
     startDate: ''
   })
   
+  // Add state for line movement tracking
+  const [lineMovementData, setLineMovementData] = useState<Record<string, {
+    spread: Array<{
+      timestamp: number;
+      sportsbook: string;
+      homeTeamSpread: number;
+      homeTeamPrice: number;
+      awayTeamSpread: number;
+      awayTeamPrice: number;
+    }>;
+    total: Array<{
+      timestamp: number;
+      sportsbook: string;
+      points: number;
+      overPrice: number;
+      underPrice: number;
+    }>;
+    moneyline: Array<{
+      timestamp: number;
+      sportsbook: string;
+      homeTeamPrice: number;
+      awayTeamPrice: number;
+    }>;
+  }>>({})
+  
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [showRefreshNotification, setShowRefreshNotification] = useState(false)
-
+  
+  // Add streaming state
+  const [isStreamingEnabled, setIsStreamingEnabled] = useState(false)
+  const [isStreamConnected, setIsStreamConnected] = useState(false)
+  const [streamEvents, setStreamEvents] = useState<StreamEvent[]>([])
+  const [streamError, setStreamError] = useState<string | null>(null)
+  const [isStreamLoading, setIsStreamLoading] = useState(false)
+  const [showStreamNotification, setShowStreamNotification] = useState(false)
+  
   // Add effect to handle notification visibility
   useEffect(() => {
     if (lastUpdated) {
@@ -386,8 +448,18 @@ export default function TrendyGamesView() {
       loadGamesData()
     }, 5 * 60 * 1000)
     
-    return () => clearInterval(refreshInterval)
-  }, [])
+    // Automatically start streaming when component loads
+    startStreaming()
+    
+    return () => {
+      clearInterval(refreshInterval)
+      // Stop streaming when component unmounts
+      if (isStreamingEnabled) {
+        stopStreaming()
+      }
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // We intentionally omit dependencies to only run this effect once on mount
 
   // Effect to update selected date when games change
   useEffect(() => {
@@ -467,6 +539,389 @@ export default function TrendyGamesView() {
       })
     }
   }, [dateGames])
+
+  // Function to start the EventSource connection
+  const startStreaming = async () => {
+    setIsStreamingEnabled(true)
+    setStreamError(null)
+    setIsStreamLoading(true)
+    
+    try {
+      // Call our API route that will handle the server-side streaming
+      const response = await fetch('/api/test-game-odds-stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          start: true
+        })
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to start streaming')
+      }
+      
+      const data = await response.json()
+      console.log('Streaming started:', data)
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to start streaming')
+      }
+      
+      // Show notification
+      setShowStreamNotification(true)
+      setTimeout(() => setShowStreamNotification(false), 3000)
+    } catch (err) {
+      setStreamError(`Failed to start streaming: ${err instanceof Error ? err.message : String(err)}`)
+      setIsStreamingEnabled(false)
+    } finally {
+      setIsStreamLoading(false)
+    }
+  }
+  
+  // Function to stop the EventSource connection
+  const stopStreaming = async () => {
+    setIsStreamLoading(true)
+    
+    try {
+      const response = await fetch('/api/test-game-odds-stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          stop: true
+        })
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to stop streaming')
+      }
+      
+      const data = await response.json()
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to stop streaming')
+      }
+      
+      setIsStreamingEnabled(false)
+      console.log('Streaming stopped')
+    } catch (err) {
+      setStreamError(`Failed to stop streaming: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setIsStreamLoading(false)
+    }
+  }
+  
+  // Poll for events from our API route
+  useEffect(() => {
+    if (!isStreamingEnabled) return
+    
+    // Initial fetch
+    const fetchEvents = async () => {
+      try {
+        const response = await fetch('/api/test-game-odds-stream')
+        
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Failed to fetch events')
+        }
+        
+        const data = await response.json()
+        
+        if (data.isConnected !== isStreamConnected) {
+          setIsStreamConnected(data.isConnected)
+        }
+        
+        if (data.events && data.events.length > 0) {
+          setStreamEvents(prevEvents => {
+            // Only add new events
+            const newEvents = data.events.filter(
+              (event: StreamEvent) => !prevEvents.some(e => 
+                e.id === event.id
+              )
+            )
+            
+            if (newEvents.length > 0) {
+              return [...prevEvents, ...newEvents].slice(-100) // Keep only the last 100 events
+            }
+            
+            return prevEvents
+          })
+        }
+      } catch (err) {
+        console.error('Error polling for events:', err)
+      }
+    }
+    
+    // Fetch immediately
+    fetchEvents()
+    
+    // Then set up polling interval
+    const pollInterval = setInterval(fetchEvents, 2000) // Poll every 2 seconds
+    
+    return () => clearInterval(pollInterval)
+  }, [isStreamingEnabled, isStreamConnected])
+  
+  // Process streaming odds data to update games and track line movements
+  useEffect(() => {
+    if (!isStreamingEnabled || streamEvents.length === 0) return
+    
+    // Get only odds events
+    const oddsEvents = streamEvents.filter(event => 
+      event.type === 'odds' || event.type === 'locked-odds'
+    )
+    
+    if (oddsEvents.length === 0) return
+    
+    // Process the latest odds events to update game data
+    console.log('Processing streaming odds events:', oddsEvents.length)
+    
+    // Clone the current games array
+    const updatedGames = [...games]
+    
+    // Clone the current line movement data
+    const updatedLineMovementData = {...lineMovementData}
+    
+    // Function to normalize sportsbook names
+    const normalizeSportsbook = (sportsbook: string): string => {
+      const name = sportsbook.toLowerCase();
+      if (name.includes('draftkings') || name.includes('draft kings') || name.includes('dk')) {
+        return 'draftkings';
+      } else if (name.includes('betmgm') || name.includes('bet mgm') || name.includes('mgm')) {
+        return 'betmgm';
+      } else if (name.includes('caesars') || name.includes('caesar')) {
+        return 'caesars';
+      } else if (name.includes('bet365') || name.includes('bet 365')) {
+        return 'bet365';
+      } else if (name.includes('fanduel') || name.includes('fan duel')) {
+        return 'fanduel';
+      } else if (name.includes('espn bet') || name.includes('espnbet')) {
+        return 'espn_bet';
+      }
+      return name;
+    };
+    
+    // Process each odds event
+    oddsEvents.forEach(event => {
+      if (!Array.isArray(event.data)) return
+      
+      event.data.forEach(odds => {
+        // Normalize the sportsbook name
+        const normalizedSportsbook = normalizeSportsbook(odds.sportsbook);
+        
+        // Find the game this odds belongs to
+        const gameIndex = updatedGames.findIndex(game => game.id === odds.game_id)
+        if (gameIndex === -1) return
+        
+        const game = updatedGames[gameIndex]
+        
+        // Initialize line movement data for this game if it doesn't exist
+        if (!updatedLineMovementData[game.id]) {
+          updatedLineMovementData[game.id] = {
+            spread: [],
+            total: [],
+            moneyline: []
+          }
+        }
+        
+        // Update the odds based on market type
+        if (odds.market_id.includes('player_')) {
+          // Handle player props (would need to extend the Game interface to include player props)
+          console.log('Received player prop update:', odds)
+        } else if (odds.market_id === 'total') {
+          // Handle total points
+          if (!game.odds.total) game.odds.total = []
+          
+          // Find existing odds for this sportsbook
+          const existingIndex = game.odds.total.findIndex(
+            o => o.sportsbook.toLowerCase() === normalizedSportsbook && o.selection_line === odds.selection_line
+          )
+          
+          if (existingIndex >= 0) {
+            // Update existing odds
+            game.odds.total[existingIndex] = {
+              ...game.odds.total[existingIndex],
+              price: odds.price,
+              points: odds.points,
+              selection_line: odds.selection_line
+            }
+          } else {
+            // Add new odds
+            game.odds.total.push({
+              sportsbook: normalizedSportsbook,
+              price: odds.price,
+              points: odds.points,
+              selection_line: odds.selection_line
+            })
+          }
+          
+          // Track line movement for totals
+          if (odds.selection_line === 'over') {
+            // Find if we already have a record for this sportsbook and points
+            const existingMovementIndex = updatedLineMovementData[game.id].total.findIndex(
+              item => item.sportsbook.toLowerCase() === normalizedSportsbook && item.points === odds.points
+            )
+            
+            if (existingMovementIndex >= 0) {
+              // Update existing record
+              updatedLineMovementData[game.id].total[existingMovementIndex].overPrice = odds.price
+              updatedLineMovementData[game.id].total[existingMovementIndex].timestamp = odds.timestamp
+            } else {
+              // Add new record
+              updatedLineMovementData[game.id].total.push({
+                timestamp: odds.timestamp,
+                sportsbook: normalizedSportsbook,
+                points: odds.points,
+                overPrice: odds.price,
+                underPrice: -110 // Default value, will be updated when we get the under odds
+              })
+            }
+          } else if (odds.selection_line === 'under') {
+            // Find if we already have a record for this sportsbook and points
+            const existingMovementIndex = updatedLineMovementData[game.id].total.findIndex(
+              item => item.sportsbook.toLowerCase() === normalizedSportsbook && item.points === odds.points
+            )
+            
+            if (existingMovementIndex >= 0) {
+              // Update existing record
+              updatedLineMovementData[game.id].total[existingMovementIndex].underPrice = odds.price
+              updatedLineMovementData[game.id].total[existingMovementIndex].timestamp = odds.timestamp
+            } else {
+              // Add new record
+              updatedLineMovementData[game.id].total.push({
+                timestamp: odds.timestamp,
+                sportsbook: normalizedSportsbook,
+                points: odds.points,
+                underPrice: odds.price,
+                overPrice: -110 // Default value, will be updated when we get the over odds
+              })
+            }
+          }
+          
+        } else if (odds.market_id === 'spread') {
+          // Handle spread
+          if (!game.odds.spread) game.odds.spread = []
+          
+          // Determine if this is for home or away team
+          const isHome = odds.is_home ?? false
+          
+          // Find existing odds for this sportsbook and team
+          const existingIndex = game.odds.spread.findIndex(
+            o => o.sportsbook.toLowerCase() === normalizedSportsbook && o.is_home === isHome
+          )
+          
+          if (existingIndex >= 0) {
+            // Update existing odds
+            game.odds.spread[existingIndex] = {
+              ...game.odds.spread[existingIndex],
+              price: odds.price,
+              points: odds.points
+            }
+          } else {
+            // Add new odds
+            game.odds.spread.push({
+              sportsbook: normalizedSportsbook,
+              team_id: odds.selection,
+              price: odds.price,
+              points: odds.points,
+              is_home: isHome
+            })
+          }
+          
+          // Track line movement for spread
+          // Find if we already have a record for this sportsbook
+          const existingMovementIndex = updatedLineMovementData[game.id].spread.findIndex(
+            item => item.sportsbook.toLowerCase() === normalizedSportsbook
+          )
+          
+          if (existingMovementIndex >= 0) {
+            // Update existing record
+            if (isHome) {
+              updatedLineMovementData[game.id].spread[existingMovementIndex].homeTeamSpread = odds.points
+              updatedLineMovementData[game.id].spread[existingMovementIndex].homeTeamPrice = odds.price
+            } else {
+              updatedLineMovementData[game.id].spread[existingMovementIndex].awayTeamSpread = odds.points
+              updatedLineMovementData[game.id].spread[existingMovementIndex].awayTeamPrice = odds.price
+            }
+            updatedLineMovementData[game.id].spread[existingMovementIndex].timestamp = odds.timestamp
+          } else {
+            // Add new record
+            updatedLineMovementData[game.id].spread.push({
+              timestamp: odds.timestamp,
+              sportsbook: normalizedSportsbook,
+              homeTeamSpread: isHome ? odds.points : 0,
+              homeTeamPrice: isHome ? odds.price : -110,
+              awayTeamSpread: !isHome ? odds.points : 0,
+              awayTeamPrice: !isHome ? odds.price : -110
+            })
+          }
+          
+        } else if (odds.market_id === 'moneyline') {
+          // Handle moneyline
+          if (!game.odds.moneyline) game.odds.moneyline = []
+          
+          // Determine if this is for home or away team
+          const isHome = odds.is_home ?? false
+          
+          // Find existing odds for this sportsbook and team
+          const existingIndex = game.odds.moneyline.findIndex(
+            o => o.sportsbook.toLowerCase() === normalizedSportsbook && o.is_home === isHome
+          )
+          
+          if (existingIndex >= 0) {
+            // Update existing odds
+            game.odds.moneyline[existingIndex] = {
+              ...game.odds.moneyline[existingIndex],
+              price: odds.price
+            }
+          } else {
+            // Add new odds
+            game.odds.moneyline.push({
+              sportsbook: normalizedSportsbook,
+              team_id: odds.selection,
+              price: odds.price,
+              is_home: isHome
+            })
+          }
+          
+          // Track line movement for moneyline
+          // Find if we already have a record for this sportsbook
+          const existingMovementIndex = updatedLineMovementData[game.id].moneyline.findIndex(
+            item => item.sportsbook.toLowerCase() === normalizedSportsbook
+          )
+          
+          if (existingMovementIndex >= 0) {
+            // Update existing record
+            if (isHome) {
+              updatedLineMovementData[game.id].moneyline[existingMovementIndex].homeTeamPrice = odds.price
+            } else {
+              updatedLineMovementData[game.id].moneyline[existingMovementIndex].awayTeamPrice = odds.price
+            }
+            updatedLineMovementData[game.id].moneyline[existingMovementIndex].timestamp = odds.timestamp
+          } else {
+            // Add new record
+            updatedLineMovementData[game.id].moneyline.push({
+              timestamp: odds.timestamp,
+              sportsbook: normalizedSportsbook,
+              homeTeamPrice: isHome ? odds.price : -110,
+              awayTeamPrice: !isHome ? odds.price : -110
+            })
+          }
+        }
+      })
+    })
+    
+    // Update the games state with the modified data
+    setGames(updatedGames)
+    
+    // Update the line movement data
+    setLineMovementData(updatedLineMovementData)
+    
+  }, [streamEvents, games, isStreamingEnabled, lineMovementData])
 
   // Add loading state handling
   if (isLoading && games.length === 0) {
@@ -626,29 +1081,42 @@ export default function TrendyGamesView() {
         
         {/* Add refresh button and last updated timestamp */}
         <div className="flex flex-col items-end">
-          <button 
-            onClick={handleRefresh}
-            disabled={isLoading}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-              isLoading 
-                ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
-                : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow'
-            }`}
-          >
-            {isLoading ? (
-              <>
-                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                <span>Refreshing...</span>
-              </>
-            ) : (
-              <>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>Refresh Odds</span>
-              </>
-            )}
-          </button>
+          <div className="flex gap-2">
+            <button 
+              onClick={handleRefresh}
+              disabled={isLoading}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                isLoading 
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                  : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow'
+              }`}
+            >
+              {isLoading ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  <span>Refreshing...</span>
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Refresh Odds</span>
+                </>
+              )}
+            </button>
+            
+            {/* Replace streaming toggle button with status indicator */}
+            <div 
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-green-50 border border-green-200 text-green-700"
+            >
+              <div className={`w-2 h-2 rounded-full ${isStreamConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`}></div>
+              <span>
+                {isStreamConnected ? 'Live Data Streaming' : 'Connecting to Stream...'}
+              </span>
+            </div>
+          </div>
+          
           {lastUpdated && (
             <div className="flex flex-col items-end">
               <span className="text-xs text-gray-500 mt-1">
@@ -661,6 +1129,20 @@ export default function TrendyGamesView() {
                   Data refreshed successfully!
                 </div>
               )}
+              
+              {/* Stream notification */}
+              {showStreamNotification && (
+                <div className="fixed top-4 right-4 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2 rounded-lg shadow-md z-50 animate-fade-in">
+                  {isStreamingEnabled ? 'Streaming started!' : 'Streaming stopped!'}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Stream error message */}
+          {streamError && (
+            <div className="text-xs text-red-500 mt-1">
+              {streamError}
             </div>
           )}
         </div>
@@ -754,13 +1236,18 @@ export default function TrendyGamesView() {
       <TrendsModal />
       
       {/* Add the research modal */}
-      <GameResearchView 
+      <GameResearchView
         isOpen={researchModal.isOpen}
-        onClose={() => setResearchModal(prev => ({ ...prev, isOpen: false }))}
-        gameId={researchModal.gameId}
-        homeTeam={researchModal.homeTeam}
-        awayTeam={researchModal.awayTeam}
-        startDate={researchModal.startDate}
+        onClose={() => setResearchModal({ ...researchModal, isOpen: false })}
+        game={{
+          id: researchModal.gameId,
+          homeTeam: researchModal.homeTeam,
+          awayTeam: researchModal.awayTeam,
+          startDate: researchModal.startDate,
+          odds: {}
+        }}
+        lineMovementData={lineMovementData}
+        isStreamingEnabled={isStreamingEnabled}
       />
     </div>
   )
