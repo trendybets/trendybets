@@ -28,6 +28,11 @@ const navigation = [
     icon: CirclePlus,
   },
   {
+    name: "Trendy Projections",
+    href: "/trendy-projections",
+    icon: TrendingUp,
+  },
+  {
     name: "Calculators",
     href: "/calculators",
     icon: Calculator,
