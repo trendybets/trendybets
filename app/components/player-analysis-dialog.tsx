@@ -145,6 +145,46 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose }: PlayerAnalysis
     return processedPlayer.hit_rates[processedPlayer.stat_type.toLowerCase() as keyof typeof processedPlayer.hit_rates]?.[timeframeKey] || 0;
   }
 
+  // Calculate hit counts for the selected timeframe
+  const calculateHitCounts = () => {
+    if (!processedPlayer.games || processedPlayer.games.length === 0) return { hits: 0, total: 0 };
+    
+    const timeframeKey = getTimeframeKey(selectedTimeframe);
+    let gameCount = 0;
+    
+    switch (timeframeKey) {
+      case 'last5':
+        gameCount = Math.min(5, processedPlayer.games.length);
+        break;
+      case 'last10':
+        gameCount = Math.min(10, processedPlayer.games.length);
+        break;
+      case 'season':
+        gameCount = processedPlayer.games.length;
+        break;
+      default:
+        gameCount = Math.min(5, processedPlayer.games.length);
+    }
+    
+    const relevantGames = processedPlayer.games.slice(0, gameCount);
+    const line = getLineValue();
+    let hits = 0;
+    
+    // Determine direction based on recommended bet type
+    const isOver = processedPlayer.recommended_bet?.type === 'over';
+    
+    for (const game of relevantGames) {
+      const value = processedPlayer.stat_type.toLowerCase() === 'points' ? game.points : 
+                   processedPlayer.stat_type.toLowerCase() === 'assists' ? game.assists : game.total_rebounds;
+      
+      if ((isOver && value > line) || (!isOver && value < line)) {
+        hits++;
+      }
+    }
+    
+    return { hits, total: gameCount };
+  }
+
   // Get current streak
   const getCurrentStreak = () => {
     if (!processedPlayer.games || processedPlayer.games.length === 0) return 0;
@@ -480,34 +520,31 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose }: PlayerAnalysis
         {/* Fixed header with tabs */}
         <div className="border-b border-gray-100">
           {/* Player header */}
-          <div className="p-6 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-            <img 
-              src={processedPlayer.player.image_url} 
-              alt={processedPlayer.player.name}
-                className="h-16 w-16 rounded-full border-2 border-gray-100 shadow-sm"
-            />
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">{processedPlayer.player.name}</h2>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-sm font-medium text-gray-600">{processedPlayer.player.team}</span>
-                  <span className="text-gray-400">•</span>
-                  <span className="text-sm font-medium text-gray-600">{processedPlayer.player.position}</span>
-                  <span className="text-gray-400">•</span>
-                  <span className="text-sm font-medium text-gray-900">{processedPlayer.stat_type} {getLineValue()}</span>
+          <div className="flex items-center justify-between p-6 pb-3">
+            {/* Player info */}
+            <div className="flex items-center">
+              <img 
+                src={processedPlayer.player.image_url} 
+                alt={processedPlayer.player.name}
+                className="h-12 w-12 rounded-full border border-gray-200 bg-gray-100 team-logo"
+              />
+              <div className="ml-3">
+                <h3 className="text-lg font-bold player-name">{processedPlayer.player.name}</h3>
+                <div className="flex items-center">
+                  <span className="text-sm text-gray-500 team-pill">{processedPlayer.player.position} • {processedPlayer.player.team}</span>
                 </div>
               </div>
             </div>
             
             {processedPlayer.next_game && (
-              <div className="bg-gray-50 py-2 px-4 rounded-lg">
+              <div className="game-info-card">
                 <div className="text-xs text-gray-500 mb-1">Next Game</div>
-                <div className="text-sm font-medium">
+                <div className="text-sm font-medium matchup-display">
                   {processedPlayer.next_game.home_team === processedPlayer.player.team 
                     ? `vs ${processedPlayer.next_game.away_team}` 
                     : `@ ${processedPlayer.next_game.home_team}`}
                 </div>
-                <div className="text-xs text-gray-500 mt-1">{processedPlayer.next_game.date}</div>
+                <div className="text-xs text-gray-500 mt-1 game-time">{processedPlayer.next_game.date}</div>
               </div>
             )}
           </div>
@@ -524,10 +561,10 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose }: PlayerAnalysis
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as TabType)}
                 className={cn(
-                  "py-3 px-4 text-sm font-medium border-b-2 transition-colors",
+                  "py-3 px-4 text-sm font-medium border-b-2 transition-colors espn-tab",
                   activeTab === tab.id 
-                    ? "border-blue-600 text-blue-600" 
-                    : "border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300"
+                    ? "espn-tab-active" 
+                    : "espn-tab-inactive"
                 )}
               >
                 {tab.label}
@@ -537,46 +574,52 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose }: PlayerAnalysis
         </div>
         
         {/* Scrollable content area */}
-        <div className="max-h-[70vh] overflow-y-auto">
+        <div className="max-h-[70vh] overflow-y-auto custom-scrollbar">
           
           {/* Overview Tab */}
           {activeTab === 'overview' && (
             <div className="p-6">
               {/* Key Stats Highlights */}
               <div className="grid grid-cols-4 gap-4 mb-6">
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="stat-card">
                   <div className="text-sm text-gray-500 mb-1">Line</div>
                   <div className="text-2xl font-bold text-gray-900">{getLineValue()}</div>
                   <div className="text-xs text-gray-500 mt-1">{processedPlayer.stat_type}</div>
                 </div>
                 
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="stat-card">
                   <div className="text-sm text-gray-500 mb-1">Average ({selectedTimeframe})</div>
                   <div className="text-2xl font-bold text-gray-900">{getAverageValue().toFixed(1)}</div>
                   <div className="text-xs text-gray-500 mt-1">{processedPlayer.stat_type}</div>
                 </div>
                 
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="stat-card">
                   <div className="text-sm text-gray-500 mb-1">Hit Rate ({selectedTimeframe})</div>
                   <div className={cn(
                     "text-2xl font-bold",
                     getHitRate(selectedTimeframe) >= 0.7 ? "text-green-600" : 
-                    getHitRate(selectedTimeframe) >= 0.5 ? "text-yellow-600" : "text-red-600"
+                    getHitRate(selectedTimeframe) >= 0.5 ? "text-yellow-600" : 
+                    "text-red-600"
                   )}>
                     {(getHitRate(selectedTimeframe) * 100).toFixed(0)}%
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">{processedPlayer.stat_type}</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {calculateHitCounts().hits} of {calculateHitCounts().total} games
+                  </div>
                 </div>
                 
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="stat-card">
                   <div className="text-sm text-gray-500 mb-1">Current Streak</div>
                   <div className="text-2xl font-bold text-gray-900">{Math.abs(getCurrentStreak())}</div>
                   <div className={cn(
                     "text-xs font-medium mt-1",
                     getCurrentStreak() > 0 ? "text-green-600" : 
-                    getCurrentStreak() < 0 ? "text-red-600" : "text-gray-500"
+                    getCurrentStreak() < 0 ? "text-red-600" : 
+                    "text-gray-500"
                   )}>
-                    {getStreakText()}
+                    {getCurrentStreak() > 0 ? "Consecutive Hits" : 
+                     getCurrentStreak() < 0 ? "Consecutive Misses" : 
+                     "No Streak"}
                   </div>
                 </div>
               </div>

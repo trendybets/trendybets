@@ -258,21 +258,21 @@ export default function TrendyPropsView() {
   return (
     <div className="container mx-auto py-6 space-y-8">
       <div className="flex flex-col space-y-4">
-        <h1 className="text-3xl font-bold text-black">Trendy Props</h1>
-        <p className="text-gray-700 font-medium">
+        <h1 className="text-3xl font-bold text-black sports-heading">Trendy Props</h1>
+        <p className="text-gray-700 font-medium sports-subheading">
           Player trends and statistics for upcoming games
         </p>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-4 mb-6">
+        <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-4 mb-6 sports-alert sports-alert-error">
           <h3 className="text-lg font-semibold">Error Loading Data</h3>
           <p>{error}</p>
           {errorDetails && <pre className="mt-2 text-xs bg-red-100 p-2 rounded">{errorDetails}</pre>}
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="sports-card sports-card-elevated">
         <TrendsTable 
           data={filteredData} 
           isLoading={isLoading && playerOdds.length > 0}

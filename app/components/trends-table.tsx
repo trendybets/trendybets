@@ -260,12 +260,12 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                   <img 
                     src={info.getValue().image_url}
                     alt={info.getValue().name}
-                    className="h-8 w-8 md:h-10 md:w-10 rounded-full border border-gray-200 bg-gray-100"
+                    className="h-8 w-8 md:h-10 md:w-10 rounded-full border border-gray-200 bg-gray-100 team-logo"
                   />
                   {stats.isStrong && (
                     <div className={cn(
-                      "absolute -top-1 -right-1 flex h-3 w-3 md:h-4 md:w-4 items-center justify-center rounded-full text-white",
-                      stats.direction === 'MORE' ? "bg-green-500" : "bg-red-500"
+                      "absolute -top-1 -right-1 flex h-3 w-3 md:h-4 md:w-4 items-center justify-center rounded-full text-white trend-indicator",
+                      stats.direction === 'MORE' ? "trend-indicator-up" : "trend-indicator-down"
                     )}>
                       {stats.direction === 'MORE' ? (
                         <TrendingUp className="h-2 w-2 md:h-2.5 md:w-2.5" />
@@ -279,8 +279,8 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                 {/* Player Info */}
                 <div className="flex-1 min-w-0 md:min-w-[240px]">
                   <div className="flex flex-col md:flex-row md:items-baseline md:space-x-1">
-                    <span className="font-medium text-sm md:text-base text-gray-900 truncate max-w-[180px] md:max-w-none">{info.getValue().name}</span>
-                    <span className="text-xs text-gray-500 truncate max-w-[180px] md:max-w-none">{info.getValue().position} • {info.getValue().team}</span>
+                    <span className="font-medium text-sm md:text-base text-gray-900 truncate max-w-[180px] md:max-w-none player-name">{info.getValue().name}</span>
+                    <span className="text-xs text-gray-500 truncate max-w-[180px] md:max-w-none team-pill">{info.getValue().position} • {info.getValue().team}</span>
                   </div>
                 </div>
               </div>
@@ -288,12 +288,10 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
               {/* Hit Rate - Moved to top right on mobile */}
               <div className="md:hidden">
                 <div className={cn(
-                  "flex min-w-[2.5rem] h-6 px-2 items-center justify-center rounded-md text-xs font-semibold",
-                  stats.percentage >= 0.9 ? "bg-green-500 text-white" : 
-                  stats.percentage >= 0.7 ? "bg-green-500 text-white" : 
-                  stats.percentage >= 0.6 ? "bg-green-400 text-white" : 
-                  stats.percentage >= 0.5 ? "bg-yellow-400 text-gray-800" : 
-                  "bg-red-500 text-white"
+                  "odds-badge",
+                  stats.percentage >= 0.7 ? "odds-badge-positive" : 
+                  stats.percentage >= 0.5 ? "odds-badge-neutral" : 
+                  "odds-badge-negative"
                 )}>
                   {stats.total ? `${(stats.percentage * 100).toFixed(0)}%` : 'N/A'}
                 </div>
@@ -303,13 +301,13 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
             {/* Bottom row for mobile - Stats narrative */}
             <div className="mt-1 md:mt-0 md:flex md:items-center md:justify-between w-full">
               {/* Stats Narrative */}
-              <div className="text-xs md:text-sm font-medium md:mr-3">
+              <div className="text-xs md:text-sm font-medium md:mr-3 stats-narrative">
                 <span className="text-black">Has gone</span> <span className={cn("font-bold", stats.direction === 'MORE' ? "text-green-600" : "text-red-600")}>{stats.direction === 'MORE' ? 'OVER' : 'UNDER'}</span> <span className="font-bold text-black">{row.line}</span> <span className="text-black">{row.stat_type} in</span> <span className="font-bold text-green-600">{stats.hits}</span> <span className="text-black">of</span> <span className="font-bold text-black">{stats.total}</span> <span className="text-black">games</span>
               </div>
 
               {/* Average Value - Stacked on mobile */}
               <div className="mt-1 md:mt-0 md:mr-3">
-                <div className="bg-gray-50 px-2 py-0.5 md:px-3 rounded-md inline-flex text-xs md:text-sm">
+                <div className="stat-badge stat-badge-neutral">
                   <span className="font-medium text-gray-700">Avg: {avgValue}</span>
                   <span className={cn("ml-1 font-medium", 
                     avgValue > row.line ? "text-green-600" : "text-red-600"
@@ -330,10 +328,10 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                       <div 
                         key={i}
                         className={cn(
-                          "h-3 w-3 md:h-4 md:w-4 rounded-full",
+                          "game-result-indicator",
                           isHit 
-                            ? "bg-green-500" 
-                            : "bg-red-500"
+                            ? "game-result-hit" 
+                            : "game-result-miss"
                         )}
                       />
                     )
@@ -343,12 +341,10 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                 {/* Hit Rate - Hidden on mobile (shown at top) */}
                 <div className="hidden md:block">
                   <div className={cn(
-                    "flex min-w-[3.5rem] h-7 px-2 items-center justify-center rounded-md text-sm font-semibold",
-                    stats.percentage >= 0.9 ? "bg-green-500 text-white" : 
-                    stats.percentage >= 0.7 ? "bg-green-500 text-white" : 
-                    stats.percentage >= 0.6 ? "bg-green-400 text-white" : 
-                    stats.percentage >= 0.5 ? "bg-yellow-400 text-gray-800" : 
-                    "bg-red-500 text-white"
+                    "odds-badge",
+                    stats.percentage >= 0.7 ? "odds-badge-positive" : 
+                    stats.percentage >= 0.5 ? "odds-badge-neutral" : 
+                    "odds-badge-negative"
                   )}>
                     {stats.total ? `${(stats.percentage * 100).toFixed(0)}%` : 'N/A'}
                   </div>
