@@ -11,6 +11,7 @@ const navigation = [
   { name: 'Trendy Games', href: '/trendy-games' },
   { name: 'Calculators', href: '/calculators' },
   { name: 'Trendy Props', href: '/trendy-props' },
+  { name: 'Trendy Projections', href: '/trendy-projections' },
 ]
 
 export function Navbar() {

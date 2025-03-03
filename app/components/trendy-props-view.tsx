@@ -12,7 +12,6 @@ import { cn } from '@/lib/utils'
 import { calculateProjection } from '../lib/projections'
 import { PlayerData } from '../types'
 import { fetchPlayerOdds } from '../lib/api'
-import { ProjectionsTable } from './projections-table'
 import { TrendsTable } from './trends-table'
 
 export default function TrendyPropsView() {
@@ -257,46 +256,32 @@ export default function TrendyPropsView() {
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6 bg-white min-h-screen">
-      {/* Enhanced Header with Gradient Background */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-lg shadow-md mb-8">
-        <div className="flex items-center p-6">
-          <div className="flex items-center">
-            <svg className="h-10 w-10 text-white mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            <div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">Trendy Props</h1>
-              <p className="text-blue-100 mt-1">Track player performance and betting trends</p>
-            </div>
-          </div>
-        </div>
+    <div className="container mx-auto py-6 space-y-8">
+      <div className="flex flex-col space-y-4">
+        <h1 className="text-3xl font-bold">Trendy Props</h1>
+        <p className="text-muted-foreground">
+          Player trends and statistics for upcoming games
+        </p>
       </div>
 
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          <p className="font-bold">Error loading player props</p>
+        <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-4 mb-6">
+          <h3 className="text-lg font-semibold">Error Loading Data</h3>
           <p>{error}</p>
-          {errorDetails && (
-            <details className="mt-2">
-              <summary className="cursor-pointer">Error Details</summary>
-              <pre className="mt-2 text-xs overflow-auto">{errorDetails}</pre>
-            </details>
-          )}
+          {errorDetails && <pre className="mt-2 text-xs bg-red-100 p-2 rounded">{errorDetails}</pre>}
         </div>
       )}
-      
-      {/* Filters Section */}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        {/* Prop Type Filter */}
+        {/* Stat Type Filter */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Prop Type</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Stat Type</label>
           <Select
             value={filters.stat}
             onValueChange={(value) => setFilters(prev => ({ ...prev, stat: value }))}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select prop type" />
+              <SelectValue placeholder="Select stat type" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Props</SelectItem>
@@ -346,24 +331,13 @@ export default function TrendyPropsView() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-8">
-        {/* Trends Table First */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <TrendsTable 
-            data={filteredData} 
-            isLoading={isLoading && playerOdds.length > 0}
-            hasMore={hasMore}
-            onLoadMore={loadMoreData}
-          />
-        </div>
-
-        {/* Projections Table Second */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <ProjectionsTable 
-            data={filteredData} 
-            isLoading={isLoading && playerOdds.length > 0}
-          />
-        </div>
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <TrendsTable 
+          data={filteredData} 
+          isLoading={isLoading && playerOdds.length > 0}
+          hasMore={hasMore}
+          onLoadMore={loadMoreData}
+        />
       </div>
     </div>
   )
