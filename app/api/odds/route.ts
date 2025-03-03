@@ -184,6 +184,8 @@ export async function GET(request: Request) {
     const fixtureId = url.searchParams.get('fixture_id');
     const limit = parseInt(url.searchParams.get('limit') || '0'); // Default to 0 (no limit)
     
+    console.log(`API request received with fixtureId=${fixtureId}, limit=${limit}`);
+    
     // First get active fixtures - updated to match the provided endpoint
     const fixturesUrl = `https://api.opticodds.com/api/v3/fixtures/active?` +
       `sport=basketball&` +
@@ -226,13 +228,37 @@ export async function GET(request: Request) {
     ));
 
     // IMPORTANT: Process ALL fixtures, don't limit unless explicitly requested
-    const limitedFixtures = fixtureId ? fixtures.filter((f: any) => f.id === fixtureId) : 
-                           limit > 0 ? fixtures.slice(0, limit) : fixtures;
+    // Ensure we're not accidentally limiting fixtures when limit=0
+    let limitedFixtures;
+    if (fixtureId) {
+      // If a specific fixture ID is requested, filter to just that one
+      limitedFixtures = fixtures.filter((f: any) => f.id === fixtureId);
+      console.log(`Filtering to specific fixture ID: ${fixtureId}`);
+    } else if (limit > 0) {
+      // If a positive limit is specified, limit the number of fixtures
+      limitedFixtures = fixtures.slice(0, limit);
+      console.log(`Limiting to ${limit} fixtures`);
+    } else {
+      // Otherwise, process ALL fixtures (limit=0 or negative)
+      limitedFixtures = [...fixtures]; // Create a copy to avoid reference issues
+      console.log(`Processing ALL ${fixtures.length} fixtures (no limit)`);
+    }
     
     console.log(`Processing ${limitedFixtures.length} fixtures out of ${fixtures.length} total fixtures`);
     console.log('Fixtures to process:', limitedFixtures.map((f: any) => 
       `${f.id}: ${f.home_team_display} vs ${f.away_team_display} (${f.status})`
     ));
+    
+    // Check if we're limiting fixtures when we shouldn't be
+    if (limit === 0 && limitedFixtures.length < fixtures.length) {
+      console.warn('WARNING: Not processing all fixtures despite limit=0. This might be a bug.');
+    }
+    
+    if (limitedFixtures.length === 1 && fixtures.length > 1) {
+      console.warn('WARNING: Only processing 1 fixture despite having multiple available.');
+      console.warn('Fixture being processed:', limitedFixtures[0].id, 
+        `${limitedFixtures[0].home_team_display} vs ${limitedFixtures[0].away_team_display}`);
+    }
 
     // Use Promise.all to fetch odds for all fixtures in parallel
     const fixtureOddsPromises = limitedFixtures.map(async (fixture: any) => {
@@ -440,6 +466,18 @@ export async function GET(request: Request) {
     // Log unique teams to help debug
     const teams = new Set(playerOdds.map((player: any) => player.player?.team || 'Unknown'));
     console.log('Unique teams found:', Array.from(teams));
+    
+    // Log unique fixtures in the processed data
+    const processedFixtures = new Set(playerOdds
+      .filter((player: any) => player.next_game && player.next_game.opponent)
+      .map((player: any) => `${player.player.team} vs ${player.next_game.opponent}`));
+    console.log('Unique fixtures in processed data:', Array.from(processedFixtures));
+    
+    // Check if we're only returning players from one fixture
+    if (processedFixtures.size === 1 && limitedFixtures.length > 1) {
+      console.warn('WARNING: Only returning players from 1 fixture despite processing multiple fixtures.');
+      console.warn('This might indicate a filtering issue in the data processing logic.');
+    }
 
     // Add pagination metadata
     const response = {

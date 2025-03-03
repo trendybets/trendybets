@@ -4,6 +4,7 @@ import { serverEnv } from "@/lib/env"
 export async function fetchPlayerOdds(fixtureLimit = 0): Promise<PlayerData[]> {
   try {
     // Fetch all fixtures by default (limit=0)
+    console.log(`Fetching player odds with fixtureLimit=${fixtureLimit}`);
     const response = await fetch(`/api/odds?limit=${fixtureLimit}`, {
       cache: 'no-store' // Disable caching to ensure fresh data
     });
@@ -14,6 +15,8 @@ export async function fetchPlayerOdds(fixtureLimit = 0): Promise<PlayerData[]> {
     
     const responseData = await response.json();
     const playerData = responseData.data || [];
+    
+    console.log(`API returned ${playerData.length} players with metadata:`, responseData.meta);
     
     return playerData;
   } catch (error) {

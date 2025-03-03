@@ -41,6 +41,21 @@ export default function TrendyPropsView() {
         // Fetch all available fixtures by setting limit to 0 (no limit)
         const odds = await fetchPlayerOdds(0) // Load all available fixtures
         
+        console.log('Fetched player odds:', {
+          totalPlayers: odds?.length || 0,
+          uniqueFixtures: new Set(odds?.map(player => 
+            player.next_game && player.next_game.opponent ? 
+            `${player.player.team} vs ${player.next_game.opponent}` : 
+            null
+          ).filter(Boolean)).size,
+          samplePlayer: odds?.[0] ? {
+            name: odds[0].player.name,
+            team: odds[0].player.team,
+            nextGame: odds[0].next_game,
+            gamesCount: odds[0].games?.length || 0
+          } : 'No players found'
+        });
+        
         // Store all player odds for pagination
         setAllPlayerOdds(odds || [])
         
@@ -58,11 +73,19 @@ export default function TrendyPropsView() {
         });
         
         const fixtureList = Array.from(fixtureSet);
+        console.log('Extracted fixtures:', {
+          fixtureCount: fixtureList.length,
+          fixtures: fixtureList
+        });
+        
         setFixtures(fixtureList);
         
         // If there are multiple fixtures, set the default to "all" to show all players
         if (fixtureList.length > 1) {
+          console.log('Multiple fixtures found, setting default to "all"');
           setFilters(prev => ({...prev, fixture: 'all'}));
+        } else {
+          console.log('Only one fixture found, using it as default');
         }
       } catch (err) {
         console.error('Error loading player odds:', err)
@@ -154,7 +177,13 @@ export default function TrendyPropsView() {
 
   // Get filtered data
   const filteredData = useMemo(() => {
-    return getFilteredData(playerOdds);
+    const filtered = getFilteredData(playerOdds);
+    console.log('Filtered data:', {
+      beforeFilter: playerOdds.length,
+      afterFilter: filtered.length,
+      currentFilters: filters
+    });
+    return filtered;
   }, [playerOdds, filters]);
 
   // Update the teams list for the dropdown
