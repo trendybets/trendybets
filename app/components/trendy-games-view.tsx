@@ -17,6 +17,7 @@ import {
 import { ChevronRightIcon, ChevronLeftIcon } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { fetchGames } from '../lib/api'
+import GameResearchView from './game-research-view'
 
 type Fixture = Database['public']['Tables']['fixtures']['Row'] & {
   home_team: Database['public']['Tables']['teams']['Row']
@@ -57,6 +58,11 @@ const teamAbbreviations: { [key: string]: string } = {
   "Los Angeles Clippers": "LAC",
   "Atlanta Hawks": "ATL"
 }
+
+// Get team abbreviation function
+const getTeamAbbreviation = (teamName: string) => {
+  return teamAbbreviations[teamName] || teamName.substring(0, 3).toUpperCase();
+};
 
 // Add back the timeframes constant at the top
 const timeframes = [
@@ -164,64 +170,38 @@ interface Game {
   first_half_total_points?: number
 }
 
-// Add this interface before the columns definition
-interface TableRow {
-  id: string
-  startDate: string
-  homeTeam: {
-    id: string
-    name: string
-    odds: {
-      spread?: { points: number; price: number }
-      moneyline?: { price: number }
-    }
-  }
-  awayTeam: {
-    id: string
-    name: string
-    odds: {
-      spread?: { points: number; price: number }
-      moneyline?: { price: number }
-    }
-  }
-  total: {
-    over?: { points: number; price: number }
-    under?: { points: number; price: number }
-  }
-}
-
 // Add team colors mapping
 const teamColors: Record<string, { primary: string; secondary: string }> = {
-  "Washington Wizards": { primary: "#002B5C", secondary: "#E31837" },
-  "Milwaukee Bucks": { primary: "#00471B", secondary: "#EEE1C6" },
-  "Cleveland Cavaliers": { primary: "#860038", secondary: "#FDBB30" },
-  "New York Knicks": { primary: "#006BB6", secondary: "#F58426" },
-  "Orlando Magic": { primary: "#0077C0", secondary: "#C4CED4" },
-  "Memphis Grizzlies": { primary: "#5D76A9", secondary: "#12173F" },
-  "Toronto Raptors": { primary: "#CE1141", secondary: "#000000" },
-  "Miami Heat": { primary: "#98002E", secondary: "#F9A01B" },
-  "Dallas Mavericks": { primary: "#00538C", secondary: "#002B5E" },
-  "New Orleans Pelicans": { primary: "#0C2340", secondary: "#C8102E" },
-  "San Antonio Spurs": { primary: "#C4CED4", secondary: "#000000" },
-  "Detroit Pistons": { primary: "#C8102E", secondary: "#1D42BA" },
-  "Houston Rockets": { primary: "#CE1141", secondary: "#000000" },
-  "Minnesota Timberwolves": { primary: "#0C2340", secondary: "#236192" },
-  "Utah Jazz": { primary: "#002B5C", secondary: "#00471B" },
-  "Oklahoma City Thunder": { primary: "#007AC1", secondary: "#EF3B24" },
-  "Sacramento Kings": { primary: "#5A2D81", secondary: "#63727A" },
-  "Golden State Warriors": { primary: "#1D428A", secondary: "#FFC72C" },
-  "Chicago Bulls": { primary: "#CE1141", secondary: "#000000" },
-  "Phoenix Suns": { primary: "#1D1160", secondary: "#E56020" },
-  "Philadelphia 76ers": { primary: "#006BB6", secondary: "#ED174C" },
-  "Brooklyn Nets": { primary: "#000000", secondary: "#FFFFFF" },
-  "Denver Nuggets": { primary: "#0E2240", secondary: "#FEC524" },
-  "Los Angeles Lakers": { primary: "#552583", secondary: "#FDB927" },
-  "Portland Trail Blazers": { primary: "#E03A3E", secondary: "#000000" },
-  "Charlotte Hornets": { primary: "#1D1160", secondary: "#00788C" },
   "Boston Celtics": { primary: "#007A33", secondary: "#BA9653" },
+  "Brooklyn Nets": { primary: "#000000", secondary: "#FFFFFF" },
+  "New York Knicks": { primary: "#006BB6", secondary: "#F58426" },
+  "Philadelphia 76ers": { primary: "#006BB6", secondary: "#ED174C" },
+  "Toronto Raptors": { primary: "#CE1141", secondary: "#000000" },
+  "Chicago Bulls": { primary: "#CE1141", secondary: "#000000" },
+  "Cleveland Cavaliers": { primary: "#860038", secondary: "#FDBB30" },
+  "Detroit Pistons": { primary: "#C8102E", secondary: "#1D42BA" },
   "Indiana Pacers": { primary: "#002D62", secondary: "#FDBB30" },
+  "Milwaukee Bucks": { primary: "#00471B", secondary: "#EEE1C6" },
+  "Atlanta Hawks": { primary: "#E03A3E", secondary: "#C1D32F" },
+  "Charlotte Hornets": { primary: "#1D1160", secondary: "#00788C" },
+  "Miami Heat": { primary: "#98002E", secondary: "#F9A01B" },
+  "Orlando Magic": { primary: "#0077C0", secondary: "#C4CED4" },
+  "Washington Wizards": { primary: "#002B5C", secondary: "#E31837" },
+  "Denver Nuggets": { primary: "#0E2240", secondary: "#FEC524" },
+  "Minnesota Timberwolves": { primary: "#0C2340", secondary: "#236192" },
+  "Oklahoma City Thunder": { primary: "#007AC1", secondary: "#EF3B24" },
+  "Portland Trail Blazers": { primary: "#E03A3E", secondary: "#000000" },
+  "Utah Jazz": { primary: "#002B5C", secondary: "#00471B" },
+  "Golden State Warriors": { primary: "#1D428A", secondary: "#FFC72C" },
   "Los Angeles Clippers": { primary: "#C8102E", secondary: "#1D428A" },
-  "Atlanta Hawks": { primary: "#E03A3E", secondary: "#C1D32F" }
+  "Los Angeles Lakers": { primary: "#552583", secondary: "#FDB927" },
+  "Phoenix Suns": { primary: "#1D1160", secondary: "#E56020" },
+  "Sacramento Kings": { primary: "#5A2D81", secondary: "#63727A" },
+  "Dallas Mavericks": { primary: "#00538C", secondary: "#002B5E" },
+  "Houston Rockets": { primary: "#CE1141", secondary: "#000000" },
+  "Memphis Grizzlies": { primary: "#5D76A9", secondary: "#12173F" },
+  "New Orleans Pelicans": { primary: "#0C2340", secondary: "#C8102E" },
+  "San Antonio Spurs": { primary: "#C4CED4", secondary: "#000000" }
 };
 
 // Add a function to get team colors
@@ -234,6 +214,36 @@ const createGradient = (teamName: string, opacity: number = 0.15) => {
   const colors = getTeamColors(teamName);
   return `linear-gradient(to right, ${colors.primary}${Math.round(opacity * 255).toString(16)} 0%, ${colors.secondary}${Math.round(opacity * 0.5 * 255).toString(16)} 70%, transparent 100%)`;
 };
+
+// Add interface for TableRow
+interface TableRow {
+  id: string
+  startDate: string
+  homeTeam: {
+    id: string
+    name: string
+    logo?: string
+    record?: string | null
+    odds: {
+      spread?: { points: number; price: number }
+      moneyline?: { price: number }
+    }
+  }
+  awayTeam: {
+    id: string
+    name: string
+    logo?: string
+    record?: string | null
+    odds: {
+      spread?: { points: number; price: number }
+      moneyline?: { price: number }
+    }
+  }
+  total: {
+    over?: { points: number; price: number }
+    under?: { points: number; price: number }
+  }
+}
 
 export default function TrendyGamesView() {
   const [games, setGames] = useState<Game[]>([])
@@ -251,6 +261,30 @@ export default function TrendyGamesView() {
     statType: '',
     historicalData: []
   })
+  
+  // Add research modal state
+  const [researchModal, setResearchModal] = useState<{
+    isOpen: boolean;
+    gameId: string;
+    homeTeam: {
+      id: string;
+      name: string;
+      logo: string;
+    };
+    awayTeam: {
+      id: string;
+      name: string;
+      logo: string;
+    };
+    startDate: string;
+  }>({
+    isOpen: false,
+    gameId: '',
+    homeTeam: { id: '', name: '', logo: '' },
+    awayTeam: { id: '', name: '', logo: '' },
+    startDate: ''
+  })
+  
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [showRefreshNotification, setShowRefreshNotification] = useState(false)
 
@@ -562,6 +596,25 @@ export default function TrendyGamesView() {
     );
   };
 
+  // Add a function to open the research modal
+  const handleOpenResearch = (game: TableRow) => {
+    setResearchModal({
+      isOpen: true,
+      gameId: game.id,
+      homeTeam: {
+        id: game.homeTeam.id,
+        name: game.homeTeam.name,
+        logo: `/team-logos/${getTeamAbbreviation(game.homeTeam.name).toLowerCase()}.png`
+      },
+      awayTeam: {
+        id: game.awayTeam.id,
+        name: game.awayTeam.name,
+        logo: `/team-logos/${getTeamAbbreviation(game.awayTeam.name).toLowerCase()}.png`
+      },
+      startDate: game.startDate
+    })
+  }
+
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6 bg-gradient-to-b from-gray-50 to-white min-h-screen">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
@@ -694,10 +747,21 @@ export default function TrendyGamesView() {
         fixtures={dateGames} 
         selectedTimeframe={selectedTimeframe}
         onRowClick={handleRowClick}
+        onResearchClick={handleOpenResearch}
       />
 
       {/* Add the modal component */}
       <TrendsModal />
+      
+      {/* Add the research modal */}
+      <GameResearchView 
+        isOpen={researchModal.isOpen}
+        onClose={() => setResearchModal(prev => ({ ...prev, isOpen: false }))}
+        gameId={researchModal.gameId}
+        homeTeam={researchModal.homeTeam}
+        awayTeam={researchModal.awayTeam}
+        startDate={researchModal.startDate}
+      />
     </div>
   )
 }
@@ -732,53 +796,16 @@ function OddsCard({ value, odds, sportsbook }: { value: string, odds: string, sp
 function OddsTable({ 
   fixtures, 
   selectedTimeframe,
-  onRowClick
+  onRowClick,
+  onResearchClick
 }: { 
   fixtures: Game[], 
   selectedTimeframe: string,
-  onRowClick: (playerName: string, statType: string) => void
+  onRowClick: (playerName: string, statType: string) => void,
+  onResearchClick: (game: TableRow) => void
 }) {
   // Add a constant for supported sportsbooks
   const SUPPORTED_SPORTSBOOKS = ['draftkings', 'betmgm', 'caesars', 'bet365', 'espn_bet'];
-
-  // Add team abbreviations mapping
-  const teamAbbreviations: Record<string, string> = {
-    'Golden State Warriors': 'GSW',
-    'Orlando Magic': 'ORL',
-    'Denver Nuggets': 'DEN',
-    'Milwaukee Bucks': 'MIL',
-    'Los Angeles Lakers': 'LAL',
-    'Boston Celtics': 'BOS',
-    'Miami Heat': 'MIA',
-    'Phoenix Suns': 'PHX',
-    'Dallas Mavericks': 'DAL',
-    'Brooklyn Nets': 'BKN',
-    'New York Knicks': 'NYK',
-    'Philadelphia 76ers': 'PHI',
-    'Chicago Bulls': 'CHI',
-    'Toronto Raptors': 'TOR',
-    'Cleveland Cavaliers': 'CLE',
-    'Atlanta Hawks': 'ATL',
-    'Houston Rockets': 'HOU',
-    'San Antonio Spurs': 'SAS',
-    'Memphis Grizzlies': 'MEM',
-    'New Orleans Pelicans': 'NOP',
-    'Portland Trail Blazers': 'POR',
-    'Oklahoma City Thunder': 'OKC',
-    'Utah Jazz': 'UTA',
-    'Sacramento Kings': 'SAC',
-    'Los Angeles Clippers': 'LAC',
-    'Minnesota Timberwolves': 'MIN',
-    'Charlotte Hornets': 'CHA',
-    'Detroit Pistons': 'DET',
-    'Washington Wizards': 'WAS',
-    'Indiana Pacers': 'IND'
-  };
-
-  // Add a function to get team abbreviation
-  const getTeamAbbreviation = (teamName: string) => {
-    return teamAbbreviations[teamName] || teamName.substring(0, 3).toUpperCase();
-  };
 
   // Update the formatTeamRecord function to use the actual records
   const formatTeamRecord = (teamName: string, record: string | null) => {
@@ -941,6 +968,7 @@ function OddsTable({
         id: fixture.id,
         startDate: fixture.start_date,
         homeTeam: {
+          id: fixture.home_team.id,
           name: fixture.home_team.name,
           logo: fixture.home_team.logo,
           record: fixture.home_record,
@@ -957,7 +985,8 @@ function OddsTable({
           }
         },
         awayTeam: {
-          name: fixture.away_team.name,
+          id: fixture.away_team.id,
+          name: fixture.away_team.name, 
           logo: fixture.away_team.logo,
           record: fixture.away_record,
           odds: {
@@ -986,7 +1015,7 @@ function OddsTable({
         }
       }
     })
-  , [fixtures])
+  , [fixtures, SUPPORTED_SPORTSBOOKS, selectedTimeframe]);
 
   if (fixtures.length === 0) {
     return (
@@ -1198,12 +1227,15 @@ function OddsTable({
                   })}
                 </span>
               </div>
-              <a href="#" className="text-blue-600 text-sm font-medium flex items-center hover:text-blue-800 transition-colors">
+              <button 
+                onClick={() => onResearchClick(game)}
+                className="text-blue-600 text-sm font-medium flex items-center hover:text-blue-800 transition-colors"
+              >
                 Research
                 <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                 </svg>
-              </a>
+              </button>
             </div>
           </div>
         </div>
