@@ -61,15 +61,13 @@ export interface GameResearchProps {
   onClose: () => void;
   game: Game;
   lineMovementData?: LineMovementData;
-  isStreamingEnabled?: boolean;
 }
 
 export default function GameResearchView({
   isOpen,
   onClose,
   game,
-  lineMovementData,
-  isStreamingEnabled = false
+  lineMovementData
 }: GameResearchProps) {
   const [activeTab, setActiveTab] = useState('overview');
   
@@ -105,40 +103,25 @@ export default function GameResearchView({
     minute: '2-digit'
   });
 
-  // Filter line movement data by selected sportsbook
+  // Get filtered line movement data based on the selected timeframe
   const getFilteredLineMovementData = () => {
     if (!lineMovementData || !lineMovementData[game.id]) {
-      return { spread: [] as SpreadMovement[], total: [] as TotalMovement[], moneyline: [] as MoneylineMovement[] };
+      return null;
     }
-
-    if (selectedSportsbook === "all") {
-      return lineMovementData[game.id];
-    }
-
-    // Filter data for the selected sportsbook
-    return {
-      spread: lineMovementData[game.id].spread.filter(
-        (item: SpreadMovement) => item.sportsbook.toLowerCase() === selectedSportsbook.toLowerCase()
-      ),
-      total: lineMovementData[game.id].total.filter(
-        (item: TotalMovement) => item.sportsbook.toLowerCase() === selectedSportsbook.toLowerCase()
-      ),
-      moneyline: lineMovementData[game.id].moneyline.filter(
-        (item: MoneylineMovement) => item.sportsbook.toLowerCase() === selectedSportsbook.toLowerCase()
-      )
-    };
+    
+    // If no filtering needed, return all data
+    return lineMovementData[game.id];
   };
-
+  
   // Get filtered line movement data
   const filteredLineMovementData = getFilteredLineMovementData();
-
-  // Function to get the latest timestamp from line movement data
+  
+  // Get the latest timestamp from the line movement data
   const getLatestTimestamp = () => {
     if (!filteredLineMovementData) return null;
-
+    
     const timestamps: number[] = [];
-
-    // Collect timestamps from all types of line movement data
+    
     if (filteredLineMovementData.spread && filteredLineMovementData.spread.length > 0) {
       timestamps.push(...filteredLineMovementData.spread.map((item: { timestamp: number }) => item.timestamp));
     }
@@ -148,12 +131,8 @@ export default function GameResearchView({
     if (filteredLineMovementData.moneyline && filteredLineMovementData.moneyline.length > 0) {
       timestamps.push(...filteredLineMovementData.moneyline.map((item: { timestamp: number }) => item.timestamp));
     }
-
-    if (timestamps.length === 0) return null;
-
-    // Get the latest timestamp
-    const latestTimestamp = Math.max(...timestamps);
-    return new Date(latestTimestamp).toLocaleString();
+    
+    return timestamps.length > 0 ? Math.max(...timestamps) : null;
   };
 
   if (!isOpen) return null;
@@ -165,12 +144,6 @@ export default function GameResearchView({
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Game Research</h2>
-            {isStreamingEnabled && (
-              <div className="ml-4 flex items-center">
-                <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
-                <span className="text-sm text-green-500 font-medium">Live Streaming</span>
-              </div>
-            )}
           </div>
           <button
             onClick={onClose}
@@ -232,10 +205,8 @@ export default function GameResearchView({
 
         {/* Last Updated Timestamp */}
         <div className="px-4 pt-2 text-xs text-gray-500">
-          {isStreamingEnabled && filteredLineMovementData && getLatestTimestamp() ? (
+          {filteredLineMovementData && getLatestTimestamp() ? (
             <span>Last updated: {getLatestTimestamp()}</span>
-          ) : isStreamingEnabled ? (
-            <span>Waiting for updates...</span>
           ) : null}
         </div>
 
@@ -320,57 +291,48 @@ export default function GameResearchView({
                 {/* Spread Line Movement Chart */}
                 <div className="mt-6">
                   <h3 className="text-lg font-semibold mb-2">Spread Line Movement</h3>
-                  {isStreamingEnabled ? (
-                    filteredLineMovementData && filteredLineMovementData.spread && filteredLineMovementData.spread.length > 0 ? (
-                      <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart
-                            data={filteredLineMovementData.spread
-                              .sort((a: SpreadMovement, b: SpreadMovement) => a.timestamp - b.timestamp)}
-                            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis 
-                              dataKey="timestamp" 
-                              tickFormatter={(timestamp) => new Date(timestamp).toLocaleTimeString()} 
-                              label={{ value: 'Time', position: 'insideBottomRight', offset: 0 }}
-                            />
-                            <YAxis label={{ value: 'Spread', angle: -90, position: 'insideLeft' }} />
-                            <Tooltip 
-                              formatter={(value) => [`${value}`, 'Spread']}
-                              labelFormatter={(timestamp) => new Date(timestamp).toLocaleString()}
-                            />
-                            <Legend />
-                            <Line 
-                              type="stepAfter" 
-                              dataKey="homeTeamSpread" 
-                              name={`${game.homeTeam.name} Spread`} 
-                              stroke="#8884d8" 
-                              dot={{ r: 4 }}
-                              activeDot={{ r: 8 }}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-lg">
-                        {selectedSportsbook !== 'all' ? (
-                          <>
-                            <p>No data available for {availableSportsbooks.find(b => b.value === selectedSportsbook)?.label}</p>
-                            <p className="text-xs mt-1">Try selecting a different sportsbook</p>
-                          </>
-                        ) : (
-                          <>
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-                            <p>Waiting for line movement data...</p>
-                          </>
-                        )}
-                      </div>
-                    )
+                  {filteredLineMovementData && filteredLineMovementData.spread && filteredLineMovementData.spread.length > 0 ? (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={filteredLineMovementData.spread
+                            .sort((a: SpreadMovement, b: SpreadMovement) => a.timestamp - b.timestamp)}
+                          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis 
+                            dataKey="timestamp" 
+                            tickFormatter={(timestamp) => new Date(timestamp).toLocaleTimeString()} 
+                            label={{ value: 'Time', position: 'insideBottomRight', offset: 0 }}
+                          />
+                          <YAxis label={{ value: 'Spread', angle: -90, position: 'insideLeft' }} />
+                          <Tooltip 
+                            formatter={(value) => [`${value}`, 'Spread']}
+                            labelFormatter={(timestamp) => new Date(timestamp).toLocaleString()}
+                          />
+                          <Legend />
+                          <Line 
+                            type="stepAfter" 
+                            dataKey="homeTeamSpread" 
+                            name={`${game.homeTeam.name} Spread`} 
+                            stroke="#8884d8" 
+                            dot={{ r: 4 }}
+                            activeDot={{ r: 8 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-lg">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-                      <p className="text-gray-500">Waiting for line movement data...</p>
+                      {selectedSportsbook !== 'all' ? (
+                        <>
+                          <p>No spread line movement data available</p>
+                        </>
+                      ) : (
+                        <>
+                          <p>No spread line movement data available</p>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -378,57 +340,48 @@ export default function GameResearchView({
                 {/* Total Points Line Movement Chart */}
                 <div className="mt-6">
                   <h3 className="text-lg font-semibold mb-2">Total Points Line Movement</h3>
-                  {isStreamingEnabled ? (
-                    filteredLineMovementData && filteredLineMovementData.total && filteredLineMovementData.total.length > 0 ? (
-                      <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart
-                            data={filteredLineMovementData.total
-                              .sort((a: TotalMovement, b: TotalMovement) => a.timestamp - b.timestamp)}
-                            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis 
-                              dataKey="timestamp" 
-                              tickFormatter={(timestamp) => new Date(timestamp).toLocaleTimeString()} 
-                              label={{ value: 'Time', position: 'insideBottomRight', offset: 0 }}
-                            />
-                            <YAxis label={{ value: 'Total Points', angle: -90, position: 'insideLeft' }} />
-                            <Tooltip 
-                              formatter={(value) => [`${value}`, 'Total Points']}
-                              labelFormatter={(timestamp) => new Date(timestamp).toLocaleString()}
-                            />
-                            <Legend />
-                            <Line 
-                              type="stepAfter" 
-                              dataKey="points" 
-                              name="Total Points" 
-                              stroke="#82ca9d" 
-                              dot={{ r: 4 }}
-                              activeDot={{ r: 8 }}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-lg">
-                        {selectedSportsbook !== 'all' ? (
-                          <>
-                            <p>No data available for {availableSportsbooks.find(b => b.value === selectedSportsbook)?.label}</p>
-                            <p className="text-xs mt-1">Try selecting a different sportsbook</p>
-                          </>
-                        ) : (
-                          <>
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-                            <p>Waiting for line movement data...</p>
-                          </>
-                        )}
-                      </div>
-                    )
+                  {filteredLineMovementData && filteredLineMovementData.total && filteredLineMovementData.total.length > 0 ? (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={filteredLineMovementData.total
+                            .sort((a: TotalMovement, b: TotalMovement) => a.timestamp - b.timestamp)}
+                          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis 
+                            dataKey="timestamp" 
+                            tickFormatter={(timestamp) => new Date(timestamp).toLocaleTimeString()} 
+                            label={{ value: 'Time', position: 'insideBottomRight', offset: 0 }}
+                          />
+                          <YAxis label={{ value: 'Total Points', angle: -90, position: 'insideLeft' }} />
+                          <Tooltip 
+                            formatter={(value) => [`${value}`, 'Total Points']}
+                            labelFormatter={(timestamp) => new Date(timestamp).toLocaleString()}
+                          />
+                          <Legend />
+                          <Line 
+                            type="stepAfter" 
+                            dataKey="points" 
+                            name="Total Points" 
+                            stroke="#82ca9d" 
+                            dot={{ r: 4 }}
+                            activeDot={{ r: 8 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-lg">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-                      <p className="text-gray-500">Waiting for line movement data...</p>
+                      {selectedSportsbook !== 'all' ? (
+                        <>
+                          <p>No total points line movement data available</p>
+                        </>
+                      ) : (
+                        <>
+                          <p>No total points line movement data available</p>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -436,65 +389,56 @@ export default function GameResearchView({
                 {/* Moneyline Movement Chart */}
                 <div className="mt-6">
                   <h3 className="text-lg font-semibold mb-2">Moneyline Movement</h3>
-                  {isStreamingEnabled ? (
-                    filteredLineMovementData && filteredLineMovementData.moneyline && filteredLineMovementData.moneyline.length > 0 ? (
-                      <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart
-                            data={filteredLineMovementData.moneyline
-                              .sort((a: MoneylineMovement, b: MoneylineMovement) => a.timestamp - b.timestamp)}
-                            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis 
-                              dataKey="timestamp" 
-                              tickFormatter={(timestamp) => new Date(timestamp).toLocaleTimeString()} 
-                              label={{ value: 'Time', position: 'insideBottomRight', offset: 0 }}
-                            />
-                            <YAxis label={{ value: 'Moneyline', angle: -90, position: 'insideLeft' }} />
-                            <Tooltip 
-                              formatter={(value, name) => [`${value}`, name === 'homeTeamPrice' ? `${game.homeTeam.name}` : `${game.awayTeam.name}`]}
-                              labelFormatter={(timestamp) => new Date(timestamp).toLocaleString()}
-                            />
-                            <Legend />
-                            <Line 
-                              type="stepAfter" 
-                              dataKey="homeTeamPrice" 
-                              name={game.homeTeam.name} 
-                              stroke="#8884d8" 
-                              dot={{ r: 4 }}
-                              activeDot={{ r: 8 }}
-                            />
-                            <Line 
-                              type="stepAfter" 
-                              dataKey="awayTeamPrice" 
-                              name={game.awayTeam.name} 
-                              stroke="#82ca9d" 
-                              dot={{ r: 4 }}
-                              activeDot={{ r: 8 }}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-lg">
-                        {selectedSportsbook !== 'all' ? (
-                          <>
-                            <p>No data available for {availableSportsbooks.find(b => b.value === selectedSportsbook)?.label}</p>
-                            <p className="text-xs mt-1">Try selecting a different sportsbook</p>
-                          </>
-                        ) : (
-                          <>
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-                            <p>Waiting for line movement data...</p>
-                          </>
-                        )}
-                      </div>
-                    )
+                  {filteredLineMovementData && filteredLineMovementData.moneyline && filteredLineMovementData.moneyline.length > 0 ? (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={filteredLineMovementData.moneyline
+                            .sort((a: MoneylineMovement, b: MoneylineMovement) => a.timestamp - b.timestamp)}
+                          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis 
+                            dataKey="timestamp" 
+                            tickFormatter={(timestamp) => new Date(timestamp).toLocaleTimeString()} 
+                            label={{ value: 'Time', position: 'insideBottomRight', offset: 0 }}
+                          />
+                          <YAxis label={{ value: 'Moneyline', angle: -90, position: 'insideLeft' }} />
+                          <Tooltip 
+                            formatter={(value, name) => [`${value}`, name === 'homeTeamPrice' ? `${game.homeTeam.name}` : `${game.awayTeam.name}`]}
+                            labelFormatter={(timestamp) => new Date(timestamp).toLocaleString()}
+                          />
+                          <Legend />
+                          <Line 
+                            type="stepAfter" 
+                            dataKey="homeTeamPrice" 
+                            name={game.homeTeam.name} 
+                            stroke="#8884d8" 
+                            dot={{ r: 4 }}
+                            activeDot={{ r: 8 }}
+                          />
+                          <Line 
+                            type="stepAfter" 
+                            dataKey="awayTeamPrice" 
+                            name={game.awayTeam.name} 
+                            stroke="#82ca9d" 
+                            dot={{ r: 4 }}
+                            activeDot={{ r: 8 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-lg">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-                      <p className="text-gray-500">Waiting for line movement data...</p>
+                      {selectedSportsbook !== 'all' ? (
+                        <>
+                          <p>No moneyline movement data available</p>
+                        </>
+                      ) : (
+                        <>
+                          <p>No moneyline movement data available</p>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
