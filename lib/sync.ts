@@ -1,4 +1,4 @@
-import { supabase } from './database'
+import { supabase } from './db'
 
 export async function syncTeams() {
   const response = await fetch('/api/sync/teams', {
