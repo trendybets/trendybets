@@ -10,9 +10,9 @@ This document outlines the plan for cleaning up and consolidating the TrendyBets
   - Update imports across the codebase
   - Verify that UI components still render correctly
 
-- [ ] **1.2 Organize utility functions by domain**
+- [x] **1.2 Organize utility functions by domain**
   - [x] Move `normalizeTeamName` and `normalizePlayerId` functions to `lib/utils.ts`
-  - [ ] Create specialized utility files if needed (e.g., `date-utils.ts`, `string-utils.ts`)
+  - [x] Create specialized utility files (e.g., `date-utils.ts`, `string-utils.ts`, `ui-utils.ts`)
 
 ## 2. Environment Variables Consolidation
 
@@ -29,8 +29,8 @@ This document outlines the plan for cleaning up and consolidating the TrendyBets
   - [x] Update imports across the codebase
   - [x] Verify that all database operations still work
 
-- [ ] **3.2 Organize database functions by domain**
-  - [ ] Consider creating specialized database files (e.g., `user-db.ts`, `games-db.ts`)
+- [x] **3.2 Organize database functions by domain**
+  - [x] Created specialized database files (`user-db.ts`, `games-db.ts`, `odds-db.ts`, `bets-db.ts`)
 
 ## 4. Components Directories Consolidation
 
