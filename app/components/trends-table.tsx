@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { TableSkeleton } from "@/components/ui/skeleton"
 
 export interface GameStats {
   points: number
@@ -501,7 +502,11 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
         </div>
 
         {/* Table Content */}
-        {filteredAndSortedData.length > 0 ? (
+        {isLoading && filteredAndSortedData.length === 0 ? (
+          <div className="p-4">
+            <TableSkeleton rows={10} columns={7} />
+          </div>
+        ) : filteredAndSortedData.length > 0 ? (
           <div className="max-h-[600px] overflow-y-auto">
             <div>
               <table className="w-full">
@@ -549,34 +554,26 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                   className="py-4 flex justify-center items-center"
                 >
                   {isLoading ? (
-                    <div className="animate-spin h-5 w-5 md:h-6 md:w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                  ) : (
-                    <div className="h-6 md:h-8 flex items-center justify-center text-xs md:text-sm text-gray-500">
-                      Scroll for more
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                      <span className="text-sm text-gray-500">Loading more...</span>
                     </div>
+                  ) : (
+                    <button
+                      onClick={onLoadMore}
+                      className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
+                      Load More
+                    </button>
                   )}
                 </div>
               )}
             </div>
           </div>
         ) : (
-          <div className="flex h-64 flex-col items-center justify-center p-6 text-center">
-            <AlertCircle className="h-10 w-10 md:h-12 md:w-12 text-gray-400" />
-            <h3 className="mt-3 text-base md:text-lg font-medium text-gray-900">No trends found</h3>
-            <p className="mt-1 max-w-md text-xs md:text-sm text-gray-500">
-              {searchQuery ? 
-                `No players match your search criteria. Try adjusting your filters or search query.` : 
-                `There are no available trends for the selected filters. Try changing the timeframe or stat type.`
-              }
-            </p>
-            {searchQuery && (
-              <button 
-                onClick={() => setSearchQuery('')}
-                className="mt-4 rounded-md border border-gray-300 bg-white px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                Clear search
-              </button>
-            )}
+          <div className="py-8 text-center text-gray-500">
+            <p className="text-lg">No results found</p>
+            <p className="text-sm mt-2">Try adjusting your filters</p>
           </div>
         )}
       </div>

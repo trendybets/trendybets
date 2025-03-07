@@ -18,6 +18,7 @@ import {
   BarController
 } from 'chart.js'
 import { cn } from "@/lib/utils"
+import { Skeleton, StatsCardSkeleton } from "@/components/ui/skeleton"
 
 // Register ChartJS components
 ChartJS.register(
@@ -68,6 +69,7 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose }: PlayerAnalysis
   const [selectedTimeframe, setSelectedTimeframe] = useState('L10')
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [processedPlayer, setProcessedPlayer] = useState<PlayerData | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
   
   // Process player data to ensure opponent names are set
   useEffect(() => {
@@ -114,6 +116,18 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose }: PlayerAnalysis
     
     setProcessedPlayer(processedData);
   }, [player]);
+  
+  useEffect(() => {
+    if (player) {
+      setIsLoading(true)
+      // Simulate loading data
+      const timer = setTimeout(() => {
+        setIsLoading(false)
+      }, 800)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [player])
   
   if (!processedPlayer) return null
 
@@ -509,751 +523,774 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose }: PlayerAnalysis
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl bg-white border-gray-200 p-0">
-        <DialogTitle className="sr-only">
-          {processedPlayer.player.name} - {processedPlayer.stat_type} Analysis
-        </DialogTitle>
-        <DialogDescription className="sr-only">
-          Detailed performance analysis for {processedPlayer.player.name}'s {processedPlayer.stat_type} statistics
-        </DialogDescription>
-        {/* Fixed header with tabs */}
-        <div className="border-b border-gray-100">
-          {/* Player header */}
-          <div className="flex items-center justify-between p-6 pb-3">
-            {/* Player info */}
-            <div className="flex items-center">
-              <img 
-                src={processedPlayer.player.image_url} 
-                alt={processedPlayer.player.name}
-                className="h-12 w-12 rounded-full border border-gray-200 bg-gray-100 team-logo"
-              />
-              <div className="ml-3">
-                <h3 className="text-lg font-bold player-name">{processedPlayer.player.name}</h3>
-                <div className="flex items-center">
-                  <span className="text-sm text-gray-500 team-pill">{processedPlayer.player.position} • {processedPlayer.player.team}</span>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        {!player ? null : (
+          <>
+            {/* Dialog Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                {isLoading ? (
+                  <Skeleton className="h-12 w-12 rounded-full" />
+                ) : (
+                  <img 
+                    src={processedPlayer.player.image_url || '/placeholder-player.png'} 
+                    alt={processedPlayer.player.name} 
+                    className="h-12 w-12 rounded-full object-cover mr-3"
+                  />
+                )}
+                <div>
+                  {isLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-5 w-40" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                  ) : (
+                    <>
+                      <h2 className="text-xl font-bold text-gray-900">{processedPlayer.player.name}</h2>
+                      <div className="text-sm text-gray-500">{processedPlayer.player.team} • {processedPlayer.player.position}</div>
+                    </>
+                  )}
                 </div>
               </div>
+              
+              {processedPlayer.next_game && (
+                <div className="game-info-card">
+                  <div className="text-xs text-gray-500 mb-1">Next Game</div>
+                  <div className="text-sm font-medium matchup-display">
+                    {processedPlayer.next_game.home_team === processedPlayer.player.team 
+                      ? `vs ${processedPlayer.next_game.away_team}` 
+                      : `@ ${processedPlayer.next_game.home_team}`}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1 game-time">{processedPlayer.next_game.date}</div>
+                </div>
+              )}
             </div>
             
-            {processedPlayer.next_game && (
-              <div className="game-info-card">
-                <div className="text-xs text-gray-500 mb-1">Next Game</div>
-                <div className="text-sm font-medium matchup-display">
-                  {processedPlayer.next_game.home_team === processedPlayer.player.team 
-                    ? `vs ${processedPlayer.next_game.away_team}` 
-                    : `@ ${processedPlayer.next_game.home_team}`}
-                </div>
-                <div className="text-xs text-gray-500 mt-1 game-time">{processedPlayer.next_game.date}</div>
-              </div>
-            )}
-          </div>
-
-          {/* Tab navigation */}
-          <div className="px-6 flex border-t border-gray-100">
-            {[
-              { id: 'overview', label: 'Overview' },
-              { id: 'performance', label: 'Performance' },
-              { id: 'insights', label: 'Insights' },
-              { id: 'matchup', label: 'Matchup' }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as TabType)}
-                className={cn(
-                  "py-3 px-4 text-sm font-medium border-b-2 transition-colors espn-tab",
-                  activeTab === tab.id 
-                    ? "espn-tab-active" 
-                    : "espn-tab-inactive"
-                )}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        
-        {/* Scrollable content area */}
-        <div className="max-h-[70vh] overflow-y-auto custom-scrollbar">
-          
-          {/* Overview Tab */}
-          {activeTab === 'overview' && (
-            <div className="p-6">
-              {/* Key Stats Highlights */}
-              <div className="grid grid-cols-4 gap-4 mb-6">
-                <div className="stat-card">
-                  <div className="text-sm text-gray-500 mb-1">Line</div>
-                  <div className="text-2xl font-bold text-gray-900">{getLineValue()}</div>
-                  <div className="text-xs text-gray-500 mt-1">{processedPlayer.stat_type}</div>
-                </div>
-                
-                <div className="stat-card">
-                  <div className="text-sm text-gray-500 mb-1">Average ({selectedTimeframe})</div>
-                  <div className="text-2xl font-bold text-gray-900">{getAverageValue().toFixed(1)}</div>
-                  <div className="text-xs text-gray-500 mt-1">{processedPlayer.stat_type}</div>
-                </div>
-                
-                <div className="stat-card">
-                  <div className="text-sm text-gray-500 mb-1">Hit Rate ({selectedTimeframe})</div>
-                  <div className={cn(
-                    "text-2xl font-bold",
-                    getHitRate(selectedTimeframe) >= 0.7 ? "text-green-600" : 
-                    getHitRate(selectedTimeframe) >= 0.5 ? "text-yellow-600" : 
-                    "text-red-600"
-                  )}>
-                    {(getHitRate(selectedTimeframe) * 100).toFixed(0)}%
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {calculateHitCounts().hits} of {calculateHitCounts().total} games
-                  </div>
-                </div>
-                
-                <div className="stat-card">
-                  <div className="text-sm text-gray-500 mb-1">Current Streak</div>
-                  <div className="text-2xl font-bold text-gray-900">{Math.abs(getCurrentStreak())}</div>
-                  <div className={cn(
-                    "text-xs font-medium mt-1",
-                    getCurrentStreak() > 0 ? "text-green-600" : 
-                    getCurrentStreak() < 0 ? "text-red-600" : 
-                    "text-gray-500"
-                  )}>
-                    {getCurrentStreak() > 0 ? "Consecutive Hits" : 
-                     getCurrentStreak() < 0 ? "Consecutive Misses" : 
-                     "No Streak"}
-                  </div>
-                </div>
-              </div>
-
-              {/* Statistics Section - Timeframes */}
-              <div className="mb-6">
-                <h3 className="text-base font-medium text-gray-900 mb-3">{processedPlayer.stat_type} Hit Rate</h3>
-                <div className="grid grid-cols-6 gap-3">
-                  {['H2H', 'L5', 'L10', 'L20', '2024', '2023'].map((period) => (
-                    <div key={period} className="text-center bg-gray-50 py-3 px-3 rounded-lg">
-                      <div className="text-xs text-gray-500 mb-1">{period}</div>
-                      <div className={cn(
-                        "text-base font-semibold",
-                        (getHitRate(period) > 0.5 ? "text-green-600" : "text-red-600")
-                      )}>
-                        {period === 'H2H' ? '100%' : `${(getHitRate(period) * 100).toFixed(0)}%`}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Chart Section */}
-              <div className="bg-white rounded-lg border border-gray-200 mb-6">
-                {/* Chart Header with Trend Info */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                  <h3 className="text-base font-medium text-gray-900">
-                    {processedPlayer.stat_type} Performance History
-                  </h3>
-                  <div className="flex gap-2">
-              {['L5', 'L10', 'L20'].map((time) => (
+            {/* Tab Navigation */}
+            <div className="px-6 flex border-t border-gray-100">
+              {[
+                { id: 'overview', label: 'Overview' },
+                { id: 'performance', label: 'Performance' },
+                { id: 'insights', label: 'Insights' },
+                { id: 'matchup', label: 'Matchup' }
+              ].map((tab) => (
                 <button
-                  key={time}
-                  onClick={() => setSelectedTimeframe(time)}
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as TabType)}
                   className={cn(
-                          "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                    selectedTimeframe === time 
-                            ? "bg-gray-900 text-white" 
-                            : "text-gray-600 hover:bg-gray-100"
+                    "py-3 px-4 text-sm font-medium border-b-2 transition-colors espn-tab",
+                    activeTab === tab.id 
+                      ? "espn-tab-active" 
+                      : "espn-tab-inactive"
                   )}
                 >
-                  {time}
+                  {tab.label}
                 </button>
               ))}
-                  </div>
             </div>
-
-                {/* Chart */}
-                <div className="p-4">
-                  <div className="h-[300px]">
-                    <Bar 
-                      options={options} 
-                      data={chartData as any} 
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Enhanced Supporting Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Betting Info */}
+            
+            {/* Tab Content */}
+            <div className="mt-4">
+              {/* Overview Tab */}
+              {activeTab === 'overview' && (
                 <div>
-                  <h3 className="text-base font-medium text-gray-900 mb-3">Betting Information</h3>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex justify-between items-center mb-3">
-                      <div className="text-sm font-medium text-gray-700">
-                        {processedPlayer.recommended_bet?.type === 'over' ? 'Over' : 'Under'} {getLineValue()}
-                      </div>
-                      <div className="text-sm font-semibold text-gray-900">-130</div>
-            </div>
-
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="text-sm text-gray-600">Confidence:</div>
-                      <div className={cn("text-sm font-medium", getConfidenceColor())}>
-                        {getConfidenceLabel()}
-            </div>
-          </div>
-
-                    {processedPlayer.recommended_bet?.reason && (
-                      <div className="text-sm text-gray-600 mt-2 p-2 bg-white rounded border border-gray-100">
-                        {processedPlayer.recommended_bet.reason}
-                      </div>
+                  {/* Key Stats Section */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    {isLoading ? (
+                      <>
+                        <StatsCardSkeleton />
+                        <StatsCardSkeleton />
+                        <StatsCardSkeleton />
+                      </>
+                    ) : (
+                      <>
+                        <div className="stat-card">
+                          <div className="text-sm text-gray-500 mb-1">Line</div>
+                          <div className="text-2xl font-bold text-gray-900">{getLineValue()}</div>
+                          <div className="text-xs text-gray-500 mt-1">{processedPlayer.stat_type}</div>
+                        </div>
+                        
+                        <div className="stat-card">
+                          <div className="text-sm text-gray-500 mb-1">Average ({selectedTimeframe})</div>
+                          <div className="text-2xl font-bold text-gray-900">{getAverageValue().toFixed(1)}</div>
+                          <div className="text-xs text-gray-500 mt-1">{processedPlayer.stat_type}</div>
+                        </div>
+                        
+                        <div className="stat-card">
+                          <div className="text-sm text-gray-500 mb-1">Hit Rate ({selectedTimeframe})</div>
+                          <div className={cn(
+                            "text-2xl font-bold",
+                            getHitRate(selectedTimeframe) >= 0.7 ? "text-green-600" : 
+                            getHitRate(selectedTimeframe) >= 0.5 ? "text-yellow-600" : 
+                            "text-red-600"
+                          )}>
+                            {(getHitRate(selectedTimeframe) * 100).toFixed(0)}%
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {calculateHitCounts().hits} of {calculateHitCounts().total} games
+                          </div>
+                        </div>
+                        
+                        <div className="stat-card">
+                          <div className="text-sm text-gray-500 mb-1">Current Streak</div>
+                          <div className="text-2xl font-bold text-gray-900">{Math.abs(getCurrentStreak())}</div>
+                          <div className={cn(
+                            "text-xs font-medium mt-1",
+                            getCurrentStreak() > 0 ? "text-green-600" : 
+                            getCurrentStreak() < 0 ? "text-red-600" : 
+                            "text-gray-500"
+                          )}>
+                            {getCurrentStreak() > 0 ? "Consecutive Hits" : 
+                             getCurrentStreak() < 0 ? "Consecutive Misses" : 
+                             "No Streak"}
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
-          </div>
-
-                {/* Recent Game Log */}
-                <div>
-                  <h3 className="text-base font-medium text-gray-900 mb-3">Recent Games</h3>
-                  <div className="bg-gray-50 rounded-lg overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-100">
-                        <tr>
-                          <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Game</th>
-                          <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">{processedPlayer.stat_type}</th>
-                          <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">Result</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {processedPlayer.games?.slice(0, 5).map((game, idx) => {
-                          const statValue = processedPlayer.stat_type.toLowerCase() === 'points' ? game.points : 
-                                            processedPlayer.stat_type.toLowerCase() === 'assists' ? game.assists : 
-                                            game.total_rebounds;
-                          const isOver = statValue > getLineValue();
-                          const opponentName = game.opponent || "Unknown";
-                          
-                          return (
-                            <tr key={idx} className="border-t border-gray-200">
-                              <td className="py-2 px-3 text-gray-700">{game.is_away ? '@' : 'vs'} {opponentName}</td>
-                              <td className="py-2 px-3 text-right font-medium text-gray-900">{statValue}</td>
-                              <td className={cn(
-                                "py-2 px-3 text-right font-medium",
-                                isOver ? "text-green-600" : "text-red-600"
-                              )}>
-                                {isOver ? "OVER" : "UNDER"}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Performance Tab */}
-          {activeTab === 'performance' && (
-            <div className="p-6">
-              {/* Performance Trend */}
-              <div className="mb-6">
-                <h3 className="text-base font-medium text-gray-900 mb-3">Performance Trend</h3>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className={cn(
-                      "text-2xl font-bold",
-                      getTrendIndicator().color
-                    )}>
-                      {getTrendIndicator().icon} {getTrendIndicator().text}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      Last 5 games analysis
-                    </div>
-                  </div>
                   
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm text-gray-500 mb-1">Last 3 Games Avg</div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xl font-bold text-gray-900">{getLastXGamesStats(3).avg}</span>
-                        <span className="text-sm text-gray-600">
-                          {getLastXGamesStats(3).avg > getLineValue() ? 'Above' : 'Below'} line
-                        </span>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500 mb-1">Standard Deviation</div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xl font-bold text-gray-900">±{getStandardDeviation()}</span>
-                        <span className="text-sm text-gray-600">
-                          {parseFloat(getStandardDeviation()) < 2 ? 'Low' : parseFloat(getStandardDeviation()) < 4 ? 'Medium' : 'High'} variance
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Performance Distribution */}
-              <div className="mb-6">
-                <h3 className="text-base font-medium text-gray-900 mb-3">Performance Distribution</h3>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="mb-2 text-sm text-gray-600">
-                    How {processedPlayer.player.name}'s {processedPlayer.stat_type.toLowerCase()} performances are distributed
-                  </div>
-                  <div className="h-[200px] mb-4">
-                    <Bar 
-                      options={{
-                        responsive: true,
-                        plugins: {
-                          legend: {
-                            display: false,
-                          },
-                          tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                          }
-                        },
-                        scales: {
-                          y: {
-                            beginAtZero: true,
-                            title: {
-                              display: true,
-                              text: 'Frequency',
-                              color: '#666'
-                            }
-                          },
-                          x: {
-                            title: {
-                              display: true,
-                              text: `${processedPlayer.stat_type} Range`,
-                              color: '#666'
-                            }
-                          }
-                        }
-                      }}
-                      data={distChartData as any}
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-3 gap-3 mt-4">
-                    <div className="bg-white rounded-lg p-3 border border-gray-100">
-                      <div className="text-xs text-gray-500 mb-1">Min</div>
-                      <div className="text-lg font-bold text-gray-900">
-                        {Math.min(...processedPlayer.games?.slice(0, parseInt(selectedTimeframe.slice(1))).map(game => {
-                          return processedPlayer.stat_type.toLowerCase() === 'points' ? game.points : 
-                                 processedPlayer.stat_type.toLowerCase() === 'assists' ? game.assists : game.total_rebounds;
-                        }) || [0])}
-                      </div>
-                    </div>
-                    <div className="bg-white rounded-lg p-3 border border-gray-100">
-                      <div className="text-xs text-gray-500 mb-1">Avg</div>
-                      <div className="text-lg font-bold text-gray-900">{getAverageValue().toFixed(1)}</div>
-                    </div>
-                    <div className="bg-white rounded-lg p-3 border border-gray-100">
-                      <div className="text-xs text-gray-500 mb-1">Max</div>
-                      <div className="text-lg font-bold text-gray-900">
-                        {Math.max(...processedPlayer.games?.slice(0, parseInt(selectedTimeframe.slice(1))).map(game => {
-                          return processedPlayer.stat_type.toLowerCase() === 'points' ? game.points : 
-                                 processedPlayer.stat_type.toLowerCase() === 'assists' ? game.assists : game.total_rebounds;
-                        }) || [0])}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Home vs Away Performance */}
-              <div>
-                <h3 className="text-base font-medium text-gray-900 mb-3">Home vs Away Performance</h3>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="text-center p-3 bg-white rounded-lg border border-gray-100">
-                      <div className="text-sm text-gray-500 mb-2">Home Games</div>
-                      <div className="text-2xl font-bold text-gray-900 mb-1">{getHomeAwayStats().home}</div>
-                      <div className={cn(
-                        "text-sm font-medium",
-                        getHomeAwayStats().homeHitRate > 0.5 ? "text-green-600" : "text-red-600"
-                      )}>
-                        {(getHomeAwayStats().homeHitRate * 100).toFixed(0)}% hit rate
-                      </div>
-                    </div>
-                    <div className="text-center p-3 bg-white rounded-lg border border-gray-100">
-                      <div className="text-sm text-gray-500 mb-2">Away Games</div>
-                      <div className="text-2xl font-bold text-gray-900 mb-1">{getHomeAwayStats().away}</div>
-                      <div className={cn(
-                        "text-sm font-medium",
-                        getHomeAwayStats().awayHitRate > 0.5 ? "text-green-600" : "text-red-600"
-                      )}>
-                        {(getHomeAwayStats().awayHitRate * 100).toFixed(0)}% hit rate
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 text-sm text-gray-600">
-                    {getHomeAwayStats().home > getHomeAwayStats().away ? 
-                      `${processedPlayer.player.name} performs better at home (+${(getHomeAwayStats().home - getHomeAwayStats().away).toFixed(1)})` : 
-                      getHomeAwayStats().away > getHomeAwayStats().home ?
-                      `${processedPlayer.player.name} performs better on the road (+${(getHomeAwayStats().away - getHomeAwayStats().home).toFixed(1)})` :
-                      `${processedPlayer.player.name} performs equally at home and on the road`
-                    }
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Insights Tab */}
-          {activeTab === 'insights' && (
-            <div className="p-6">
-              {/* Betting Value Insight */}
-              <div className="mb-6">
-                <h3 className="text-base font-medium text-gray-900 mb-3">Betting Value Insight</h3>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="mb-4">
-                    <div className="text-sm font-medium text-gray-700 mb-1">Line Value Assessment</div>
-                    <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden w-full">
-                      {/* Value indicator bar - position based on average vs line */}
-                      <div 
-                        className="absolute top-0 left-0 h-full bg-blue-600"
-                        style={{ 
-                          width: `${Math.min(100, Math.max(0, (getAverageValue() / getLineValue()) * 100))}%` 
-                        }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>Low Value</span>
-                      <span>Fair</span>
-                      <span>High Value</span>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white rounded-lg p-3 border border-gray-100">
-                      <div className="text-xs text-gray-500 mb-1">Avg vs Line</div>
-                      <div className="text-lg font-bold text-gray-900">
-                        {getAverageValue() > getLineValue() ? '+' : ''}{(getAverageValue() - getLineValue()).toFixed(1)}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {Math.abs(getAverageValue() - getLineValue()) < 0.5 ? "Fair line" : 
-                         getAverageValue() > getLineValue() ? "Favors OVER" : "Favors UNDER"}
-                      </div>
-                    </div>
-                    <div className="bg-white rounded-lg p-3 border border-gray-100">
-                      <div className="text-xs text-gray-500 mb-1">Margin of Safety</div>
-                      <div className={cn(
-                        "text-lg font-bold",
-                        Math.abs(getAverageValue() - getLineValue()) > parseFloat(getStandardDeviation()) ? 
-                          "text-green-600" : "text-yellow-600"
-                      )}>
-                        {((Math.abs(getAverageValue() - getLineValue()) / parseFloat(getStandardDeviation())) * 100).toFixed(0)}%
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {Math.abs(getAverageValue() - getLineValue()) > parseFloat(getStandardDeviation()) ? 
-                          "Strong signal" : "Moderate signal"}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 p-3 bg-blue-50 text-blue-800 text-sm rounded-lg border border-blue-100">
-                    <div className="font-medium mb-1">Betting Insight</div>
-                    {getAverageValue() > getLineValue() + parseFloat(getStandardDeviation()) ? 
-                      `Strong OVER value: ${processedPlayer.player.name}'s average ${processedPlayer.stat_type.toLowerCase()} exceeds the line by more than one standard deviation.` :
-                      getAverageValue() < getLineValue() - parseFloat(getStandardDeviation()) ?
-                      `Strong UNDER value: ${processedPlayer.player.name}'s average ${processedPlayer.stat_type.toLowerCase()} is below the line by more than one standard deviation.` :
-                      `Moderate ${getAverageValue() > getLineValue() ? 'OVER' : 'UNDER'} value: The difference between the average and line is within one standard deviation.`
-                    }
-                  </div>
-                </div>
-              </div>
-              
-              {/* Key Factors */}
-              <div>
-                <h3 className="text-base font-medium text-gray-900 mb-3">Key Factors</h3>
-                <div className="bg-gray-50 rounded-lg overflow-hidden">
-                  <div className="border-b border-gray-200">
-                    <div className="py-3 px-4 bg-gray-100 text-sm font-medium text-gray-700">
-                      Factors Affecting Performance
-                    </div>
-                  </div>
-                  <div className="p-0">
-                    <div className="divide-y divide-gray-200">
-                      <div className="flex items-center py-3 px-4">
-                        <div className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center mr-3",
-                          getTrendDirection() === 1 ? "bg-green-100 text-green-600" : 
-                          getTrendDirection() === -1 ? "bg-red-100 text-red-600" : 
-                          "bg-yellow-100 text-yellow-600"
-                        )}>
-                          {getTrendDirection() === 1 ? "↗" : getTrendDirection() === -1 ? "↘" : "→"}
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-gray-900">Recent Form</div>
-                          <div className="text-xs text-gray-600">
-                            {getTrendDirection() === 1 ? 
-                              `${processedPlayer.player.name} is trending upward in recent games` : 
-                              getTrendDirection() === -1 ? 
-                              `${processedPlayer.player.name} is trending downward in recent games` : 
-                              `${processedPlayer.player.name}'s performance has been stable recently`
-                            }
+                  {/* Statistics Section - Timeframes */}
+                  <div className="mb-6">
+                    <h3 className="text-base font-medium text-gray-900 mb-3">{processedPlayer.stat_type} Hit Rate</h3>
+                    <div className="grid grid-cols-6 gap-3">
+                      {isLoading ? (
+                        Array(6).fill(0).map((_, i) => (
+                          <Skeleton key={i} className="h-16 w-full rounded-lg" />
+                        ))
+                      ) : (
+                        ['H2H', 'L5', 'L10', 'L20', '2024', '2023'].map((period) => (
+                          <div key={period} className="text-center bg-gray-50 py-3 px-3 rounded-lg">
+                            <div className="text-xs text-gray-500 mb-1">{period}</div>
+                            <div className={cn(
+                              "text-base font-semibold",
+                              getHitRate(period) > 0.5 ? "text-green-600" : "text-red-600"
+                            )}>
+                              {period === 'H2H' ? '100%' : `${(getHitRate(period) * 100).toFixed(0)}%`}
+                            </div>
                           </div>
-                        </div>
-                        <div className={cn(
-                          "text-sm font-medium",
-                          getTrendDirection() === 1 ? "text-green-600" : 
-                          getTrendDirection() === -1 ? "text-red-600" : 
-                          "text-yellow-600"
-                        )}>
-                          {getTrendDirection() === 1 ? "Positive" : getTrendDirection() === -1 ? "Negative" : "Neutral"}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center py-3 px-4">
-                        <div className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center mr-3",
-                          processedPlayer.next_game?.home_team === processedPlayer.player.team ? 
-                            (getHomeAwayStats().homeHitRate > 0.5 ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600") :
-                            (getHomeAwayStats().awayHitRate > 0.5 ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600")
-                        )}>
-                          {processedPlayer.next_game?.home_team === processedPlayer.player.team ? "H" : "A"}
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-gray-900">Home/Away Impact</div>
-                          <div className="text-xs text-gray-600">
-                            {processedPlayer.next_game?.home_team === processedPlayer.player.team ? 
-                              `Next game is at home (${(getHomeAwayStats().homeHitRate * 100).toFixed(0)}% hit rate)` : 
-                              `Next game is away (${(getHomeAwayStats().awayHitRate * 100).toFixed(0)}% hit rate)`
-                            }
-                          </div>
-                        </div>
-                        <div className={cn(
-                          "text-sm font-medium",
-                          processedPlayer.next_game?.home_team === processedPlayer.player.team ? 
-                            (getHomeAwayStats().homeHitRate > 0.5 ? "text-green-600" : "text-red-600") :
-                            (getHomeAwayStats().awayHitRate > 0.5 ? "text-green-600" : "text-red-600")
-                        )}>
-                          {processedPlayer.next_game?.home_team === processedPlayer.player.team ? 
-                            (getHomeAwayStats().homeHitRate > 0.5 ? "Positive" : "Negative") :
-                            (getHomeAwayStats().awayHitRate > 0.5 ? "Positive" : "Negative")
-                          }
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center py-3 px-4">
-                        <div className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center mr-3",
-                          "bg-blue-100 text-blue-600"
-                        )}>
-                          SD
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-gray-900">Performance Consistency</div>
-                          <div className="text-xs text-gray-600">
-                            {parseFloat(getStandardDeviation()) < 2 ? 
-                              `Very consistent performer (±${getStandardDeviation()})` : 
-                              parseFloat(getStandardDeviation()) < 4 ? 
-                              `Moderately consistent performer (±${getStandardDeviation()})` : 
-                              `Highly variable performer (±${getStandardDeviation()})`
-                            }
-                          </div>
-                        </div>
-                        <div className={cn(
-                          "text-sm font-medium",
-                          parseFloat(getStandardDeviation()) < 2 ? "text-green-600" : 
-                          parseFloat(getStandardDeviation()) < 4 ? "text-yellow-600" : 
-                          "text-red-600"
-                        )}>
-                          {parseFloat(getStandardDeviation()) < 2 ? "High" : parseFloat(getStandardDeviation()) < 4 ? "Medium" : "Low"}
-                        </div>
-                      </div>
+                        ))
+                      )}
                     </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Matchup Tab */}
-          {activeTab === 'matchup' && (
-            <div className="p-6">
-              {/* Next Game Matchup */}
-              <div className="mb-6">
-                <h3 className="text-base font-medium text-gray-900 mb-3">Next Game Matchup</h3>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  {processedPlayer.next_game ? (
-                    <>
-                      <div className="flex items-center justify-center gap-8 mb-4">
-                        <div className="text-center">
-                          <div className="text-sm font-medium text-gray-900 mb-1">{processedPlayer.player.team}</div>
-                          <img 
-                            src={processedPlayer.player.image_url} 
-                            alt={processedPlayer.player.team}
-                            className="h-12 w-12 mx-auto rounded-full border border-gray-200"
+                  
+                  {/* Chart Section */}
+                  <div className="bg-white rounded-lg border border-gray-200 mb-6">
+                    {/* Chart Header with Trend Info */}
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                      <h3 className="text-base font-medium text-gray-900">
+                        {processedPlayer.stat_type} Performance History
+                      </h3>
+                      <div className="flex gap-2">
+                        {['L5', 'L10', 'L20'].map((time) => (
+                          <button
+                            key={time}
+                            onClick={() => setSelectedTimeframe(time)}
+                            className={cn(
+                              "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                              selectedTimeframe === time 
+                              ? "bg-gray-900 text-white" 
+                              : "text-gray-600 hover:bg-gray-100"
+                            )}
+                          >
+                            {time}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Chart */}
+                    <div className="p-4">
+                      {isLoading ? (
+                        <Skeleton className="h-64 w-full" />
+                      ) : (
+                        <div className="h-64">
+                          <Bar 
+                            options={options} 
+                            data={chartData as any} 
                           />
                         </div>
-                        <div className="text-center">
-                          <div className="text-xs text-gray-500">vs</div>
-                          <div className="text-xl font-bold text-gray-900">
-                            {processedPlayer.next_game.date}
-                          </div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-sm font-medium text-gray-900 mb-1">
-                            {processedPlayer.next_game.home_team === processedPlayer.player.team ? 
-                              processedPlayer.next_game.away_team : processedPlayer.next_game.home_team}
-                          </div>
-                          <div className="h-12 w-12 mx-auto rounded-full bg-gray-200 flex items-center justify-center">
-                            <span className="text-xs text-gray-500">Logo</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-3 gap-3 mb-4">
-                        <div className="bg-white rounded-lg p-3 border border-gray-100 text-center">
-                          <div className="text-xs text-gray-500 mb-1">Against Opponent</div>
-                          <div className="text-lg font-bold text-gray-900">
-                            {getLastXGamesStats(3).avg}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            Average {processedPlayer.stat_type}
-                          </div>
-                        </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-100 text-center">
-                          <div className="text-xs text-gray-500 mb-1">Game Location</div>
-                          <div className="text-lg font-bold text-gray-900">
-                            {processedPlayer.next_game.home_team === processedPlayer.player.team ? "Home" : "Away"}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            {processedPlayer.next_game.home_team === processedPlayer.player.team ? 
-                              `${(getHomeAwayStats().homeHitRate * 100).toFixed(0)}% hit rate` : 
-                              `${(getHomeAwayStats().awayHitRate * 100).toFixed(0)}% hit rate`}
-                          </div>
-                        </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-100 text-center">
-                          <div className="text-xs text-gray-500 mb-1">Matchup Rating</div>
-                          <div className={cn(
-                            "text-lg font-bold",
-                            getLastXGamesStats(3).avg > getLineValue() ? "text-green-600" : "text-red-600"
-                          )}>
-                            {getLastXGamesStats(3).avg > getLineValue() ? "Favorable" : "Challenging"}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            For Over {getLineValue()}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-blue-50 text-blue-800 text-sm rounded-lg border border-blue-100 p-3">
-                        <div className="font-medium mb-1">Matchup Insight</div>
-                        {getLastXGamesStats(3).avg > getLineValue() ? 
-                          `${processedPlayer.player.name} has been performing above the line in recent games with an average of ${getLastXGamesStats(3).avg} ${processedPlayer.stat_type.toLowerCase()}.` :
-                          `${processedPlayer.player.name} has been performing below the line in recent games with an average of ${getLastXGamesStats(3).avg} ${processedPlayer.stat_type.toLowerCase()}.`
-                        }
-                        {processedPlayer.next_game.home_team === processedPlayer.player.team ? 
-                          ` Playing at home where they have a ${(getHomeAwayStats().homeHitRate * 100).toFixed(0)}% hit rate.` :
-                          ` Playing away where they have a ${(getHomeAwayStats().awayHitRate * 100).toFixed(0)}% hit rate.`
-                        }
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      No upcoming game information available
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Historical Matchups */}
-              <div>
-                <h3 className="text-base font-medium text-gray-900 mb-3">Historical Performance</h3>
-                <div className="bg-gray-50 rounded-lg overflow-hidden">
-                  <div className="p-4">
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div className="bg-white rounded-lg p-3 border border-gray-100">
-                        <div className="flex justify-between items-center mb-2">
-                          <div className="text-sm font-medium text-gray-900">vs Opponent</div>
-                          <div className={cn(
-                            "text-xs font-medium px-2 py-1 rounded-full",
-                            getHitRate('H2H') > 0.5 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                          )}>
-                            {(getHitRate('H2H') * 100).toFixed(0)}% hit rate
+                  </div>
+                  
+                  {/* Enhanced Supporting Stats */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Betting Info */}
+                    <div>
+                      <h3 className="text-base font-medium text-gray-900 mb-3">Betting Information</h3>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex justify-between items-center mb-3">
+                          <div className="text-sm font-medium text-gray-700">
+                            {processedPlayer.recommended_bet?.type === 'over' ? 'Over' : 'Under'} {getLineValue()}
                           </div>
+                          <div className="text-sm font-semibold text-gray-900">-130</div>
                         </div>
-                        <div className="text-2xl font-bold text-gray-900">
-                          {getLastXGamesStats(3).avg}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Average {processedPlayer.stat_type}
-                        </div>
-                      </div>
-                      
-                      <div className="bg-white rounded-lg p-3 border border-gray-100">
-                        <div className="flex justify-between items-center mb-2">
-                          <div className="text-sm font-medium text-gray-900">Current Form</div>
-                          <div className={cn(
-                            "text-xs font-medium px-2 py-1 rounded-full",
-                            getTrendDirection() === 1 ? "bg-green-100 text-green-800" : 
-                            getTrendDirection() === -1 ? "bg-red-100 text-red-800" : 
-                            "bg-yellow-100 text-yellow-800"
-                          )}>
-                            {getTrendDirection() === 1 ? "Improving" : getTrendDirection() === -1 ? "Declining" : "Stable"}
-                          </div>
-                        </div>
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-2xl font-bold text-gray-900">{getCurrentStreak() !== 0 ? Math.abs(getCurrentStreak()) : 'No'}</span>
-                          <span className="text-sm text-gray-600">
-                            game {getCurrentStreak() > 0 ? 'OVER' : getCurrentStreak() < 0 ? 'UNDER' : ''} streak
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Last hit: {processedPlayer.games && processedPlayer.games.length > 0 ? 
-                            (processedPlayer.stat_type.toLowerCase() === 'points' ? processedPlayer.games[0].points : 
-                             processedPlayer.stat_type.toLowerCase() === 'assists' ? processedPlayer.games[0].assists : 
-                             processedPlayer.games[0].total_rebounds) : 'N/A'
-                          }
-                        </div>
-            </div>
-          </div>
 
-                    <div className="bg-white rounded-lg border border-gray-100 overflow-hidden">
-                      <div className="py-2 px-3 bg-gray-100 text-xs font-medium text-gray-700">
-                        Recent Games Against Similar Opponents
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="text-sm text-gray-600">Confidence:</div>
+                          <div className={cn("text-sm font-medium", getConfidenceColor())}>
+                            {getConfidenceLabel()}
+                          </div>
+                        </div>
+
+                        {processedPlayer.recommended_bet?.reason && (
+                          <div className="text-sm text-gray-600 mt-2 p-2 bg-white rounded border border-gray-100">
+                            {processedPlayer.recommended_bet.reason}
+                          </div>
+                        )}
                       </div>
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Date</th>
-                            <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Opponent</th>
-                            <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">{processedPlayer.stat_type}</th>
-                            <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">Result</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {processedPlayer.games?.slice(0, 5).map((game, idx) => {
-                            const statValue = processedPlayer.stat_type.toLowerCase() === 'points' ? game.points : 
-                                            processedPlayer.stat_type.toLowerCase() === 'assists' ? game.assists : 
-                                            game.total_rebounds;
-                            const isOver = statValue > getLineValue();
-                            const opponentName = game.opponent || "Unknown";
-                            
-                            return (
-                              <tr key={idx} className="border-t border-gray-200">
-                                <td className="py-2 px-3 text-gray-700 text-xs">{game.date}</td>
-                                <td className="py-2 px-3 text-gray-700">{game.is_away ? '@' : 'vs'} {opponentName}</td>
-                                <td className="py-2 px-3 text-right font-medium text-gray-900">{statValue}</td>
-                                <td className={cn(
-                                  "py-2 px-3 text-right font-medium text-xs",
-                                  isOver ? "text-green-600" : "text-red-600"
-                                )}>
-                                  {isOver ? "OVER" : "UNDER"}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                    </div>
+
+                    {/* Recent Game Log */}
+                    <div>
+                      <h3 className="text-base font-medium text-gray-900 mb-3">Recent Games</h3>
+                      <div className="bg-gray-50 rounded-lg overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-100">
+                            <tr>
+                              <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Game</th>
+                              <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">{processedPlayer.stat_type}</th>
+                              <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">Result</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {processedPlayer.games?.slice(0, 5).map((game, idx) => {
+                              const statValue = processedPlayer.stat_type.toLowerCase() === 'points' ? game.points : 
+                                                processedPlayer.stat_type.toLowerCase() === 'assists' ? game.assists : 
+                                                game.total_rebounds;
+                              const isOver = statValue > getLineValue();
+                              const opponentName = game.opponent || "Unknown";
+                              
+                              return (
+                                <tr key={idx} className="border-t border-gray-200">
+                                  <td className="py-2 px-3 text-gray-700">{game.is_away ? '@' : 'vs'} {opponentName}</td>
+                                  <td className="py-2 px-3 text-right font-medium text-gray-900">{statValue}</td>
+                                  <td className={cn(
+                                    "py-2 px-3 text-right font-medium",
+                                    isOver ? "text-green-600" : "text-red-600"
+                                  )}>
+                                    {isOver ? "OVER" : "UNDER"}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
+              
+              {/* Performance Tab */}
+              {activeTab === 'performance' && (
+                <div className="p-6">
+                  {/* Performance Trend */}
+                  <div className="mb-6">
+                    <h3 className="text-base font-medium text-gray-900 mb-3">Performance Trend</h3>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className={cn(
+                          "text-2xl font-bold",
+                          getTrendIndicator().color
+                        )}>
+                          {getTrendIndicator().icon} {getTrendIndicator().text}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Last 5 games analysis
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-sm text-gray-500 mb-1">Last 3 Games Avg</div>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-xl font-bold text-gray-900">{getLastXGamesStats(3).avg}</span>
+                            <span className="text-sm text-gray-600">
+                              {getLastXGamesStats(3).avg > getLineValue() ? 'Above' : 'Below'} line
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-500 mb-1">Standard Deviation</div>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-xl font-bold text-gray-900">±{getStandardDeviation()}</span>
+                            <span className="text-sm text-gray-600">
+                              {parseFloat(getStandardDeviation()) < 2 ? 'Low' : parseFloat(getStandardDeviation()) < 4 ? 'Medium' : 'High'} variance
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Performance Distribution */}
+                  <div className="mb-6">
+                    <h3 className="text-base font-medium text-gray-900 mb-3">Performance Distribution</h3>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="mb-2 text-sm text-gray-600">
+                        How {processedPlayer.player.name}'s {processedPlayer.stat_type.toLowerCase()} performances are distributed
+                      </div>
+                      <div className="h-[200px] mb-4">
+                        <Bar 
+                          options={{
+                            responsive: true,
+                            plugins: {
+                              legend: {
+                                display: false,
+                              },
+                              tooltip: {
+                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                              }
+                            },
+                            scales: {
+                              y: {
+                                beginAtZero: true,
+                                title: {
+                                  display: true,
+                                  text: 'Frequency',
+                                  color: '#666'
+                                }
+                              },
+                              x: {
+                                title: {
+                                  display: true,
+                                  text: `${processedPlayer.stat_type} Range`,
+                                  color: '#666'
+                                }
+                              }
+                            }
+                          }}
+                          data={distChartData as any}
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-3 mt-4">
+                        <div className="bg-white rounded-lg p-3 border border-gray-100">
+                          <div className="text-xs text-gray-500 mb-1">Min</div>
+                          <div className="text-lg font-bold text-gray-900">
+                            {Math.min(...processedPlayer.games?.slice(0, parseInt(selectedTimeframe.slice(1))).map(game => {
+                              return processedPlayer.stat_type.toLowerCase() === 'points' ? game.points : 
+                                     processedPlayer.stat_type.toLowerCase() === 'assists' ? game.assists : game.total_rebounds;
+                            }) || [0])}
+                          </div>
+                        </div>
+                        <div className="bg-white rounded-lg p-3 border border-gray-100">
+                          <div className="text-xs text-gray-500 mb-1">Avg</div>
+                          <div className="text-lg font-bold text-gray-900">{getAverageValue().toFixed(1)}</div>
+                        </div>
+                        <div className="bg-white rounded-lg p-3 border border-gray-100">
+                          <div className="text-xs text-gray-500 mb-1">Max</div>
+                          <div className="text-lg font-bold text-gray-900">
+                            {Math.max(...processedPlayer.games?.slice(0, parseInt(selectedTimeframe.slice(1))).map(game => {
+                              return processedPlayer.stat_type.toLowerCase() === 'points' ? game.points : 
+                                     processedPlayer.stat_type.toLowerCase() === 'assists' ? game.assists : game.total_rebounds;
+                            }) || [0])}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Home vs Away Performance */}
+                  <div>
+                    <h3 className="text-base font-medium text-gray-900 mb-3">Home vs Away Performance</h3>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="text-center p-3 bg-white rounded-lg border border-gray-100">
+                          <div className="text-sm text-gray-500 mb-2">Home Games</div>
+                          <div className="text-2xl font-bold text-gray-900 mb-1">{getHomeAwayStats().home}</div>
+                          <div className={cn(
+                            "text-sm font-medium",
+                            getHomeAwayStats().homeHitRate > 0.5 ? "text-green-600" : "text-red-600"
+                          )}>
+                            {(getHomeAwayStats().homeHitRate * 100).toFixed(0)}% hit rate
+                          </div>
+                        </div>
+                        <div className="text-center p-3 bg-white rounded-lg border border-gray-100">
+                          <div className="text-sm text-gray-500 mb-2">Away Games</div>
+                          <div className="text-2xl font-bold text-gray-900 mb-1">{getHomeAwayStats().away}</div>
+                          <div className={cn(
+                            "text-sm font-medium",
+                            getHomeAwayStats().awayHitRate > 0.5 ? "text-green-600" : "text-red-600"
+                          )}>
+                            {(getHomeAwayStats().awayHitRate * 100).toFixed(0)}% hit rate
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-4 text-sm text-gray-600">
+                        {getHomeAwayStats().home > getHomeAwayStats().away ? 
+                          `${processedPlayer.player.name} performs better at home (+${(getHomeAwayStats().home - getHomeAwayStats().away).toFixed(1)})` : 
+                          getHomeAwayStats().away > getHomeAwayStats().home ?
+                          `${processedPlayer.player.name} performs better on the road (+${(getHomeAwayStats().away - getHomeAwayStats().home).toFixed(1)})` :
+                          `${processedPlayer.player.name} performs equally at home and on the road`
+                        }
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Insights Tab */}
+              {activeTab === 'insights' && (
+                <div className="p-6">
+                  {/* Betting Value Insight */}
+                  <div className="mb-6">
+                    <h3 className="text-base font-medium text-gray-900 mb-3">Betting Value Insight</h3>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="mb-4">
+                        <div className="text-sm font-medium text-gray-700 mb-1">Line Value Assessment</div>
+                        <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden w-full">
+                          {/* Value indicator bar - position based on average vs line */}
+                          <div 
+                            className="absolute top-0 left-0 h-full bg-blue-600"
+                            style={{ 
+                              width: `${Math.min(100, Math.max(0, (getAverageValue() / getLineValue()) * 100))}%` 
+                            }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>Low Value</span>
+                          <span>Fair</span>
+                          <span>High Value</span>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-white rounded-lg p-3 border border-gray-100">
+                          <div className="text-xs text-gray-500 mb-1">Avg vs Line</div>
+                          <div className="text-lg font-bold text-gray-900">
+                            {getAverageValue() > getLineValue() ? '+' : ''}{(getAverageValue() - getLineValue()).toFixed(1)}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {Math.abs(getAverageValue() - getLineValue()) < 0.5 ? "Fair line" : 
+                             getAverageValue() > getLineValue() ? "Favors OVER" : "Favors UNDER"}
+                          </div>
+                        </div>
+                        <div className="bg-white rounded-lg p-3 border border-gray-100">
+                          <div className="text-xs text-gray-500 mb-1">Margin of Safety</div>
+                          <div className={cn(
+                            "text-lg font-bold",
+                            Math.abs(getAverageValue() - getLineValue()) > parseFloat(getStandardDeviation()) ? 
+                              "text-green-600" : "text-yellow-600"
+                          )}>
+                            {((Math.abs(getAverageValue() - getLineValue()) / parseFloat(getStandardDeviation())) * 100).toFixed(0)}%
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {Math.abs(getAverageValue() - getLineValue()) > parseFloat(getStandardDeviation()) ? 
+                              "Strong signal" : "Moderate signal"}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-4 p-3 bg-blue-50 text-blue-800 text-sm rounded-lg border border-blue-100">
+                        <div className="font-medium mb-1">Betting Insight</div>
+                        {getAverageValue() > getLineValue() + parseFloat(getStandardDeviation()) ? 
+                          `Strong OVER value: ${processedPlayer.player.name}'s average ${processedPlayer.stat_type.toLowerCase()} exceeds the line by more than one standard deviation.` :
+                          getAverageValue() < getLineValue() - parseFloat(getStandardDeviation()) ?
+                          `Strong UNDER value: ${processedPlayer.player.name}'s average ${processedPlayer.stat_type.toLowerCase()} is below the line by more than one standard deviation.` :
+                          `Moderate ${getAverageValue() > getLineValue() ? 'OVER' : 'UNDER'} value: The difference between the average and line is within one standard deviation.`
+                        }
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Key Factors */}
+                  <div>
+                    <h3 className="text-base font-medium text-gray-900 mb-3">Key Factors</h3>
+                    <div className="bg-gray-50 rounded-lg overflow-hidden">
+                      <div className="border-b border-gray-200">
+                        <div className="py-3 px-4 bg-gray-100 text-sm font-medium text-gray-700">
+                          Factors Affecting Performance
+                        </div>
+                      </div>
+                      <div className="p-0">
+                        <div className="divide-y divide-gray-200">
+                          <div className="flex items-center py-3 px-4">
+                            <div className={cn(
+                              "w-8 h-8 rounded-full flex items-center justify-center mr-3",
+                              getTrendDirection() === 1 ? "bg-green-100 text-green-600" : 
+                              getTrendDirection() === -1 ? "bg-red-100 text-red-600" : 
+                              "bg-yellow-100 text-yellow-600"
+                            )}>
+                              {getTrendDirection() === 1 ? "↗" : getTrendDirection() === -1 ? "↘" : "→"}
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900">Recent Form</div>
+                              <div className="text-xs text-gray-600">
+                                {getTrendDirection() === 1 ? 
+                                  `${processedPlayer.player.name} is trending upward in recent games` : 
+                                  getTrendDirection() === -1 ? 
+                                  `${processedPlayer.player.name} is trending downward in recent games` : 
+                                  `${processedPlayer.player.name}'s performance has been stable recently`
+                                }
+                              </div>
+                            </div>
+                            <div className={cn(
+                              "text-sm font-medium",
+                              getTrendDirection() === 1 ? "text-green-600" : 
+                              getTrendDirection() === -1 ? "text-red-600" : 
+                              "text-yellow-600"
+                            )}>
+                              {getTrendDirection() === 1 ? "Positive" : getTrendDirection() === -1 ? "Negative" : "Neutral"}
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center py-3 px-4">
+                            <div className={cn(
+                              "w-8 h-8 rounded-full flex items-center justify-center mr-3",
+                              processedPlayer.next_game?.home_team === processedPlayer.player.team ? 
+                                (getHomeAwayStats().homeHitRate > 0.5 ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600") :
+                                (getHomeAwayStats().awayHitRate > 0.5 ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600")
+                            )}>
+                              {processedPlayer.next_game?.home_team === processedPlayer.player.team ? "H" : "A"}
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900">Home/Away Impact</div>
+                              <div className="text-xs text-gray-600">
+                                {processedPlayer.next_game?.home_team === processedPlayer.player.team ? 
+                                  `Next game is at home (${(getHomeAwayStats().homeHitRate * 100).toFixed(0)}% hit rate)` : 
+                                  `Next game is away (${(getHomeAwayStats().awayHitRate * 100).toFixed(0)}% hit rate)`
+                                }
+                              </div>
+                            </div>
+                            <div className={cn(
+                              "text-sm font-medium",
+                              processedPlayer.next_game?.home_team === processedPlayer.player.team ? 
+                                (getHomeAwayStats().homeHitRate > 0.5 ? "text-green-600" : "text-red-600") :
+                                (getHomeAwayStats().awayHitRate > 0.5 ? "text-green-600" : "text-red-600")
+                            )}>
+                              {processedPlayer.next_game?.home_team === processedPlayer.player.team ? 
+                                (getHomeAwayStats().homeHitRate > 0.5 ? "Positive" : "Negative") :
+                                (getHomeAwayStats().awayHitRate > 0.5 ? "Positive" : "Negative")
+                              }
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center py-3 px-4">
+                            <div className={cn(
+                              "w-8 h-8 rounded-full flex items-center justify-center mr-3",
+                              "bg-blue-100 text-blue-600"
+                            )}>
+                              SD
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900">Performance Consistency</div>
+                              <div className="text-xs text-gray-600">
+                                {parseFloat(getStandardDeviation()) < 2 ? 
+                                  `Very consistent performer (±${getStandardDeviation()})` : 
+                                  parseFloat(getStandardDeviation()) < 4 ? 
+                                  `Moderately consistent performer (±${getStandardDeviation()})` : 
+                                  `Highly variable performer (±${getStandardDeviation()})`
+                                }
+                              </div>
+                            </div>
+                            <div className={cn(
+                              "text-sm font-medium",
+                              parseFloat(getStandardDeviation()) < 2 ? "text-green-600" : 
+                              parseFloat(getStandardDeviation()) < 4 ? "text-yellow-600" : 
+                              "text-red-600"
+                            )}>
+                              {parseFloat(getStandardDeviation()) < 2 ? "High" : parseFloat(getStandardDeviation()) < 4 ? "Medium" : "Low"}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Matchup Tab */}
+              {activeTab === 'matchup' && (
+                <div className="p-6">
+                  {/* Next Game Matchup */}
+                  <div className="mb-6">
+                    <h3 className="text-base font-medium text-gray-900 mb-3">Next Game Matchup</h3>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      {processedPlayer.next_game ? (
+                        <>
+                          <div className="flex items-center justify-center gap-8 mb-4">
+                            <div className="text-center">
+                              <div className="text-sm font-medium text-gray-900 mb-1">{processedPlayer.player.team}</div>
+                              <img 
+                                src={processedPlayer.player.image_url} 
+                                alt={processedPlayer.player.team}
+                                className="h-12 w-12 mx-auto rounded-full border border-gray-200"
+                              />
+                            </div>
+                            <div className="text-center">
+                              <div className="text-xs text-gray-500">vs</div>
+                              <div className="text-xl font-bold text-gray-900">
+                                {processedPlayer.next_game.date}
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-sm font-medium text-gray-900 mb-1">
+                                {processedPlayer.next_game.home_team === processedPlayer.player.team ? 
+                                  processedPlayer.next_game.away_team : processedPlayer.next_game.home_team}
+                              </div>
+                              <div className="h-12 w-12 mx-auto rounded-full bg-gray-200 flex items-center justify-center">
+                                <span className="text-xs text-gray-500">Logo</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-3 gap-3 mb-4">
+                            <div className="bg-white rounded-lg p-3 border border-gray-100 text-center">
+                              <div className="text-xs text-gray-500 mb-1">Against Opponent</div>
+                              <div className="text-lg font-bold text-gray-900">
+                                {getLastXGamesStats(3).avg}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                Average {processedPlayer.stat_type}
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-3 border border-gray-100 text-center">
+                              <div className="text-xs text-gray-500 mb-1">Game Location</div>
+                              <div className="text-lg font-bold text-gray-900">
+                                {processedPlayer.next_game.home_team === processedPlayer.player.team ? "Home" : "Away"}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {processedPlayer.next_game.home_team === processedPlayer.player.team ? 
+                                  `${(getHomeAwayStats().homeHitRate * 100).toFixed(0)}% hit rate` : 
+                                  `${(getHomeAwayStats().awayHitRate * 100).toFixed(0)}% hit rate`}
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-3 border border-gray-100 text-center">
+                              <div className="text-xs text-gray-500 mb-1">Matchup Rating</div>
+                              <div className={cn(
+                                "text-lg font-bold",
+                                getLastXGamesStats(3).avg > getLineValue() ? "text-green-600" : "text-red-600"
+                              )}>
+                                {getLastXGamesStats(3).avg > getLineValue() ? "Favorable" : "Challenging"}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                For Over {getLineValue()}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-blue-50 text-blue-800 text-sm rounded-lg border border-blue-100 p-3">
+                            <div className="font-medium mb-1">Matchup Insight</div>
+                            {getLastXGamesStats(3).avg > getLineValue() ? 
+                              `${processedPlayer.player.name} has been performing above the line in recent games with an average of ${getLastXGamesStats(3).avg} ${processedPlayer.stat_type.toLowerCase()}.` :
+                              `${processedPlayer.player.name} has been performing below the line in recent games with an average of ${getLastXGamesStats(3).avg} ${processedPlayer.stat_type.toLowerCase()}.`
+                            }
+                            {processedPlayer.next_game.home_team === processedPlayer.player.team ? 
+                              ` Playing at home where they have a ${(getHomeAwayStats().homeHitRate * 100).toFixed(0)}% hit rate.` :
+                              ` Playing away where they have a ${(getHomeAwayStats().awayHitRate * 100).toFixed(0)}% hit rate.`
+                            }
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          No upcoming game information available
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Historical Matchups */}
+                  <div>
+                    <h3 className="text-base font-medium text-gray-900 mb-3">Historical Performance</h3>
+                    <div className="bg-gray-50 rounded-lg overflow-hidden">
+                      <div className="p-4">
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div className="bg-white rounded-lg p-3 border border-gray-100">
+                            <div className="flex justify-between items-center mb-2">
+                              <div className="text-sm font-medium text-gray-900">vs Opponent</div>
+                              <div className={cn(
+                                "text-xs font-medium px-2 py-1 rounded-full",
+                                getHitRate('H2H') > 0.5 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                              )}>
+                                {(getHitRate('H2H') * 100).toFixed(0)}% hit rate
+                              </div>
+                            </div>
+                            <div className="text-2xl font-bold text-gray-900">
+                              {getLastXGamesStats(3).avg}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Average {processedPlayer.stat_type}
+                            </div>
+                          </div>
+                          
+                          <div className="bg-white rounded-lg p-3 border border-gray-100">
+                            <div className="flex justify-between items-center mb-2">
+                              <div className="text-sm font-medium text-gray-900">Current Form</div>
+                              <div className={cn(
+                                "text-xs font-medium px-2 py-1 rounded-full",
+                                getTrendDirection() === 1 ? "bg-green-100 text-green-800" : 
+                                getTrendDirection() === -1 ? "bg-red-100 text-red-800" : 
+                                "bg-yellow-100 text-yellow-800"
+                              )}>
+                                {getTrendDirection() === 1 ? "Improving" : getTrendDirection() === -1 ? "Declining" : "Stable"}
+                              </div>
+                            </div>
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-2xl font-bold text-gray-900">{getCurrentStreak() !== 0 ? Math.abs(getCurrentStreak()) : 'No'}</span>
+                              <span className="text-sm text-gray-600">
+                                game {getCurrentStreak() > 0 ? 'OVER' : getCurrentStreak() < 0 ? 'UNDER' : ''} streak
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Last hit: {processedPlayer.games && processedPlayer.games.length > 0 ? 
+                                (processedPlayer.stat_type.toLowerCase() === 'points' ? processedPlayer.games[0].points : 
+                                 processedPlayer.stat_type.toLowerCase() === 'assists' ? processedPlayer.games[0].assists : 
+                                 processedPlayer.games[0].total_rebounds) : 'N/A'
+                              }
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-white rounded-lg border border-gray-100 overflow-hidden">
+                          <div className="py-2 px-3 bg-gray-100 text-xs font-medium text-gray-700">
+                            Recent Games Against Similar Opponents
+                          </div>
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-gray-200">
+                                <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Date</th>
+                                <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Opponent</th>
+                                <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">{processedPlayer.stat_type}</th>
+                                <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">Result</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {processedPlayer.games?.slice(0, 5).map((game, idx) => {
+                                const statValue = processedPlayer.stat_type.toLowerCase() === 'points' ? game.points : 
+                                                processedPlayer.stat_type.toLowerCase() === 'assists' ? game.assists : 
+                                                game.total_rebounds;
+                                const isOver = statValue > getLineValue();
+                                const opponentName = game.opponent || "Unknown";
+                                
+                                return (
+                                  <tr key={idx} className="border-t border-gray-200">
+                                    <td className="py-2 px-3 text-gray-700 text-xs">{game.date}</td>
+                                    <td className="py-2 px-3 text-gray-700">{game.is_away ? '@' : 'vs'} {opponentName}</td>
+                                    <td className="py-2 px-3 text-right font-medium text-gray-900">{statValue}</td>
+                                    <td className={cn(
+                                      "py-2 px-3 text-right font-medium text-xs",
+                                      isOver ? "text-green-600" : "text-red-600"
+                                    )}>
+                                      {isOver ? "OVER" : "UNDER"}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-          
-        </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )

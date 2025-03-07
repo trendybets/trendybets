@@ -13,6 +13,7 @@ import { calculateProjection } from '../lib/projections'
 import { PlayerData } from '../types'
 import { fetchPlayerOdds } from '../lib/api'
 import { TrendsTable } from './trends-table'
+import { CardSkeleton, StatsCardSkeleton } from "@/components/ui/skeleton"
 
 export default function TrendyPropsView() {
   const [filters, setFilters] = useState({
@@ -200,10 +201,31 @@ export default function TrendyPropsView() {
 
   if (isLoading && playerOdds.length === 0) {
     return (
-      <div className="container mx-auto p-4">
-        <div className="p-8 text-center text-gray-600">
-          <div className="animate-spin inline-block w-6 h-6 border-2 border-current border-t-transparent rounded-full mb-2" />
-          <div>Loading player odds...</div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex flex-col space-y-4">
+          <h1 className="text-3xl font-bold text-black sports-heading">Trendy Props</h1>
+          <p className="text-gray-700 font-medium sports-subheading">
+            Player trends and statistics for upcoming games
+          </p>
+        </div>
+        
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatsCardSkeleton />
+          <StatsCardSkeleton />
+          <StatsCardSkeleton />
+        </div>
+        
+        <div className="mt-8 sports-card sports-card-elevated">
+          <div className="p-4 border-b border-gray-200">
+            <div className="h-8 w-1/3 bg-gray-200 animate-pulse rounded-md"></div>
+          </div>
+          <div className="p-4">
+            <CardSkeleton className="mb-4" />
+            <CardSkeleton className="mb-4" />
+            <CardSkeleton className="mb-4" />
+            <CardSkeleton className="mb-4" />
+            <CardSkeleton />
+          </div>
         </div>
       </div>
     )
