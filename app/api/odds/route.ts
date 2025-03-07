@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { serverEnv } from "@/lib/env"
 import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/supabase"
+import { normalizeTeamName, normalizePlayerId } from "@/lib/utils"
+import { performance } from 'perf_hooks'
 
 // Add this line to tell Next.js this is a dynamic route
 export const dynamic = 'force-dynamic'
@@ -14,34 +16,52 @@ const supabase = createClient<Database>(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Helper function to normalize team names for comparison
-const normalizeTeamName = (name: string) => {
-  if (!name) return '';
-  return name.toLowerCase()
-    .replace(/\s+/g, '') // Remove spaces
-    .replace(/\./g, '')  // Remove periods
-    .replace(/-/g, '')   // Remove hyphens
-    .replace(/^the/i, ''); // Remove leading "the"
-};
-
-// Helper function to normalize player IDs for consistent lookup
-const normalizePlayerId = (id: string) => {
-  if (!id) return '';
-  return id.toUpperCase(); // Convert to uppercase for consistency
-};
-
 // Helper function to calculate hit rates
-    const calculateHitRate = (arr: number[], line: number) =>
-      arr.length ? arr.filter(stat => stat > line).length / arr.length : 0
+const calculateHitRate = (arr: number[], line: number) =>
+  arr.length ? arr.filter(stat => stat > line).length / arr.length : 0
+
+// Cache for API responses
+const API_CACHE = new Map<string, { data: any, timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+// Helper function to get cached data or fetch new data
+async function getCachedOrFetch(url: string, options: RequestInit = {}) {
+  const cacheKey = url;
+  const cachedData = API_CACHE.get(cacheKey);
+  
+  // If we have cached data and it's not expired, use it
+  if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL) {
+    console.log(`Using cached data for ${url}`);
+    return cachedData.data;
+  }
+  
+  // Otherwise fetch new data
+  console.log(`Fetching fresh data for ${url}`);
+  const response = await fetch(url, options);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch: ${response.status}`);
+  }
+  
+  const data = await response.json();
+  
+  // Cache the new data
+  API_CACHE.set(cacheKey, { data, timestamp: Date.now() });
+  
+  return data;
+}
 
 export async function GET(request: Request) {
+  const totalStartTime = performance.now();
   try {
     // Get query parameters
     const url = new URL(request.url);
     const fixtureId = url.searchParams.get('fixture_id');
     const limit = parseInt(url.searchParams.get('limit') || '0'); // Default to 0 (no limit)
+    const page = parseInt(url.searchParams.get('page') || '1'); // Default to page 1
+    const pageSize = parseInt(url.searchParams.get('pageSize') || '20'); // Default to 20 items per page
     
-    console.log(`API request received with fixtureId=${fixtureId}, limit=${limit}`);
+    console.log(`API request received with fixtureId=${fixtureId}, limit=${limit}, page=${page}, pageSize=${pageSize}`);
     
     // Fetch active fixtures from OpticOdds API using the active endpoint
     console.log('Fetching active fixtures from OpticOdds API');
@@ -53,19 +73,14 @@ export async function GET(request: Request) {
       `is_live=false&` +
       `key=${serverEnv.OPTIC_ODDS_API_KEY}`;
 
-    const fixturesResponse = await fetch(fixturesUrl, {
+    // Use cached data if available
+    const fixturesData = await getCachedOrFetch(fixturesUrl, {
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-      },
-      cache: 'no-store' // Disable caching to ensure fresh data
+      }
     });
-
-    if (!fixturesResponse.ok) {
-      throw new Error(`Failed to fetch fixtures: ${fixturesResponse.status}`);
-    }
     
-    const fixturesData = await fixturesResponse.json();
     const fixtures = fixturesData.data || [];
     
     console.log('Number of fixtures found:', fixtures.length || 0);
@@ -97,28 +112,22 @@ export async function GET(request: Request) {
       
       try {
         // Fetch player odds from OpticOdds API with the correct format
-      const oddsUrl = `https://api.opticodds.com/api/v3/fixtures/odds?` +
+        const oddsUrl = `https://api.opticodds.com/api/v3/fixtures/odds?` +
           `fixture_id=${fixture.id}&` +
-        `sportsbook=draftkings&` +
+          `sportsbook=draftkings&` +
           `market=player%20points&` +
           `market=player%20assists&` +
           `market=player%20rebounds&` +
-        `is_main=true&` +
+          `is_main=true&` +
           `key=${serverEnv.OPTIC_ODDS_API_KEY}`;
         
-        const oddsResponse = await fetch(oddsUrl, {
+        // Use cached data if available
+        const oddsData = await getCachedOrFetch(oddsUrl, {
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
-          },
-          cache: 'no-store' // Disable caching to ensure fresh data
+          }
         });
-        
-        if (!oddsResponse.ok) {
-          throw new Error(`Failed to fetch odds: ${oddsResponse.status}`);
-        }
-        
-        const oddsData = await oddsResponse.json();
         
         // The API returns a nested structure where odds are inside the first data item's "odds" array
         // Check if we have data and if the first item has an odds array
@@ -590,15 +599,14 @@ export async function GET(request: Request) {
       }
     };
     
+    const totalEndTime = performance.now();
+    console.log(`Total API execution time: ${totalEndTime - totalStartTime}ms`);
+
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error in /api/odds:', error);
+    console.error('Error in odds API route:', error);
     return NextResponse.json(
-      { 
-        error: error instanceof Error ? error.message : 'Failed to fetch player odds',
-        details: error instanceof Error ? error.stack : undefined,
-        data: [] // Return empty data array to prevent frontend errors
-      },
+      { error: 'Failed to fetch odds data' },
       { status: 500 }
     );
   }

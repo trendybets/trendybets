@@ -27,127 +27,103 @@ export default function TrendyPropsView() {
   const [fixtures, setFixtures] = useState<string[]>([])
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
-  const [allPlayerOdds, setAllPlayerOdds] = useState<PlayerData[]>([])
-  const PAGE_SIZE = 20 // Number of players to show per page
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 0
+  })
   
   useEffect(() => {
-    async function loadPlayerOdds() {
-      try {
-        setIsLoading(true)
-        setError(null)
-        setErrorDetails(null)
-        
-        // Fetch all available fixtures by setting limit to 0 (no limit)
-        const odds = await fetchPlayerOdds(0) // Load all available fixtures
-        
-        console.log('Fetched player odds:', {
-          totalPlayers: odds?.length || 0,
-          uniqueFixtures: new Set(odds?.map(player => 
-            player.next_game && player.next_game.opponent ? 
-            `${player.player.team} vs ${player.next_game.opponent}` : 
-            null
-          ).filter(Boolean)).size,
-          samplePlayer: odds?.[0] ? {
-            name: odds[0].player.name,
-            team: odds[0].player.team,
-            nextGame: odds[0].next_game,
-            gamesCount: odds[0].games?.length || 0
-          } : 'No players found'
-        });
-        
-        // Store all player odds for pagination
-        setAllPlayerOdds(odds || [])
-        
-        // Set initial page of data
-        setPlayerOdds(odds ? odds.slice(0, PAGE_SIZE) : [])
-        setPage(1)
-        setHasMore(odds && odds.length > PAGE_SIZE)
-        
-        // Extract unique fixtures
-        const fixtureSet = new Set<string>();
-        const fixtureMap = new Map<string, {id: string, display: string}>();
-        
-        odds.forEach(player => {
-          if (player.next_game && player.next_game.home_team && player.next_game.away_team) {
-            // Use the actual home and away teams from the fixture data
-            const fixtureString = `${player.next_game.home_team} vs ${player.next_game.away_team}`;
-            const fixtureId = player.next_game.fixture_id || 'unknown';
-            
-            // Only add if we haven't seen this fixture ID before
-            if (!fixtureMap.has(fixtureId)) {
-              fixtureSet.add(fixtureString);
-              fixtureMap.set(fixtureId, {
-                id: fixtureId,
-                display: fixtureString
-              });
-              console.log(`Adding fixture: ${fixtureString} (ID: ${fixtureId}) for player ${player.player.name}`);
-            }
-          } else {
-            console.warn(`Missing next_game data for player ${player.player.name}:`, player.next_game);
+    loadPlayerOdds();
+  }, [page]); // Load new data when page changes
+  
+  // Define loadPlayerOdds as a standalone function so it can be called from the button
+  const loadPlayerOdds = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+      setErrorDetails(null)
+      
+      // Fetch player odds with pagination
+      const response = await fetchPlayerOdds(0, page, pagination.pageSize)
+      const odds = response.data
+      
+      console.log('Fetched player odds:', {
+        totalPlayers: odds?.length || 0,
+        page: response.pagination.page,
+        totalPages: response.pagination.totalPages,
+        uniqueFixtures: new Set(odds?.map(player => 
+          player.next_game && player.next_game.opponent ? 
+          `${player.player.team} vs ${player.next_game.opponent}` : 
+          null
+        ).filter(Boolean)).size,
+        samplePlayer: odds?.[0] ? {
+          name: odds[0].player.name,
+          team: odds[0].player.team,
+          nextGame: odds[0].next_game,
+          gamesCount: odds[0].games?.length || 0
+        } : 'No players found'
+      });
+      
+      // Update player odds and pagination state
+      setPlayerOdds(odds || [])
+      setPagination(response.pagination)
+      setHasMore(page < response.pagination.totalPages)
+      
+      // Extract unique fixtures
+      const fixtureSet = new Set<string>();
+      const fixtureMap = new Map<string, {id: string, display: string}>();
+      
+      odds.forEach(player => {
+        if (player.next_game && player.next_game.home_team && player.next_game.away_team) {
+          // Use the actual home and away teams from the fixture data
+          const fixtureString = `${player.next_game.home_team} vs ${player.next_game.away_team}`;
+          const fixtureId = player.next_game.fixture_id || 'unknown';
+          
+          // Only add if we haven't seen this fixture ID before
+          if (!fixtureMap.has(fixtureId)) {
+            fixtureSet.add(fixtureString);
+            fixtureMap.set(fixtureId, {
+              id: fixtureId,
+              display: fixtureString
+            });
+            console.log(`Adding fixture: ${fixtureString} (ID: ${fixtureId}) for player ${player.player.name}`);
           }
-        });
-        
-        const fixtureList = Array.from(fixtureSet);
-        console.log('Extracted fixtures:', {
-          fixtureCount: fixtureList.length,
-          fixtures: fixtureList,
-          fixtureMap: Array.from(fixtureMap.entries())
-        });
-        
-        // Log a sample of players to see their next_game data
-        const samplePlayers = odds.slice(0, 5);
-        console.log('Sample players next_game data:', samplePlayers.map(player => ({
-          name: player.player.name,
-          team: player.player.team,
-          next_game: player.next_game
-        })));
-        
-        setFixtures(fixtureList);
-        
-        // If there are multiple fixtures, set the default to "all" to show all players
-        if (fixtureList.length > 1) {
-          console.log('Multiple fixtures found, setting default to "all"');
-          setFilters(prev => ({...prev, fixture: 'all'}));
         } else {
-          console.log('Only one fixture found, using it as default');
+          console.warn(`Missing next_game data for player ${player.player.name}:`, player.next_game);
         }
-      } catch (err) {
-        console.error('Error loading player odds:', err)
-        setError(err instanceof Error ? err.message : 'Failed to load player odds')
-        setErrorDetails(err instanceof Error && err.stack ? err.stack : null)
-        setPlayerOdds([])
-        setAllPlayerOdds([])
-        setHasMore(false)
-      } finally {
-        setIsLoading(false)
-      }
+      });
+      
+      const fixtureList = Array.from(fixtureSet);
+      console.log('Extracted fixtures:', {
+        fixtureCount: fixtureList.length,
+        fixtures: fixtureList,
+        fixtureMap: Array.from(fixtureMap.entries())
+      });
+      
+      setFixtures(fixtureList);
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Error loading player odds:', err);
+      setError('Failed to load player odds data');
+      setErrorDetails(err instanceof Error ? err.message : String(err));
+      setIsLoading(false);
     }
-
-    loadPlayerOdds()
-  }, []) // Only run on component mount
-
-  // Function to load more data when scrolling
-  const loadMoreData = () => {
-    if (isLoading || !hasMore) return;
-    
-    setIsLoading(true);
-    
-    // Get the filtered data based on current filters
-    const filtered = getFilteredData(allPlayerOdds);
-    
-    // Calculate next page
-    const nextPage = page + 1;
-    const start = 0;
-    const end = nextPage * PAGE_SIZE;
-    
-    // Get the next page of data
-    const nextPageData = filtered.slice(start, end);
-    
-    // Update state
-    setPlayerOdds(nextPageData);
-    setPage(nextPage);
-    setHasMore(end < filtered.length);
-    setIsLoading(false);
+  };
+  
+  // Function to load the next page of data
+  const loadNextPage = () => {
+    if (hasMore) {
+      setPage(prevPage => prevPage + 1);
+    }
+  };
+  
+  // Function to load the previous page of data
+  const loadPrevPage = () => {
+    if (page > 1) {
+      setPage(prevPage => prevPage - 1);
+    }
   };
 
   // Function to get filtered data
@@ -212,26 +188,15 @@ export default function TrendyPropsView() {
 
   // Update the teams list for the dropdown
   const availableTeams = useMemo(() => {
-    const teams = new Set(allPlayerOdds.map(odd => odd.player.team));
+    const teams = new Set(playerOdds.map(odd => odd.player.team));
     return Array.from(teams).sort();
-  }, [allPlayerOdds]);
+  }, [playerOdds]);
 
   // Update the stats list for the dropdown
   const availableStats = useMemo(() => {
-    const stats = new Set(allPlayerOdds.map(odd => odd.stat_type));
+    const stats = new Set(playerOdds.map(odd => odd.stat_type));
     return Array.from(stats).sort();
-  }, [allPlayerOdds]);
-
-  // Reset pagination when filters change
-  useEffect(() => {
-    // Get the filtered data based on current filters
-    const filtered = getFilteredData(allPlayerOdds);
-    
-    // Reset to first page
-    setPage(1);
-    setPlayerOdds(filtered.slice(0, PAGE_SIZE));
-    setHasMore(filtered.length > PAGE_SIZE);
-  }, [filters]);
+  }, [playerOdds]);
 
   if (isLoading && playerOdds.length === 0) {
     return (
@@ -256,7 +221,7 @@ export default function TrendyPropsView() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-8">
+    <div className="container mx-auto px-4 py-8">
       <div className="flex flex-col space-y-4">
         <h1 className="text-3xl font-bold text-black sports-heading">Trendy Props</h1>
         <p className="text-gray-700 font-medium sports-subheading">
@@ -277,12 +242,46 @@ export default function TrendyPropsView() {
           data={filteredData} 
           isLoading={isLoading && playerOdds.length > 0}
           hasMore={hasMore}
-          onLoadMore={loadMoreData}
+          onLoadMore={loadNextPage}
           availableTeams={availableTeams}
           availableFixtures={fixtures}
           filters={filters}
           setFilters={setFilters}
         />
+      </div>
+
+      {/* Pagination controls */}
+      <div className="flex justify-between items-center mt-6 mb-4">
+        <button
+          onClick={loadPrevPage}
+          disabled={page <= 1}
+          className={cn(
+            "px-4 py-2 rounded-md",
+            page <= 1 
+              ? "bg-gray-200 text-gray-500 cursor-not-allowed" 
+              : "bg-blue-500 text-white hover:bg-blue-600"
+          )}
+        >
+          Previous
+        </button>
+        
+        <span className="text-sm">
+          Page {page} of {pagination.totalPages || 1} 
+          ({pagination.total} total players)
+        </span>
+        
+        <button
+          onClick={loadNextPage}
+          disabled={!hasMore}
+          className={cn(
+            "px-4 py-2 rounded-md",
+            !hasMore 
+              ? "bg-gray-200 text-gray-500 cursor-not-allowed" 
+              : "bg-blue-500 text-white hover:bg-blue-600"
+          )}
+        >
+          Next
+        </button>
       </div>
     </div>
   )

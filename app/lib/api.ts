@@ -1,24 +1,72 @@
 import { PlayerData } from '../types'
 import { serverEnv } from "@/lib/env"
 
-export async function fetchPlayerOdds(fixtureLimit = 0): Promise<PlayerData[]> {
+// Simple client-side cache
+const API_CACHE = new Map<string, { data: any, timestamp: number }>();
+const CACHE_TTL = 60 * 1000; // 1 minute in milliseconds
+
+/**
+ * Fetches data from an API endpoint with caching
+ * @param url The API endpoint URL
+ * @param options Fetch options
+ * @param ttl Cache TTL in milliseconds (default: 1 minute)
+ * @returns The API response data
+ */
+async function fetchWithCache(url: string, options: RequestInit = {}, ttl = CACHE_TTL) {
+  const cacheKey = url;
+  const cachedData = API_CACHE.get(cacheKey);
+  
+  // If we have cached data and it's not expired, use it
+  if (cachedData && (Date.now() - cachedData.timestamp) < ttl) {
+    console.log(`Using cached data for ${url}`);
+    return cachedData.data;
+  }
+  
+  // Otherwise fetch new data
+  console.log(`Fetching fresh data for ${url}`);
+  const response = await fetch(url, options);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+  }
+  
+  const data = await response.json();
+  
+  // Cache the new data
+  API_CACHE.set(cacheKey, { data, timestamp: Date.now() });
+  
+  return data;
+}
+
+/**
+ * Fetches player odds with pagination support
+ * @param page Page number (1-indexed)
+ * @param pageSize Number of items per page
+ * @param fixtureLimit Limit the number of fixtures to process (0 for all)
+ * @returns Player odds data and pagination metadata
+ */
+export async function fetchPlayerOdds(
+  fixtureLimit = 0,
+  page = 1,
+  pageSize = 20
+): Promise<{ data: PlayerData[], pagination: any }> {
   try {
-    // Fetch all fixtures by default (limit=0)
-    console.log(`Fetching player odds with fixtureLimit=${fixtureLimit}`);
-    const response = await fetch(`/api/odds?limit=${fixtureLimit}`, {
-      cache: 'no-store' // Disable caching to ensure fresh data
-    });
+    console.log(`Fetching player odds with fixtureLimit=${fixtureLimit}, page=${page}, pageSize=${pageSize}`);
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch player odds: ${response.status} ${response.statusText}`);
-    }
+    const url = `/api/odds?limit=${fixtureLimit}&page=${page}&pageSize=${pageSize}`;
+    const responseData = await fetchWithCache(url);
     
-    const responseData = await response.json();
-    const playerData = responseData.data || [];
+    console.log(`API returned ${responseData.data?.length || 0} players with metadata:`, responseData.meta);
     
-    console.log(`API returned ${playerData.length} players with metadata:`, responseData.meta);
-    
-    return playerData;
+    return {
+      data: responseData.data || [],
+      pagination: responseData.pagination || {
+        page,
+        pageSize,
+        total: responseData.data?.length || 0,
+        totalPages: Math.ceil((responseData.data?.length || 0) / pageSize)
+      }
+    };
   } catch (error) {
     console.error('Error fetching player odds:', error);
     throw error;
@@ -59,59 +107,64 @@ const normalizeTeamName = (name: string) => {
     .replace(/^the/i, ''); // Remove leading "the"
 };
 
-// Fetch active fixtures
-export async function fetchActiveFixtures() {
-  const response = await fetch('/api/fixtures/active', {
-    cache: 'no-store' // Disable caching to ensure fresh data
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch fixtures')
-  }
-
-  const data = await response.json()
-  return data.data || []
-}
-
-// Fetch team data
-export async function fetchTeams() {
-  const response = await fetch('/api/teams', {
-    cache: 'no-store' // Disable caching to ensure fresh data
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch teams')
-  }
-
-  const data = await response.json()
-  return data.data || []
-}
-
-// Fetch game odds for a fixture (moneyline, point spread, total points)
-export async function fetchFixtureOdds(fixtureId: string) {
-  const response = await fetch(`/api/games/odds?fixture_id=${fixtureId}`, {
-    cache: 'no-store' // Disable caching to ensure fresh data
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch odds')
-  }
-
-  const data = await response.json()
-  return data.data || []
-}
-
-// Main function to get all game data
-export async function fetchGames() {
-  const response = await fetch('/api/games', {
-    cache: 'no-store' // Disable caching to ensure fresh data
-  })
+/**
+ * Fetches active fixtures with pagination
+ * @param page Page number (1-indexed)
+ * @param pageSize Number of items per page
+ * @returns Active fixtures data and pagination metadata
+ */
+export async function fetchActiveFixtures(page = 1, pageSize = 20) {
+  const url = `/api/fixtures/active?page=${page}&pageSize=${pageSize}`;
+  const data = await fetchWithCache(url);
   
-  if (!response.ok) {
-    const errorData = await response.json()
-    throw new Error(errorData.error || 'Failed to fetch games')
-  }
+  return {
+    data: data.data || [],
+    pagination: data.pagination || {
+      page,
+      pageSize,
+      total: data.data?.length || 0,
+      totalPages: Math.ceil((data.data?.length || 0) / pageSize)
+    }
+  };
+}
 
-  const data = await response.json()
-  return data
+/**
+ * Fetches team data
+ * @returns Team data
+ */
+export async function fetchTeams() {
+  const data = await fetchWithCache('/api/teams', {}, 5 * 60 * 1000); // Cache teams for 5 minutes
+  return data.data || [];
+}
+
+/**
+ * Fetches game odds for a fixture
+ * @param fixtureId The fixture ID
+ * @returns Game odds data
+ */
+export async function fetchFixtureOdds(fixtureId: string) {
+  const url = `/api/games/odds?fixture_id=${fixtureId}`;
+  const data = await fetchWithCache(url);
+  return data.data || [];
+}
+
+/**
+ * Fetches all games with pagination
+ * @param page Page number (1-indexed)
+ * @param pageSize Number of items per page
+ * @returns Games data and pagination metadata
+ */
+export async function fetchGames(page = 1, pageSize = 20) {
+  const url = `/api/games?page=${page}&pageSize=${pageSize}`;
+  const data = await fetchWithCache(url);
+  
+  return {
+    data: data.data || [],
+    pagination: data.pagination || {
+      page,
+      pageSize,
+      total: data.data?.length || 0,
+      totalPages: Math.ceil((data.data?.length || 0) / pageSize)
+    }
+  };
 } 

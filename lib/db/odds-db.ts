@@ -1,9 +1,15 @@
 import { supabase } from './index'
+import { performance } from 'perf_hooks'
 
 /**
  * Retrieves odds for a specific fixture and sportsbook
+ * @param fixtureId The fixture ID
+ * @param sportsbook The sportsbook name
+ * @returns Odds data for the fixture
  */
 export async function getOddsForFixture(fixtureId: string, sportsbook: string) {
+  const startTime = performance.now()
+  
   const { data, error } = await supabase
     .from('odds')
     .select(`
@@ -20,15 +26,13 @@ export async function getOddsForFixture(fixtureId: string, sportsbook: string) {
       player_id,
       team_id,
       price,
-      points,
-      timestamp,
-      start_date,
-      last_synced_at,
-      created_at,
-      updated_at
-    `)
+      points
+    `) // Removed timestamp fields that aren't needed for display
     .eq('fixture_id', fixtureId)
     .eq('sportsbook', sportsbook.toLowerCase())
+
+  const endTime = performance.now()
+  console.log(`getOddsForFixture query execution time: ${endTime - startTime}ms`)
 
   if (error) {
     console.error('Error fetching odds:', error)
@@ -39,35 +43,101 @@ export async function getOddsForFixture(fixtureId: string, sportsbook: string) {
 }
 
 /**
- * Retrieves a player's game history
+ * Retrieves a player's game history with pagination
+ * @param playerId The player ID
+ * @param page Page number (1-indexed)
+ * @param pageSize Number of items per page
+ * @param ascending Sort order by date
+ * @returns Player history data and pagination metadata
  */
-export async function getPlayerHistory(playerId: string, limit = 20, ascending = false) {
-  console.log('getPlayerHistory called with:', { playerId, limit, ascending })
+export async function getPlayerHistory(
+  playerId: string, 
+  page = 1, 
+  pageSize = 20, 
+  ascending = false
+) {
+  const startTime = performance.now()
+  console.log('getPlayerHistory called with:', { playerId, page, pageSize, ascending })
 
-  const { data, error } = await supabase
+  // Calculate range for pagination
+  const start = (page - 1) * pageSize
+  const end = start + pageSize - 1
+
+  const { data, error, count } = await supabase
     .from('player_history')
-    .select('*')
+    .select(`
+      id,
+      player_id,
+      fixture_id,
+      team,
+      opponent,
+      start_date,
+      minutes,
+      points,
+      rebounds,
+      assists,
+      steals,
+      blocks,
+      turnovers,
+      three_pointers_made,
+      field_goals_made,
+      field_goals_attempted
+    `, { count: 'exact' })
     .eq('player_id', playerId)
     .order('start_date', { ascending: false }) // Always fetch most recent first
-    .limit(limit)
+    .range(start, end)
+
+  const endTime = performance.now()
+  console.log(`getPlayerHistory query execution time: ${endTime - startTime}ms`)
 
   if (error) {
     console.error('Error fetching player history:', error)
-    return []
+    return { 
+      data: [],
+      pagination: {
+        page,
+        pageSize,
+        total: 0,
+        totalPages: 0
+      }
+    }
   }
 
-  console.log(`Found ${data?.length} games for player ${playerId}`)
-  return data || []
+  console.log(`Found ${data?.length} games for player ${playerId} (page ${page})`)
+  return {
+    data: data || [],
+    pagination: {
+      page,
+      pageSize,
+      total: count || 0,
+      totalPages: count ? Math.ceil(count / pageSize) : 0
+    }
+  }
 }
 
 /**
  * Retrieves active player props with player information
+ * @param page Page number (1-indexed)
+ * @param pageSize Number of items per page
+ * @returns Player props data and pagination metadata
  */
-export async function getPlayerProps() {
-  const { data, error } = await supabase
+export async function getPlayerProps(page = 1, pageSize = 20) {
+  const startTime = performance.now()
+  
+  // Calculate range for pagination
+  const start = (page - 1) * pageSize
+  const end = start + pageSize - 1
+
+  const { data, error, count } = await supabase
     .from('player_props')
     .select(`
-      *,
+      id,
+      player_id,
+      fixture_id,
+      prop_type,
+      line,
+      status,
+      trend_strength,
       player:players (
         id,
         name,
@@ -75,14 +145,26 @@ export async function getPlayerProps() {
         position,
         image_url
       )
-    `)
+    `, { count: 'exact' })
     .eq('status', 'active')
     .order('trend_strength', { ascending: false })
+    .range(start, end)
+
+  const endTime = performance.now()
+  console.log(`getPlayerProps query execution time: ${endTime - startTime}ms`)
 
   if (error) {
     console.error('Error fetching player props:', error)
     throw error
   }
 
-  return data
+  return {
+    data: data || [],
+    pagination: {
+      page,
+      pageSize,
+      total: count || 0,
+      totalPages: count ? Math.ceil(count / pageSize) : 0
+    }
+  }
 } 
