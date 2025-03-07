@@ -58,15 +58,17 @@ This document outlines the plan for cleaning up and consolidating the TrendyBets
 
 ## 6. Project Cleanup
 
-- [ ] **6.1 Clean up debug/test files**
-  - [ ] Move JSON files (`player_props_response.json`, etc.) to a dedicated directory
-  - [ ] Move Python scripts (`check_player.py`, `debug_player.py`) to a dedicated directory
-  - [ ] Remove any unused debug files
+- [x] **6.1 Clean up debug/test files**
+  - [x] Move JSON files (`player_props_response.json`, etc.) to a dedicated directory (`debug/json`)
+  - [x] Move Python scripts (`check_player.py`, `debug_player.py`) to a dedicated directory (`debug/scripts`)
+  - [x] Move other test files (`test_supabase.js`) to the debug/scripts directory
 
-- [ ] **6.2 Standardize configuration files**
-  - [ ] Choose between `next.config.js` and `next.config.mjs`
-  - [ ] Remove the unused configuration file
-  - [ ] Verify that Next.js configuration still works correctly
+- [x] **6.2 Standardize configuration files**
+  - [x] Choose between `next.config.js` and `next.config.mjs` (kept `next.config.js`)
+  - [x] Choose between `postcss.config.js` and `postcss.config.mjs` (kept `postcss.config.js`)
+  - [x] Choose between `tailwind.config.js` and `tailwind.config.ts` (kept `tailwind.config.js`)
+  - [x] Remove the unused configuration files
+  - [x] Verify that Next.js configuration still works correctly
 
 ## 7. Code Quality Improvements
 
