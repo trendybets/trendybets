@@ -65,6 +65,41 @@ To learn more about Next.js, take a look at the following resources:
 - [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
+## Project Structure
+
+The project follows a modular structure to maintain clean separation of concerns:
+
+```
+trendybets/
+├── app/                  # Next.js App Router
+│   ├── api/              # API routes
+│   ├── components/       # App-specific components
+│   ├── types/            # TypeScript type definitions
+│   └── ...               # Page routes
+├── components/           # Shared components
+│   ├── ui/               # UI components (shadcn/ui)
+│   └── ...               # Other shared components
+├── lib/                  # Shared utilities
+│   ├── db/               # Database functions
+│   │   ├── bets-db.ts    # Betting-related database functions
+│   │   ├── games-db.ts   # Game-related database functions
+│   │   ├── odds-db.ts    # Odds-related database functions
+│   │   └── user-db.ts    # User-related database functions
+│   ├── utils/            # Utility functions
+│   │   ├── date-utils.ts # Date-related utilities
+│   │   ├── string-utils.ts # String-related utilities
+│   │   └── ui-utils.ts   # UI-related utilities
+│   ├── database.ts       # Database client re-exports
+│   ├── env.ts            # Environment variables
+│   └── utils.ts          # Utility function re-exports
+├── public/               # Static assets
+├── types/                # Global type definitions
+├── debug/                # Debug files
+│   ├── json/             # JSON test data
+│   └── scripts/          # Debug scripts
+└── ...                   # Configuration files
+```
+
 ## Database Setup
 
 ### Fixing "Database error saving new user"

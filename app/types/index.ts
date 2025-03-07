@@ -20,13 +20,28 @@ export interface RecommendedBet {
   reason: string
 }
 
-interface GameStats {
+export interface GameStats {
   points: number
   assists: number
   total_rebounds: number
   date: string
   is_away: boolean
   opponent: string
+}
+
+export interface PlayerHistoryGame {
+  id: string
+  player_id: string
+  fixture_id: string
+  start_date: string
+  points: number
+  assists: number
+  rebounds: number
+  minutes: number
+  opponent: string
+  is_home: boolean
+  created_at: string
+  updated_at: string
 }
 
 export interface PlayerData {
