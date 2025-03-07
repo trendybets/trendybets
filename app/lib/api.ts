@@ -20,7 +20,7 @@ export async function fetchPlayerOdds(fixtureLimit = 0): Promise<PlayerData[]> {
     
     return playerData;
   } catch (error) {
-    console.error('Error in fetchPlayerOdds:', error);
+    console.error('Error fetching player odds:', error);
     throw error;
   }
 }
@@ -49,15 +49,19 @@ interface GameOdds {
   points?: number
 }
 
+// Helper function to normalize team names for comparison
+const normalizeTeamName = (name: string) => {
+  if (!name) return '';
+  return name.toLowerCase()
+    .replace(/\s+/g, '') // Remove spaces
+    .replace(/\./g, '')  // Remove periods
+    .replace(/-/g, '')   // Remove hyphens
+    .replace(/^the/i, ''); // Remove leading "the"
+};
+
 // Fetch active fixtures
 export async function fetchActiveFixtures() {
-  const url = `https://api.opticodds.com/api/v3/fixtures/active?` +
-    `sport=basketball&` +
-    `league=nba&` +
-    `is_live=false&` +
-    `key=${serverEnv.OPTIC_ODDS_API_KEY}`
-
-  const response = await fetch(url, {
+  const response = await fetch('/api/fixtures/active', {
     cache: 'no-store' // Disable caching to ensure fresh data
   })
 
@@ -71,12 +75,7 @@ export async function fetchActiveFixtures() {
 
 // Fetch team data
 export async function fetchTeams() {
-  const url = `https://api.opticodds.com/api/v3/teams?` +
-    `sport=basketball&` +
-    `league=nba&` +
-    `key=${serverEnv.OPTIC_ODDS_API_KEY}`
-
-  const response = await fetch(url, {
+  const response = await fetch('/api/teams', {
     cache: 'no-store' // Disable caching to ensure fresh data
   })
 
@@ -88,21 +87,9 @@ export async function fetchTeams() {
   return data.data || []
 }
 
-// Fetch odds for a fixture
+// Fetch game odds for a fixture (moneyline, point spread, total points)
 export async function fetchFixtureOdds(fixtureId: string) {
-  const url = `https://api.opticodds.com/api/v3/fixtures/odds?` +
-    `sportsbook=draftkings&` +
-    `sportsbook=caesars&` +
-    `sportsbook=bet365&` +
-    `sportsbook=betmgm&` +
-    `fixture_id=${fixtureId}&` +
-    `market=moneyline&` +
-    `market=point_spread&` +
-    `market=total_points&` +
-    `is_main=true&` +
-    `key=${serverEnv.OPTIC_ODDS_API_KEY}`
-
-  const response = await fetch(url, {
+  const response = await fetch(`/api/games/odds?fixture_id=${fixtureId}`, {
     cache: 'no-store' // Disable caching to ensure fresh data
   })
 
