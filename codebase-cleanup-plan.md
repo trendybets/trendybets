@@ -34,15 +34,16 @@ This document outlines the plan for cleaning up and consolidating the TrendyBets
 
 ## 4. Components Directories Consolidation
 
-- [ ] **4.1 Standardize on one components directory**
-  - [ ] Choose either `app/components/` or `components/` as the primary location
-  - [ ] Merge unique components from both directories
-  - [ ] Update imports across the codebase
-  - [ ] Verify that all UI components render correctly
+- [x] **4.1 Standardize on components directories**
+  - [x] Keep `components/` for general-purpose and UI components
+  - [x] Keep `app/components/` for application-specific components
+  - [x] Move UI components from `app/components/ui` to `components/ui`
+  - [x] Verify that all UI components render correctly
 
-- [ ] **4.2 Resolve duplicate components**
-  - [ ] Resolve duplicate `game-card.tsx` implementations
-  - [ ] Ensure consistent styling and behavior
+- [x] **4.2 Resolve duplicate components**
+  - [x] Rename `app/components/game-card.tsx` to `app/components/simple-game-card.tsx`
+  - [x] Remove unused `game-card.tsx` files
+  - [x] Ensure consistent styling and behavior
 
 ## 5. API Routes Optimization
 
