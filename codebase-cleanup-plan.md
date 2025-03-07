@@ -23,11 +23,11 @@ This document outlines the plan for cleaning up and consolidating the TrendyBets
 
 ## 3. Database Files Consolidation
 
-- [ ] **3.1 Consolidate `app/lib/database.ts` and `lib/database.ts`**
-  - [ ] Merge unique functions from both files into `lib/database.ts`
-  - [ ] Create a single point of initialization for the Supabase client
-  - [ ] Update imports across the codebase
-  - [ ] Verify that all database operations still work
+- [x] **3.1 Consolidate `app/lib/database.ts` and `lib/database.ts`**
+  - [x] Merge unique functions from both files into `lib/database.ts`
+  - [x] Create a single point of initialization for the Supabase client
+  - [x] Update imports across the codebase
+  - [x] Verify that all database operations still work
 
 - [ ] **3.2 Organize database functions by domain**
   - [ ] Consider creating specialized database files (e.g., `user-db.ts`, `games-db.ts`)

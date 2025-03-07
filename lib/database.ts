@@ -52,7 +52,15 @@ export async function getUserBets(userId: string) {
     .from("bets")
     .select(`
       *,
-      games (*)
+      game:games (
+        id,
+        home_team,
+        away_team,
+        start_time,
+        home_score,
+        away_score,
+        status
+      )
     `)
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
@@ -62,44 +70,49 @@ export async function getUserBets(userId: string) {
 }
 
 export async function getFixturesWithTeams() {
-  console.log("getFixturesWithTeams called")
-  try {
-    const { data: fixtures, error } = await supabaseClient
-      .from('fixtures')
-      .select(`
-        *,
-        home_team:teams!fixtures_home_team_id_fkey(id, name, logo),
-        away_team:teams!fixtures_away_team_id_fkey(id, name, logo)
-      `)
-      .eq('status', 'unplayed')
-      .order('start_time', { ascending: true })
+  const { data, error } = await supabase
+    .from('fixtures')
+    .select(`
+      *,
+      home_team:teams!fixtures_home_team_id_fkey (
+        id,
+        name,
+        logo,
+        abbreviation
+      ),
+      away_team:teams!fixtures_away_team_id_fkey (
+        id,
+        name,
+        logo,
+        abbreviation
+      )
+    `)
+    .eq('status', 'unplayed')
+    .order('start_date', { ascending: true })
 
-    console.log("Supabase response:", { fixtures, error })
-
-    if (error) throw error
-    return fixtures
-  } catch (error) {
-    console.error("Error in getFixturesWithTeams:", error)
+  if (error) {
+    console.error('Error fetching fixtures:', error)
     throw error
   }
+
+  return data
+}
+
+export async function getSportsbook() {
+  const { data, error } = await supabase
+    .from('sportsbook')
+    .select('*')
+    .eq('is_active', true)
+
+  if (error) {
+    console.error('Error fetching sportsbook:', error)
+    throw error
+  }
+
+  return data
 }
 
 export async function getOddsForFixture(fixtureId: string, sportsbook: string) {
-  console.log('Fetching odds for:', { fixtureId, sportsbook })
-  
-  const supabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
-  // First get the sportsbook info
-  const { data: sportsbookData } = await supabase
-    .from('sportsbook')
-    .select('logo')
-    .eq('name', sportsbook)
-    .single()
-
-  // Then get the odds
   const { data, error } = await supabase
     .from('odds')
     .select(`
@@ -107,31 +120,31 @@ export async function getOddsForFixture(fixtureId: string, sportsbook: string) {
       fixture_id,
       sportsbook,
       market,
-      market_id,
       name,
       is_main,
       selection,
+      normalized_selection,
+      market_id,
       selection_line,
+      player_id,
       team_id,
       price,
       points,
-      start_date
+      timestamp,
+      start_date,
+      last_synced_at,
+      created_at,
+      updated_at
     `)
     .eq('fixture_id', fixtureId)
-    .eq('sportsbook', sportsbook)
-    .eq('is_main', true)
-    .in('market_id', ['point_spread', 'moneyline', 'total_points'])
+    .eq('sportsbook', sportsbook.toLowerCase())
 
   if (error) {
     console.error('Error fetching odds:', error)
-    return []
+    throw error
   }
 
-  // Add the logo to each odds record
-  return data.map(odd => ({
-    ...odd,
-    sportsbook_logo: sportsbookData?.logo
-  }))
+  return data
 }
 
 export async function getPlayerHistory(playerId: string, limit = 20, ascending = false) {
