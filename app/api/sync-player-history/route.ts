@@ -93,35 +93,115 @@ export async function POST(request: Request) {
     console.log("Starting player history sync...")
     
     try {
-      // Parse request body
-      const body = await request.json()
-      const { playerId, lastSyncDate } = body
+      // Add authentication for cron jobs
+      const apiToken = request.headers.get('api-token');
       
-      if (!playerId) {
-        return NextResponse.json({ error: "Player ID is required" }, { status: 400 })
+      // For production, you should use a secure comparison method and store this in an environment variable
+      if (apiToken && apiToken === serverEnv.CRON_API_TOKEN) {
+        console.log('Authenticated cron job request');
       }
       
-      // Use the connection pool to get a Supabase client and process the player
-      const processedGames = await withServiceRoleClient(async (supabase) => {
-        return processPlayer(playerId, lastSyncDate, supabase)
-      })
+      // Parse request body
+      let body;
+      let playerId: string | null = null;
+      let lastSyncDate: string | null = null;
+      let playerLimit: number | null = null;
+      let workerMode = false;
+      let startIndex = 0;
+      let endIndex = 0;
       
-      console.log(`Player history sync completed for player ${playerId}`)
+      try {
+        body = await request.json();
+        
+        // Check for new format
+        if (body.playerId) {
+          playerId = body.playerId;
+          lastSyncDate = body.lastSyncDate;
+        } 
+        // Check for old format
+        else {
+          playerId = body.player_id || null;
+          playerLimit = body.limit ? parseInt(body.limit, 10) : null;
+          workerMode = body.worker_mode === true;
+          startIndex = body.start_index ? parseInt(body.start_index, 10) : 0;
+          endIndex = body.end_index ? parseInt(body.end_index, 10) : 0;
+        }
+      } catch (e) {
+        // No body or invalid JSON, continue with default values
+        console.log('No valid JSON body provided');
+      }
       
-      return NextResponse.json({
-        success: true,
-        player_id: playerId,
-        processed_games: processedGames
-      })
+      console.log("Request parameters:", { 
+        playerId, 
+        lastSyncDate,
+        playerLimit,
+        workerMode,
+        startIndex,
+        endIndex
+      });
+      
+      // If we have a specific player ID, process just that player
+      if (playerId) {
+        // Get the last sync date if not provided
+        if (!lastSyncDate) {
+          const lastSyncInfo = await withServiceRoleClient(async (supabase) => {
+            const { data } = await supabase
+              .from("sync_log")
+              .select(`
+                id,
+                sync_type,
+                started_at,
+                completed_at,
+                status,
+                last_sync_date,
+                records_processed
+              `)
+              .eq("sync_type", "player_history")
+              .eq("status", "completed")
+              .order("last_sync_date", { ascending: false })
+              .limit(1);
+            
+            return data;
+          });
+          
+          // Use yesterday's date if no last sync found, otherwise use last sync date
+          lastSyncDate = lastSyncInfo?.[0]?.last_sync_date || 
+            new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        }
+        
+        console.log(`Processing player ${playerId} since ${lastSyncDate}`);
+        
+        // Use the connection pool to get a Supabase client and process the player
+        const processedGames = await withServiceRoleClient(async (supabase) => {
+          // Ensure lastSyncDate is not null before passing to processPlayer
+          const syncDate = lastSyncDate || new Date().toISOString().split('T')[0];
+          return processPlayer(playerId as string, syncDate, supabase);
+        });
+        
+        console.log(`Player history sync completed for player ${playerId}`);
+        
+        return NextResponse.json({
+          success: true,
+          player_id: playerId,
+          processed_games: processedGames
+        });
+      }
+      
+      // If no specific player ID, return an error for now
+      // In the future, we can implement batch processing here
+      return NextResponse.json({ 
+        error: "Player ID is required. Batch processing not implemented in this version." 
+      }, { status: 400 });
+      
     } catch (error) {
-      console.error("Error in player history sync:", error)
+      console.error("Error in player history sync:", error);
       
       return NextResponse.json({
         error: "Failed to sync player history",
         details: error instanceof Error ? error.message : String(error)
-      }, { status: 500 })
+      }, { status: 500 });
     }
-  }, "player_history_sync")
+  }, "player_history_sync");
 }
 
 // Helper function to process a single player
