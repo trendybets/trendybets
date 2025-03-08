@@ -1,34 +1,14 @@
 'use client'
 
-import { useMemo, useState, useRef, useEffect, Dispatch, SetStateAction, useCallback } from 'react'
-import {
-  createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from '@tanstack/react-table'
-import { PlayerData as BasePlayerData, NextGame, Player } from '../types'
+import { useEffect } from 'react'
+import { Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { DynamicPlayerAnalysisDialog } from './dynamic-player-analysis-dialog'
 import { PlayerData } from '../types'
-import { ChevronDown, ChevronUp, Filter, Search, TrendingUp, AlertCircle } from 'lucide-react'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { TableSkeleton } from "@/components/ui/skeleton"
-import { useFilters } from '@/lib/context/app-state'
 import { PlayerRow } from './player-row'
+import { TableSkeleton } from '@/components/ui/skeleton'
+import { DynamicPlayerAnalysisDialog } from './dynamic-player-analysis-dialog'
+import { useTrendsTable } from '@/lib/hooks/use-trends-table'
+import { Dispatch, SetStateAction } from 'react'
 
 export interface GameStats {
   points: number
@@ -61,180 +41,32 @@ interface TrendsTableProps {
 type TimeframeKey = 'last5' | 'last10' | 'last20'
 type SortDirection = 'asc' | 'desc'
 
-// Helper function for opponent team - memoize with useCallback
-const getOpponentTeam = (player: Player, nextGame: NextGame | undefined) => {
-  if (!nextGame) return null;
-  if (!nextGame.opponent) return null;
-  
-  if (nextGame.opponent === player.team) {
-    return nextGame.home_team === player.team ? nextGame.away_team : nextGame.home_team;
-  }
-  return nextGame.opponent;
-}
-
 export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMore, availableTeams, availableFixtures, filters, setFilters }: TrendsTableProps) {
-  // Default to Last 5 Games for initial load
-  const [timeframe, setTimeframe] = useState('L5')
-  const [statType, setStatType] = useState('All Props')
-  const [selectedPlayer, setSelectedPlayer] = useState<PlayerData | null>(null)
-  const [searchQuery, setSearchQuery] = useState('');
-  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
-  const loaderRef = useRef<HTMLDivElement>(null);
-  
-  // Get additional state from context
-  const { teams } = useFilters()
-  
-  // Memoize helper functions to prevent recreating them on each render
-  const getTimeframeNumber = useCallback((tf: string) => {
-    if (tf === 'L5') return 5;
-    if (tf === 'L10') return 10;
-    if (tf === 'L20') return 20;
-    return 20; // Default to 20 if unknown
-  }, []);
+  // Use the custom hook to manage state
+  const {
+    timeframe,
+    statType,
+    selectedPlayer,
+    searchQuery,
+    hoveredRowId,
+    loaderRef,
+    teams,
+    filteredAndSortedData,
+    setTimeframe,
+    setStatType,
+    setSelectedPlayer,
+    setSearchQuery,
+    handleRowHover,
+    setupObserver,
+    getTimeframeNumber,
+    getAverageValue,
+    calculateHits
+  } = useTrendsTable({ data, isLoading, hasMore, onLoadMore })
 
-  // Helper function to get the correct stat value
-  const getStatValue = useCallback((game: GameStats, statType: string) => {
-    switch (statType.toLowerCase()) {
-      case 'points':
-        return game.points
-      case 'assists':
-        return game.assists
-      case 'rebounds':
-      case 'total_rebounds':
-        return game.total_rebounds
-      default:
-        return 0
-    }
-  }, []);
-
-  // Helper function to calculate actual hits
-  const calculateHits = useCallback((row: PlayerData, timeframeNumber: number) => {
-    if (!row.games || row.games.length === 0) {
-      return {
-        hits: 0,
-        total: 0,
-        percentage: 0,
-        direction: 'MORE',
-        isStrong: false
-      }
-    }
-    
-    // Get the relevant games based on timeframe
-    const relevantGames = row.games.slice(0, timeframeNumber)
-    
-    // Count how many times the player went over their line
-    let hits = 0
-    relevantGames.forEach(game => {
-      const statValue = row.stat_type.toLowerCase() === 'points' ? game.points : 
-                        row.stat_type.toLowerCase() === 'assists' ? game.assists : 
-                        game.total_rebounds
-      
-      if (statValue > row.line) {
-        hits++
-      }
-    })
-    
-    const percentage = relevantGames.length > 0 ? hits / relevantGames.length : 0
-    
-    // Determine if this is a strong trend (>70% or <30%)
-    const isStrong = percentage >= 0.7 || percentage <= 0.3
-    
-    // Determine direction of recommendation
-    const direction = percentage >= 0.5 ? 'MORE' : 'LESS'
-    
-    return {
-      hits,
-      total: relevantGames.length,
-      percentage,
-      direction,
-      isStrong
-    }
-  }, []);
-
-  // Calculate average value for a player
-  const getAverageValue = useCallback((row: PlayerData, timeframeNumber: number) => {
-    if (!row.games || row.games.length === 0) return 0
-    
-    // Get the relevant games based on timeframe
-    const relevantGames = row.games.slice(0, timeframeNumber)
-    
-    // Calculate the average
-    let sum = 0
-    relevantGames.forEach(game => {
-      const statValue = row.stat_type.toLowerCase() === 'points' ? game.points : 
-                        row.stat_type.toLowerCase() === 'assists' ? game.assists : 
-                        game.total_rebounds
-      
-      sum += statValue
-    })
-    
-    return relevantGames.length > 0 ? sum / relevantGames.length : 0
-  }, []);
-
-  // Set up intersection observer for infinite scrolling
+  // Setup intersection observer for infinite scrolling
   useEffect(() => {
-    if (!hasMore || !onLoadMore || isLoading) return;
-    
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          onLoadMore();
-        }
-      },
-      { threshold: 0.5 }
-    );
-    
-    const currentLoaderRef = loaderRef.current;
-    if (currentLoaderRef) {
-      observer.observe(currentLoaderRef);
-    }
-    
-    return () => {
-      if (currentLoaderRef) {
-        observer.unobserve(currentLoaderRef);
-      }
-    };
-  }, [hasMore, onLoadMore, isLoading]);
-
-  // Filter and sort data - memoized to prevent recalculation on every render
-  const filteredAndSortedData = useMemo(() => {
-    // Make a copy of the data to avoid mutating the original
-    let filtered = [...data]
-    
-    // Apply stat type filter
-    if (statType !== 'All Props') {
-      filtered = filtered.filter(item => {
-        // Handle both 'rebounds' and 'total_rebounds'
-        if (statType.toLowerCase() === 'rebounds') {
-          return item.stat_type.toLowerCase() === 'rebounds' || 
-                 item.stat_type.toLowerCase() === 'total_rebounds';
-        }
-        return item.stat_type.toLowerCase() === statType.toLowerCase();
-      });
-    }
-    
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim()
-      filtered = filtered.filter(item => 
-        item.player.name.toLowerCase().includes(query) || 
-        item.player.team.toLowerCase().includes(query) ||
-        item.player.position.toLowerCase().includes(query)
-      )
-    }
-    
-    // Always sort by hit rate descending
-    return filtered.sort((a, b) => {
-      const aStats = calculateHits(a, getTimeframeNumber(timeframe))
-      const bStats = calculateHits(b, getTimeframeNumber(timeframe))
-      return bStats.percentage - aStats.percentage
-    })
-  }, [data, statType, timeframe, searchQuery, calculateHits, getTimeframeNumber]);
-
-  // Memoize the handleRowHover function to prevent recreating it on each render
-  const handleRowHover = useCallback((rowId: string, isHovered: boolean) => {
-    setHoveredRowId(isHovered ? rowId : null);
-  }, []);
+    return setupObserver()
+  }, [setupObserver])
 
   // Render the table with optimized components
   return (
