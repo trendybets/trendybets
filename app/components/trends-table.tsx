@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { TableSkeleton } from "@/components/ui/skeleton"
+import { useFilters } from '@/lib/context/app-state'
 
 export interface GameStats {
   points: number
@@ -78,6 +79,9 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
+  
+  // Get additional state from context
+  const { teams } = useFilters()
   
   // Log the data we're receiving
   useEffect(() => {
@@ -451,29 +455,27 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
               </div>
             </div>
             
-            {/* Team Filter Dropdown - Only show if props are provided */}
-            {filters && setFilters && availableTeams && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs md:text-sm text-white">Team:</span>
-                <div className="relative">
-                  <select
-                    value={filters.team}
-                    onChange={(e) => setFilters(prev => ({ ...prev, team: e.target.value }))}
-                    className="appearance-none bg-white border border-gray-300 rounded-md py-1 md:py-2 pl-2 pr-8 md:pl-3 md:pr-10 text-xs md:text-sm leading-5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="all">All Teams</option>
-                    {availableTeams.map(team => (
-                      <option key={team} value={team.toLowerCase()}>{team}</option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                    <svg className="h-3 w-3 md:h-4 md:w-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                  </div>
+            {/* Team Filter Dropdown */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs md:text-sm text-white">Team:</span>
+              <div className="relative">
+                <select
+                  value={filters?.team || 'all'}
+                  onChange={(e) => setFilters?.({ ...filters!, team: e.target.value })}
+                  className="appearance-none bg-white border border-gray-300 rounded-md py-1 md:py-2 pl-2 pr-8 md:pl-3 md:pr-10 text-xs md:text-sm leading-5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="all">All Teams</option>
+                  {teams.map((team) => (
+                    <option key={team} value={team}>{team}</option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                  <svg className="h-3 w-3 md:h-4 md:w-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
                 </div>
               </div>
-            )}
+            </div>
             
             {/* Fixture Filter Dropdown - Only show if props are provided */}
             {filters && setFilters && availableFixtures && (

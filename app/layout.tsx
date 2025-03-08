@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "@/components/navbar";
 import "./globals.css";
 import { Toaster } from "sonner";
+import { AppStateProvider } from "@/lib/context/app-state";
 
 const inter = Inter({ 
   subsets: ["latin"],
@@ -40,13 +41,15 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange
         >
-          <div className="min-h-screen bg-background text-foreground">
-            <Navbar />
-            <main className="flex-1">
-              {children}
-            </main>
-          </div>
-          <Toaster />
+          <AppStateProvider>
+            <div className="min-h-screen bg-background text-foreground">
+              <Navbar />
+              <main className="flex-1">
+                {children}
+              </main>
+            </div>
+            <Toaster />
+          </AppStateProvider>
         </ThemeProvider>
       </body>
     </html>
