@@ -12,7 +12,7 @@ import {
   PointElement,
   LineElement,
   Title,
-  Tooltip,
+  Tooltip as ChartTooltip,
   Legend,
 } from 'chart.js'
 import { fetchFixtureOdds } from '../lib/api'
@@ -24,7 +24,7 @@ ChartJS.register(
   PointElement,
   LineElement,
   Title,
-  Tooltip,
+  ChartTooltip,
   Legend
 )
 
@@ -391,34 +391,62 @@ export default function GameResearchView({
                   <h3 className="text-lg font-semibold mb-2">Total Points Line Movement</h3>
                   {filteredLineMovementData && filteredLineMovementData.total && filteredLineMovementData.total.length > 0 ? (
                     <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                          data={filteredLineMovementData.total
-                            .sort((a: TotalMovement, b: TotalMovement) => a.timestamp - b.timestamp)}
-                          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis 
-                            dataKey="timestamp" 
-                            tickFormatter={(timestamp) => new Date(timestamp).toLocaleTimeString()} 
-                            label={{ value: 'Time', position: 'insideBottomRight', offset: 0 }}
-                          />
-                          <YAxis label={{ value: 'Total Points', angle: -90, position: 'insideLeft' }} />
-                          <Tooltip 
-                            formatter={(value) => [`${value}`, 'Total Points']}
-                            labelFormatter={(timestamp) => new Date(timestamp).toLocaleString()}
-                          />
-                          <Legend />
-                          <Line 
-                            type="stepAfter" 
-                            dataKey="points" 
-                            name="Total Points" 
-                            stroke="#82ca9d" 
-                            dot={{ r: 4 }}
-                            activeDot={{ r: 8 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
+                      <Line
+                        data={{
+                          labels: filteredLineMovementData.total
+                            .sort((a: TotalMovement, b: TotalMovement) => a.timestamp - b.timestamp)
+                            .map((item) => new Date(item.timestamp)),
+                          datasets: [
+                            {
+                              label: 'Total Points',
+                              data: filteredLineMovementData.total
+                                .sort((a: TotalMovement, b: TotalMovement) => a.timestamp - b.timestamp)
+                                .map((item) => item.points),
+                              borderColor: '#82ca9d',
+                              backgroundColor: 'rgba(130, 202, 157, 0.2)',
+                              pointRadius: 4,
+                              pointHoverRadius: 8,
+                              stepped: true,
+                            }
+                          ]
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          scales: {
+                            x: {
+                              title: {
+                                display: true,
+                                text: 'Time'
+                              },
+                              ticks: {
+                                callback: function(value, index, values) {
+                                  const date = new Date(this.getLabelForValue(index as number));
+                                  return date.toLocaleTimeString();
+                                }
+                              }
+                            },
+                            y: {
+                              title: {
+                                display: true,
+                                text: 'Total Points'
+                              }
+                            }
+                          },
+                          plugins: {
+                            tooltip: {
+                              callbacks: {
+                                label: function(context) {
+                                  return `Total Points: ${context.parsed.y}`;
+                                },
+                                title: function(tooltipItems) {
+                                  return new Date(tooltipItems[0].parsed.x).toLocaleString();
+                                }
+                              }
+                            }
+                          }
+                        }}
+                      />
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-lg">
@@ -440,42 +468,74 @@ export default function GameResearchView({
                   <h3 className="text-lg font-semibold mb-2">Moneyline Movement</h3>
                   {filteredLineMovementData && filteredLineMovementData.moneyline && filteredLineMovementData.moneyline.length > 0 ? (
                     <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                          data={filteredLineMovementData.moneyline
-                            .sort((a: MoneylineMovement, b: MoneylineMovement) => a.timestamp - b.timestamp)}
-                          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis 
-                            dataKey="timestamp" 
-                            tickFormatter={(timestamp) => new Date(timestamp).toLocaleTimeString()} 
-                            label={{ value: 'Time', position: 'insideBottomRight', offset: 0 }}
-                          />
-                          <YAxis label={{ value: 'Moneyline', angle: -90, position: 'insideLeft' }} />
-                          <Tooltip 
-                            formatter={(value, name) => [`${value}`, name === 'homeTeamPrice' ? `${game.homeTeam.name}` : `${game.awayTeam.name}`]}
-                            labelFormatter={(timestamp) => new Date(timestamp).toLocaleString()}
-                          />
-                          <Legend />
-                          <Line 
-                            type="stepAfter" 
-                            dataKey="homeTeamPrice" 
-                            name={game.homeTeam.name} 
-                            stroke="#8884d8" 
-                            dot={{ r: 4 }}
-                            activeDot={{ r: 8 }}
-                          />
-                          <Line 
-                            type="stepAfter" 
-                            dataKey="awayTeamPrice" 
-                            name={game.awayTeam.name} 
-                            stroke="#82ca9d" 
-                            dot={{ r: 4 }}
-                            activeDot={{ r: 8 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
+                      <Line
+                        data={{
+                          labels: filteredLineMovementData.moneyline
+                            .sort((a: MoneylineMovement, b: MoneylineMovement) => a.timestamp - b.timestamp)
+                            .map((item) => new Date(item.timestamp)),
+                          datasets: [
+                            {
+                              label: game.homeTeam.name,
+                              data: filteredLineMovementData.moneyline
+                                .sort((a: MoneylineMovement, b: MoneylineMovement) => a.timestamp - b.timestamp)
+                                .map((item) => item.homeTeamPrice),
+                              borderColor: '#8884d8',
+                              backgroundColor: 'rgba(136, 132, 216, 0.2)',
+                              pointRadius: 4,
+                              pointHoverRadius: 8,
+                              stepped: true,
+                            },
+                            {
+                              label: game.awayTeam.name,
+                              data: filteredLineMovementData.moneyline
+                                .sort((a: MoneylineMovement, b: MoneylineMovement) => a.timestamp - b.timestamp)
+                                .map((item) => item.awayTeamPrice),
+                              borderColor: '#82ca9d',
+                              backgroundColor: 'rgba(130, 202, 157, 0.2)',
+                              pointRadius: 4,
+                              pointHoverRadius: 8,
+                              stepped: true,
+                            }
+                          ]
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          scales: {
+                            x: {
+                              title: {
+                                display: true,
+                                text: 'Time'
+                              },
+                              ticks: {
+                                callback: function(value, index, values) {
+                                  const date = new Date(this.getLabelForValue(index as number));
+                                  return date.toLocaleTimeString();
+                                }
+                              }
+                            },
+                            y: {
+                              title: {
+                                display: true,
+                                text: 'Moneyline'
+                              }
+                            }
+                          },
+                          plugins: {
+                            tooltip: {
+                              callbacks: {
+                                label: function(context) {
+                                  const datasetLabel = context.dataset.label || '';
+                                  return `${datasetLabel}: ${context.parsed.y}`;
+                                },
+                                title: function(tooltipItems) {
+                                  return new Date(tooltipItems[0].parsed.x).toLocaleString();
+                                }
+                              }
+                            }
+                          }
+                        }}
+                      />
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-lg">
