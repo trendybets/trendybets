@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
-import { Search } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Search, Filter, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PlayerData } from '../types'
 import { PlayerRow } from './player-row'
@@ -63,6 +63,9 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
     calculateHits
   } = useTrendsTable({ data, isLoading, hasMore, onLoadMore })
 
+  // State for mobile filter drawer
+  const [showMobileFilters, setShowMobileFilters] = useState(false)
+
   // Setup intersection observer for infinite scrolling
   useEffect(() => {
     return setupObserver()
@@ -74,24 +77,42 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
       {/* Filters and Search Bar */}
       <div className="bg-gray-800 rounded-t-lg">
         <div className="p-4 border-b border-gray-700">
-          {/* Search Bar */}
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-gray-400" aria-hidden="true" />
+          {/* Search and Filter Row */}
+          <div className="flex items-center justify-between gap-2">
+            {/* Search Bar */}
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-gray-400" aria-hidden="true" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search player or team..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="block w-full rounded-md border border-gray-300 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                aria-label="Search players or teams"
+              />
             </div>
-            <input
-              type="text"
-              placeholder="Search player or team..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full rounded-md border border-gray-300 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              aria-label="Search players or teams"
-            />
+            
+            {/* Mobile Filter Toggle */}
+            <button 
+              className="md:hidden flex items-center justify-center p-2 bg-blue-600 text-white rounded-md"
+              onClick={() => setShowMobileFilters(!showMobileFilters)}
+              aria-expanded={showMobileFilters}
+              aria-controls="mobile-filters"
+            >
+              <Filter className="h-4 w-4 mr-1" />
+              <span>Filters</span>
+              <ChevronDown className={cn(
+                "h-4 w-4 ml-1 transition-transform",
+                showMobileFilters ? "rotate-180" : ""
+              )} />
+            </button>
           </div>
         </div>
         
-        {/* Filters Row */}
-        <div className="px-4 pb-4 flex flex-wrap items-center gap-3 md:gap-6" role="group" aria-label="Filter options">
+        {/* Filters Row - Desktop */}
+        <div className="hidden md:flex px-4 pb-4 flex-wrap items-center gap-3 md:gap-6" role="group" aria-label="Filter options">
           {/* Timeframe Filter Dropdown */}
           <div className="flex items-center gap-2">
             <label htmlFor="timeframe-filter" className="text-xs md:text-sm text-white">Timeframe:</label>
@@ -186,6 +207,80 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                   </svg>
                 </div>
               </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Mobile Filters - Collapsible */}
+        <div 
+          id="mobile-filters"
+          className={cn(
+            "md:hidden px-4 pb-4 flex flex-col gap-3 transition-all duration-300 overflow-hidden",
+            showMobileFilters ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+          )}
+        >
+          {/* Timeframe Filter */}
+          <div className="flex flex-col gap-1">
+            <label htmlFor="mobile-timeframe-filter" className="text-xs text-white">Timeframe:</label>
+            <select
+              id="mobile-timeframe-filter"
+              value={timeframe}
+              onChange={(e) => setTimeframe(e.target.value)}
+              className="w-full appearance-none bg-white border border-gray-300 rounded-md py-2 px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="L5">Last 5 Games</option>
+              <option value="L10">Last 10 Games</option>
+              <option value="L20">Last 20 Games</option>
+            </select>
+          </div>
+          
+          {/* Stat Type Filter */}
+          <div className="flex flex-col gap-1">
+            <label htmlFor="mobile-stat-type-filter" className="text-xs text-white">Prop type:</label>
+            <select
+              id="mobile-stat-type-filter"
+              value={statType}
+              onChange={(e) => setStatType(e.target.value)}
+              className="w-full appearance-none bg-white border border-gray-300 rounded-md py-2 px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="All Props">All Props</option>
+              <option value="Points">Points</option>
+              <option value="Assists">Assists</option>
+              <option value="Rebounds">Rebounds</option>
+            </select>
+          </div>
+          
+          {/* Team Filter */}
+          <div className="flex flex-col gap-1">
+            <label htmlFor="mobile-team-filter" className="text-xs text-white">Team:</label>
+            <select
+              id="mobile-team-filter"
+              value={filters?.team || 'all'}
+              onChange={(e) => setFilters?.({ ...filters!, team: e.target.value })}
+              className="w-full appearance-none bg-white border border-gray-300 rounded-md py-2 px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">All Teams</option>
+              {teams.map((team) => (
+                <option key={team} value={team}>{team}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Fixture Filter */}
+          {filters && setFilters && availableFixtures && (
+            <div className="flex flex-col gap-1">
+              <label htmlFor="mobile-fixture-filter" className="text-xs text-white">Game:</label>
+              <select
+                id="mobile-fixture-filter"
+                value={filters.fixture}
+                onChange={(e) => setFilters(prev => ({ ...prev, fixture: e.target.value }))}
+                className="w-full appearance-none bg-white border border-gray-300 rounded-md py-2 px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All Games</option>
+                {availableFixtures.map(fixture => (
+                  <option key={fixture} value={fixture}>{fixture}</option>
+                ))}
+              </select>
             </div>
           )}
         </div>

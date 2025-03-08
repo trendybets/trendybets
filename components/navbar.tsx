@@ -11,10 +11,14 @@ import {
   CirclePlus,
   Menu,
   X,
-  TrendingUp
+  TrendingUp,
+  Home,
+  Settings,
+  User
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { Disclosure, Transition } from "@headlessui/react"
+import { ResponsiveContainer } from "./ui/responsive-container"
 
 const navigation = [
   {
@@ -29,6 +33,35 @@ const navigation = [
   },
   {
     name: "Trendy Projections",
+    href: "/trendy-projections",
+    icon: TrendingUp,
+  },
+  {
+    name: "Calculators",
+    href: "/calculators",
+    icon: Calculator,
+  },
+  {
+    name: "Sync",
+    href: "/admin/sync",
+    icon: RefreshCw,
+  },
+]
+
+// Mobile navigation with simplified labels for better mobile experience
+const mobileNavigation = [
+  {
+    name: "Games",
+    href: "/",
+    icon: GamepadIcon,
+  },
+  {
+    name: "Props",
+    href: "/trendy-props",
+    icon: CirclePlus,
+  },
+  {
+    name: "Projections",
     href: "/trendy-projections",
     icon: TrendingUp,
   },
@@ -66,7 +99,7 @@ export function Navbar() {
     )}>
       {({ open }) => (
         <>
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <ResponsiveContainer maxWidth="2xl" padding="md">
             <div className="flex h-16 items-center justify-between">
               {/* Logo and brand */}
               <div className="flex items-center">
@@ -132,7 +165,7 @@ export function Navbar() {
                 </Disclosure.Button>
               </div>
             </div>
-          </div>
+          </ResponsiveContainer>
 
           {/* Mobile menu */}
           <Transition
@@ -143,9 +176,9 @@ export function Navbar() {
             leaveFrom="transform scale-100 opacity-100"
             leaveTo="transform scale-95 opacity-0"
           >
-            <Disclosure.Panel className="md:hidden bg-white">
-              <div className="space-y-1 px-4 pb-3 pt-2">
-                {navigation.map((item) => {
+            <Disclosure.Panel className="md:hidden bg-white shadow-lg">
+              <div className="px-2 pt-2 pb-3 space-y-1">
+                {mobileNavigation.map((item) => {
                   const isActive = 
                     pathname === item.href || 
                     (pathname === "/trendy-games" && item.href === "/")
@@ -168,6 +201,34 @@ export function Navbar() {
                       )} />
                       {item.name}
                     </Disclosure.Button>
+                  )
+                })}
+              </div>
+              
+              {/* Bottom mobile navigation bar */}
+              <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-2 md:hidden">
+                {mobileNavigation.slice(0, 5).map((item) => {
+                  const isActive = 
+                    pathname === item.href || 
+                    (pathname === "/trendy-games" && item.href === "/")
+                  
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "flex flex-col items-center justify-center px-2 py-1 text-xs",
+                        isActive
+                          ? "text-blue-600"
+                          : "text-gray-700"
+                      )}
+                    >
+                      <item.icon className={cn(
+                        "h-5 w-5 mb-1",
+                        isActive ? "text-blue-600" : "text-gray-700"
+                      )} />
+                      <span>{item.name}</span>
+                    </Link>
                   )
                 })}
               </div>

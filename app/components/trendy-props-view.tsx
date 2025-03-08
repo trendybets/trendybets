@@ -15,6 +15,16 @@ import { DynamicTrendsTable } from './dynamic-trends-table'
 import { CardSkeleton, StatsCardSkeleton } from "@/components/ui/skeleton"
 import { usePlayerOdds, useFilters } from '@/lib/context/app-state'
 import { fetchPlayerOddsData } from '@/lib/services/data-service'
+import { ResponsiveContainer } from '@/components/ui/responsive-container'
+import { ResponsiveGrid } from '@/components/ui/responsive-grid'
+import { 
+  ResponsiveCard, 
+  ResponsiveCardHeader, 
+  ResponsiveCardTitle, 
+  ResponsiveCardContent,
+  ResponsiveCardFooter
+} from '@/components/ui/responsive-card'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 export default function TrendyPropsView() {
   // Get state and actions from context
@@ -121,51 +131,51 @@ export default function TrendyPropsView() {
 
   if (isLoading && playerOdds.length === 0) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col space-y-4">
-          <h1 className="text-3xl font-bold text-black sports-heading">Trendy Props</h1>
+      <ResponsiveContainer padding="md">
+        <div className="flex flex-col space-y-4 py-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-black sports-heading">Trendy Props</h1>
           <p className="text-gray-700 font-medium sports-subheading">
             Player trends and statistics for upcoming games
           </p>
         </div>
         
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <ResponsiveGrid columns={{ xs: 1, md: 3 }} gap="md" className="mt-6">
           <StatsCardSkeleton />
           <StatsCardSkeleton />
           <StatsCardSkeleton />
-        </div>
+        </ResponsiveGrid>
         
-        <div className="mt-8 sports-card sports-card-elevated">
-          <div className="p-4 border-b border-gray-200">
+        <ResponsiveCard elevated className="mt-8">
+          <ResponsiveCardHeader>
             <div className="h-8 w-1/3 bg-gray-200 animate-pulse rounded-md"></div>
-          </div>
-          <div className="p-4">
+          </ResponsiveCardHeader>
+          <ResponsiveCardContent>
             <CardSkeleton className="mb-4" />
             <CardSkeleton className="mb-4" />
             <CardSkeleton className="mb-4" />
             <CardSkeleton className="mb-4" />
             <CardSkeleton />
-          </div>
-        </div>
-      </div>
+          </ResponsiveCardContent>
+        </ResponsiveCard>
+      </ResponsiveContainer>
     )
   }
 
   if (playerOdds.length === 0 && !isLoading) {
     return (
-      <div className="container mx-auto p-4">
-        <div className="p-8 text-center text-gray-600">
+      <ResponsiveContainer padding="md">
+        <ResponsiveCard elevated className="p-8 text-center text-gray-600 mt-8">
           <div className="text-xl font-medium mb-2">No player odds available</div>
           <div className="text-sm">Please try again later</div>
-        </div>
-      </div>
+        </ResponsiveCard>
+      </ResponsiveContainer>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex flex-col space-y-4">
-        <h1 className="text-3xl font-bold text-black sports-heading">Trendy Props</h1>
+    <ResponsiveContainer padding="md">
+      <div className="flex flex-col space-y-4 py-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-black sports-heading">Trendy Props</h1>
         <p className="text-gray-700 font-medium sports-subheading">
           Player trends and statistics for upcoming games
         </p>
@@ -178,7 +188,7 @@ export default function TrendyPropsView() {
         </div>
       )}
 
-      <div className="sports-card sports-card-elevated">
+      <ResponsiveCard elevated className="p-0">
         <DynamicTrendsTable 
           data={filteredData} 
           isLoading={isLoading && playerOdds.length > 0}
@@ -194,41 +204,46 @@ export default function TrendyPropsView() {
             })
           }}
         />
-      </div>
+      </ResponsiveCard>
 
       {/* Pagination controls */}
-      <div className="flex justify-between items-center mt-6 mb-4">
+      <ResponsiveCardFooter className="mt-6 mb-4 border-0 pt-0">
         <button
           onClick={loadPrevPage}
           disabled={pagination.page <= 1}
           className={cn(
-            "px-4 py-2 rounded-md",
+            "flex items-center px-4 py-2 rounded-md",
             pagination.page <= 1 
               ? "bg-gray-200 text-gray-500 cursor-not-allowed" 
               : "bg-blue-500 text-white hover:bg-blue-600"
           )}
         >
-          Previous
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          <span className="hidden sm:inline">Previous</span>
         </button>
         
-        <span className="text-sm">
+        <span className="text-sm text-center py-2">
           Page {pagination.page} of {pagination.totalPages || 1} 
-          ({pagination.total} total players)
+          <span className="hidden sm:inline"> ({pagination.total} total players)</span>
         </span>
         
         <button
           onClick={loadNextPage}
           disabled={!hasMore}
           className={cn(
-            "px-4 py-2 rounded-md",
+            "flex items-center px-4 py-2 rounded-md",
             !hasMore 
               ? "bg-gray-200 text-gray-500 cursor-not-allowed" 
               : "bg-blue-500 text-white hover:bg-blue-600"
           )}
         >
-          Next
+          <span className="hidden sm:inline">Next</span>
+          <ChevronRight className="h-4 w-4 ml-1" />
         </button>
-      </div>
-    </div>
+      </ResponsiveCardFooter>
+      
+      {/* Add padding at the bottom for mobile navigation */}
+      <div className="h-16 md:h-0"></div>
+    </ResponsiveContainer>
   )
 } 
