@@ -15,9 +15,9 @@ import {
   SortingState,
 } from '@tanstack/react-table'
 import { ChevronRightIcon, ChevronLeftIcon } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Line } from 'react-chartjs-2'
 import { fetchGames } from '../lib/api'
-import GameResearchView from './game-research-view'
+import GameResearchViewOptimized from './game-research-view-optimized'
 
 type Fixture = Database['public']['Tables']['fixtures']['Row'] & {
   home_team: Database['public']['Tables']['teams']['Row']
@@ -593,41 +593,31 @@ export default function TrendyGamesView() {
           </div>
           
           <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendModal.historicalData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="date" 
-                  tick={{ fontSize: 12 }}
-                  angle={-45}
-                  textAnchor="end"
-                />
-                <YAxis />
-                <Tooltip 
-                  content={({ active, payload, label }) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <div className="bg-white p-3 border rounded shadow">
-                          <p>Date: {label}</p>
-                          <p>Value: {payload[0].value}</p>
-                          <p>Opponent: {payload[0].payload.opponent}</p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="value" 
-                  stroke="#8884d8" 
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                  activeDot={{ r: 8 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <Line
+              data={{
+                labels: trendModal.historicalData.map(data => data.date),
+                datasets: [
+                  {
+                    label: `${trendModal.playerName} - ${trendModal.statType}`,
+                    data: trendModal.historicalData.map(data => data.value),
+                    borderColor: 'rgb(255, 99, 132)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                plugins: {
+                  legend: {
+                    position: 'top',
+                  },
+                  title: {
+                    display: true,
+                    text: `${trendModal.playerName} - ${trendModal.statType} History`,
+                  },
+                },
+              }}
+            />
           </div>
         </div>
       </div>
@@ -795,7 +785,7 @@ export default function TrendyGamesView() {
       <TrendsModal />
       
       {/* Add the research modal */}
-      <GameResearchView
+      <GameResearchViewOptimized
         isOpen={researchModal.isOpen}
         onClose={() => setResearchModal({ ...researchModal, isOpen: false })}
         game={{

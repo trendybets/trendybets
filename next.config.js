@@ -1,5 +1,10 @@
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true',
+})
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: true,
   images: {
     remotePatterns: [
       {
@@ -28,7 +33,8 @@ const nextConfig = {
         pathname: '**',
       },
     ],
+    domains: ['hvegilvwwvdmivnphlyo.supabase.co', 'cdn.opticodds.com'],
   },
 }
 
-module.exports = nextConfig 
+module.exports = withBundleAnalyzer(nextConfig) 

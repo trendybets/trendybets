@@ -1,8 +1,32 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Line } from 'react-chartjs-2'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js'
+import { fetchFixtureOdds } from '../lib/api'
+
+// Register ChartJS components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+)
 
 // Define Team interface
 interface Team {
@@ -293,34 +317,59 @@ export default function GameResearchView({
                   <h3 className="text-lg font-semibold mb-2">Spread Line Movement</h3>
                   {filteredLineMovementData && filteredLineMovementData.spread && filteredLineMovementData.spread.length > 0 ? (
                     <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                          data={filteredLineMovementData.spread
-                            .sort((a: SpreadMovement, b: SpreadMovement) => a.timestamp - b.timestamp)}
-                          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis 
-                            dataKey="timestamp" 
-                            tickFormatter={(timestamp) => new Date(timestamp).toLocaleTimeString()} 
-                            label={{ value: 'Time', position: 'insideBottomRight', offset: 0 }}
-                          />
-                          <YAxis label={{ value: 'Spread', angle: -90, position: 'insideLeft' }} />
-                          <Tooltip 
-                            formatter={(value) => [`${value}`, 'Spread']}
-                            labelFormatter={(timestamp) => new Date(timestamp).toLocaleString()}
-                          />
-                          <Legend />
-                          <Line 
-                            type="stepAfter" 
-                            dataKey="homeTeamSpread" 
-                            name={`${game.homeTeam.name} Spread`} 
-                            stroke="#8884d8" 
-                            dot={{ r: 4 }}
-                            activeDot={{ r: 8 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
+                      <Line
+                        data={{
+                          labels: filteredLineMovementData.spread
+                            .sort((a: SpreadMovement, b: SpreadMovement) => a.timestamp - b.timestamp)
+                            .map((item: SpreadMovement) => new Date(item.timestamp).toLocaleTimeString()),
+                          datasets: [
+                            {
+                              label: `${game.homeTeam.name} Spread`,
+                              data: filteredLineMovementData.spread
+                                .sort((a: SpreadMovement, b: SpreadMovement) => a.timestamp - b.timestamp)
+                                .map((item: SpreadMovement) => item.homeTeamSpread),
+                              borderColor: '#8884d8',
+                              backgroundColor: 'rgba(136, 132, 216, 0.5)',
+                              pointRadius: 4,
+                              pointHoverRadius: 8,
+                              tension: 0.1
+                            }
+                          ]
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              position: 'top',
+                            },
+                            tooltip: {
+                              callbacks: {
+                                label: function(context) {
+                                  return `${context.dataset.label}: ${context.parsed.y}`;
+                                },
+                                title: function(tooltipItems) {
+                                  return new Date(filteredLineMovementData.spread[tooltipItems[0].dataIndex].timestamp).toLocaleString();
+                                }
+                              }
+                            }
+                          },
+                          scales: {
+                            y: {
+                              title: {
+                                display: true,
+                                text: 'Spread'
+                              }
+                            },
+                            x: {
+                              title: {
+                                display: true,
+                                text: 'Time'
+                              }
+                            }
+                          }
+                        }}
+                      />
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-lg">
