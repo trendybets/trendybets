@@ -3,6 +3,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/supabase"
 import { serverEnv } from "@/lib/env"
 import axios from 'axios'
+import { withServiceRoleClient, withRetry, withPerformanceLogging } from "@/lib/db/supabase-client"
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -12,22 +13,6 @@ export const dynamic = 'force-dynamic'
 
 // Increase the execution duration to 5 minutes (300 seconds)
 export const maxDuration = 300
-
-// Helper function to retry failed operations
-async function withRetry<T>(
-  operation: () => Promise<T>,
-  retries = 3,
-  delay = 1000
-): Promise<T> {
-  try {
-    return await operation();
-  } catch (error) {
-    if (retries <= 0) throw error;
-    console.log(`Operation failed, retrying in ${delay}ms... (${retries} retries left)`);
-    await new Promise(resolve => setTimeout(resolve, delay));
-    return withRetry(operation, retries - 1, delay * 1.5);
-  }
-}
 
 interface Stats {
   fouls: number
@@ -104,368 +89,39 @@ interface APIResponse {
 }
 
 export async function POST(request: Request) {
-  // Add authentication for cron jobs
-  const apiToken = request.headers.get('api-token');
-  
-  // For production, you should use a secure comparison method and store this in an environment variable
-  if (apiToken !== serverEnv.CRON_API_TOKEN) {
-    console.error('Unauthorized access attempt to sync-player-history');
-    return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  // Parse request body to check for player_id parameter and limit parameter
-  let playerIdToProcess: string | null = null;
-  let playerLimit: number | null = null;
-  let workerMode: boolean = false;
-  let startIndex: number = 0;
-  let endIndex: number = 0;
-  
-  try {
-    const body = await request.json();
-    playerIdToProcess = body.player_id || null;
-    playerLimit = body.limit ? parseInt(body.limit, 10) : null;
-    workerMode = body.worker_mode === true;
-    startIndex = body.start_index ? parseInt(body.start_index, 10) : 0;
-    endIndex = body.end_index ? parseInt(body.end_index, 10) : 0;
-  } catch (e) {
-    // No body or invalid JSON, continue with full sync
-  }
-
-  console.log("API route called", 
-    playerIdToProcess ? `for player ${playerIdToProcess}` : 
-    workerMode ? `as worker for players ${startIndex}-${endIndex}` :
-    playerLimit ? `for up to ${playerLimit} players` : "for all players"
-  );
-  
-  // Log environment variables (without revealing full values)
-  console.log("Environment check:", {
-    SUPABASE_URL_set: !!SUPABASE_URL,
-    SUPABASE_SERVICE_KEY_set: !!SUPABASE_SERVICE_KEY,
-    SUPABASE_URL_length: SUPABASE_URL?.length,
-    SUPABASE_SERVICE_KEY_length: SUPABASE_SERVICE_KEY?.length,
-    NODE_OPTIONS: process.env.NODE_OPTIONS || 'not set'
-  })
-  
-  // Create Supabase client with improved fetch implementation
-  const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-    // Add custom fetch implementation with DNS resolution options
-    global: {
-      fetch: (url, options) => {
-        // Log the URL (with API key redacted)
-        console.log(`Fetching URL: ${url.toString().replace(/apikey=[^&]+/, 'apikey=REDACTED')}`);
-        
-        // Parse the URL to get the query parameters
-        const urlObj = new URL(url.toString());
-        const apiKey = urlObj.searchParams.get('apikey') || SUPABASE_SERVICE_KEY;
-        
-        // Create new headers with the API key
-        const newHeaders = new Headers(options?.headers || {});
-        
-        // Ensure API key is in headers
-        if (!newHeaders.has('apikey')) {
-          newHeaders.set('apikey', apiKey);
-        }
-        
-        // Always set the Authorization header with the API key
-        if (!newHeaders.has('Authorization')) {
-          newHeaders.set('Authorization', `Bearer ${apiKey}`);
-        }
-        
-        // Add additional headers for better connectivity
-        newHeaders.set('Accept-Encoding', 'gzip, deflate');
-        newHeaders.set('Connection', 'keep-alive');
-        
-        // Return the fetch with updated headers
-        return fetch(url, {
-          ...options,
-          headers: newHeaders
-        });
-      }
-    }
-  })
-  
-  const syncStartTime = new Date().toISOString()
-  
-  try {
-    // First, verify we can access the table
-    console.log("Attempting to access player_history table...")
+  return withPerformanceLogging(async () => {
+    console.log("Starting player history sync...")
+    
     try {
-      const { data: tableCheck, error: tableError } = await withRetry(async () => {
-        console.log("Executing table check query...")
-        const result = await supabase
-          .from("player_history")
-          .select("id")
-          .limit(1);
-        
-        console.log("Table check query completed", {
-          hasData: !!result.data,
-          dataLength: result.data?.length,
-          hasError: !!result.error
-        });
-        
-        return result;
-      });
-
-      if (tableError) {
-        console.error("Table check error:", tableError)
-        throw new Error(`Failed to access player_history table: ${tableError.message}`)
+      // Parse request body
+      const body = await request.json()
+      const { playerId, lastSyncDate } = body
+      
+      if (!playerId) {
+        return NextResponse.json({ error: "Player ID is required" }, { status: 400 })
       }
-
-      console.log("Table check successful", tableCheck)
-    } catch (tableAccessError) {
-      console.error("Error during table access:", tableAccessError)
-      throw new Error(`Table access error: ${tableAccessError instanceof Error ? tableAccessError.message : String(tableAccessError)}`)
+      
+      // Use the connection pool to get a Supabase client and process the player
+      const processedGames = await withServiceRoleClient(async (supabase) => {
+        return processPlayer(playerId, lastSyncDate, supabase)
+      })
+      
+      console.log(`Player history sync completed for player ${playerId}`)
+      
+      return NextResponse.json({
+        success: true,
+        player_id: playerId,
+        processed_games: processedGames
+      })
+    } catch (error) {
+      console.error("Error in player history sync:", error)
+      
+      return NextResponse.json({
+        error: "Failed to sync player history",
+        details: error instanceof Error ? error.message : String(error)
+      }, { status: 500 })
     }
-    
-    // Get the last sync timestamp with correct column names
-    const { data: lastSync } = await withRetry(async () => {
-      return await supabase
-        .from("sync_log")
-        .select(`
-          id,
-          sync_type,
-          started_at,
-          completed_at,
-          status,
-          last_sync_date,
-          records_processed
-        `)
-        .eq("sync_type", "player_history")
-        .eq("status", "completed")
-        .order("last_sync_date", { ascending: false })
-        .limit(1);
-    });
-
-    // Use yesterday's date if no last sync found, otherwise use last sync date
-    const lastSyncDate = lastSync?.[0]?.last_sync_date || 
-      new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    
-    console.log(`Last sync was at: ${lastSyncDate}`)
-    
-    let totalHistoryRecords = 0;
-    
-    // If a specific player ID is provided, only process that player
-    if (playerIdToProcess) {
-      console.log(`Processing single player: ${playerIdToProcess}`);
-      const playerHistoryCount = await processPlayer(playerIdToProcess, lastSyncDate, supabase);
-      totalHistoryRecords = playerHistoryCount;
-      
-      // Update sync_log for this specific player
-      await withRetry(async () => {
-        return await supabase
-          .from("sync_log")
-          .insert([{ 
-            sync_type: "player_history_single",
-            started_at: syncStartTime,
-            completed_at: new Date().toISOString(),
-            status: "completed",
-            last_sync_date: new Date().toISOString(),
-            records_processed: totalHistoryRecords,
-            metadata: {
-              player_id: playerIdToProcess,
-              games_processed: totalHistoryRecords
-            }
-          }])
-          .select();
-      });
-        
-      return NextResponse.json(
-        { 
-          message: `Synced ${totalHistoryRecords} new history records for player ${playerIdToProcess} since ${lastSyncDate}`,
-          player_id: playerIdToProcess,
-          records: totalHistoryRecords
-        },
-        { status: 200 }
-      );
-    }
-    
-    // Otherwise, get all active players and queue them for processing
-    const { data: players, error: playerError } = await withRetry(async () => {
-      return await supabase
-        .from("players")
-        .select("id")
-        .eq("is_active", true);
-    });
-
-    if (playerError) throw playerError;
-    
-    // If in worker mode, only process the specified range of players
-    let playersToProcess = players;
-    
-    if (workerMode && startIndex >= 0 && endIndex > startIndex && endIndex <= players.length) {
-      playersToProcess = players.slice(startIndex, endIndex);
-      console.log(`Worker mode: Processing players ${startIndex} to ${endIndex-1} (${playersToProcess.length} players)`);
-    } else if (playerLimit && playerLimit > 0 && playerLimit < players.length) {
-      // Apply limit if specified
-      playersToProcess = players.slice(0, playerLimit);
-      console.log(`Found ${players.length} active players, processing ${playersToProcess.length}`);
-    } else {
-      console.log(`Found ${players.length} active players`);
-      
-      // If not in worker mode and processing all players, spawn workers instead
-      if (!workerMode && playersToProcess.length > 20) {
-        console.log("Spawning workers to process players in parallel");
-        
-        // Create worker batches (10 players per worker)
-        const workerSize = 10;
-        const workerPromises = [];
-        
-        for (let i = 0; i < players.length; i += workerSize) {
-          const end = Math.min(i + workerSize, players.length);
-          console.log(`Creating worker for players ${i} to ${end-1}`);
-          
-          // Make a request to this same endpoint but in worker mode
-          const workerPromise = axios({
-            method: 'POST',
-            url: request.url,
-            headers: {
-              'Content-Type': 'application/json',
-              'api-token': serverEnv.CRON_API_TOKEN
-            },
-            data: {
-              worker_mode: true,
-              start_index: i,
-              end_index: end
-            }
-          }).catch(error => {
-            console.error(`Worker for players ${i}-${end-1} failed:`, error.message);
-            return { data: { records_processed: 0 } };
-          });
-          
-          workerPromises.push(workerPromise);
-        }
-        
-        console.log(`Waiting for ${workerPromises.length} workers to complete...`);
-        const workerResults = await Promise.all(workerPromises);
-        
-        // Sum up the total records processed by all workers
-        const totalProcessedRecords = workerResults.reduce((sum, result) => {
-          return sum + (result.data?.records_processed || 0);
-        }, 0);
-        
-        // Update the sync_log to indicate we've completed the sync process
-        await withRetry(async () => {
-          return await supabase
-            .from("sync_log")
-            .insert([{ 
-              sync_type: "player_history",
-              started_at: syncStartTime,
-              completed_at: new Date().toISOString(),
-              status: "completed",
-              last_sync_date: new Date().toISOString(),
-              records_processed: totalProcessedRecords,
-              metadata: {
-                players_processed: players.length,
-                workers_used: workerPromises.length,
-                last_sync_date: lastSyncDate
-              }
-            }])
-            .select();
-        });
-        
-        return NextResponse.json(
-          { 
-            message: `Processed ${players.length} players using ${workerPromises.length} workers since ${lastSyncDate}`,
-            players_processed: players.length,
-            workers_used: workerPromises.length,
-            records_processed: totalProcessedRecords
-          },
-          { status: 200 }
-        );
-      }
-    }
-    
-    // Process players in batches
-    const batchSize = 5; // Process 5 players at a time
-    let totalProcessedRecords = 0;
-    
-    // Create batches of players
-    const batches = [];
-    for (let i = 0; i < playersToProcess.length; i += batchSize) {
-      batches.push(playersToProcess.slice(i, i + batchSize));
-    }
-    
-    console.log(`Created ${batches.length} batches of players to process`);
-    
-    // Process each batch
-    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-      const batch = batches[batchIndex];
-      console.log(`Processing batch ${batchIndex + 1}/${batches.length} with ${batch.length} players`);
-      
-      // Process players in parallel within each batch
-      const batchResults = await Promise.all(
-        batch.map(player => processPlayer(player.id, lastSyncDate, supabase))
-      );
-      
-      // Sum up the total records processed in this batch
-      const batchTotal = batchResults.reduce((sum, count) => sum + count, 0);
-      totalProcessedRecords += batchTotal;
-      
-      console.log(`Batch ${batchIndex + 1} complete: processed ${batchTotal} records`);
-      
-      // Add a small delay between batches to avoid rate limiting
-      if (batchIndex < batches.length - 1) {
-        console.log(`Waiting 1 second before processing next batch...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-    
-    // Update the sync_log to indicate we've completed the sync process
-    await withRetry(async () => {
-      return await supabase
-        .from("sync_log")
-        .insert([{ 
-          sync_type: workerMode ? "player_history_worker" : "player_history",
-          started_at: syncStartTime,
-          completed_at: new Date().toISOString(),
-          status: "completed",
-          last_sync_date: new Date().toISOString(),
-          records_processed: totalProcessedRecords,
-          metadata: {
-            players_processed: playersToProcess.length,
-            worker_range: workerMode ? `${startIndex}-${endIndex}` : undefined,
-            last_sync_date: lastSyncDate
-          }
-        }])
-        .select();
-    });
-    
-    return NextResponse.json(
-      { 
-        message: `Processed ${playersToProcess.length} players for history sync since ${lastSyncDate}`,
-        players_processed: playersToProcess.length,
-        records_processed: totalProcessedRecords
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    // Add error logging to sync_log
-    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-    
-    await withRetry(async () => {
-      return await supabase
-        .from("sync_log")
-        .insert([{
-          sync_type: playerIdToProcess ? "player_history_single" : "player_history",
-          started_at: syncStartTime,
-          completed_at: new Date().toISOString(),
-          status: "error",
-          error: errorMessage,
-          records_processed: 0,
-          metadata: playerIdToProcess ? { player_id: playerIdToProcess } : undefined
-        }]);
-    });
-
-    console.error("Sync error:", error);
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
-  }
+  }, "player_history_sync")
 }
 
 // Helper function to process a single player
