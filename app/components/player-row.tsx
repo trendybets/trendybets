@@ -46,8 +46,12 @@ function PlayerRowComponent({
   const lineDiff = avgValue - player.line
   const lineDiffFormatted = `${lineDiff > 0 ? '+' : ''}${lineDiff.toFixed(1)}`
 
+  // Generate a unique ID for this row for ARIA purposes
+  const rowId = `player-${player.player.id}-${player.stat_type}`
+
   return (
     <tr 
+      id={rowId}
       className={cn(
         "border-t border-gray-100 transition-colors cursor-pointer hover:bg-blue-50",
         isHovered && "bg-blue-50"
@@ -55,6 +59,15 @@ function PlayerRowComponent({
       onClick={() => onSelect(player)}
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect(player)
+        }
+      }}
+      tabIndex={0}
+      role="button"
+      aria-label={`View details for ${player.player.name}, ${player.stat_type}`}
     >
       <td className="px-3 md:px-4 py-2 md:py-3">
         <div className="flex flex-col md:flex-row md:items-center w-full">
@@ -66,14 +79,17 @@ function PlayerRowComponent({
               <div className="relative mr-2 md:mr-3">
                 <img 
                   src={player.player.image_url}
-                  alt={player.player.name}
+                  alt={`${player.player.name}`}
                   className="h-8 w-8 md:h-10 md:w-10 rounded-full border border-gray-200 bg-gray-100 team-logo"
                 />
                 {stats.isStrong && (
-                  <div className={cn(
-                    "absolute -top-1 -right-1 flex h-3 w-3 md:h-4 md:w-4 items-center justify-center rounded-full text-white trend-indicator",
-                    stats.direction === 'MORE' ? "trend-indicator-up" : "trend-indicator-down"
-                  )}>
+                  <div 
+                    className={cn(
+                      "absolute -top-1 -right-1 flex h-3 w-3 md:h-4 md:w-4 items-center justify-center rounded-full text-white trend-indicator",
+                      stats.direction === 'MORE' ? "trend-indicator-up" : "trend-indicator-down"
+                    )}
+                    aria-hidden="true"
+                  >
                     {stats.direction === 'MORE' ? (
                       <TrendingUp className="h-2 w-2 md:h-2.5 md:w-2.5" />
                     ) : (
@@ -94,12 +110,15 @@ function PlayerRowComponent({
 
             {/* Hit Rate - Moved to top right on mobile */}
             <div className="md:hidden">
-              <div className={cn(
-                "odds-badge",
-                stats.percentage >= 0.7 ? "odds-badge-positive" : 
-                stats.percentage >= 0.5 ? "odds-badge-neutral" : 
-                "odds-badge-negative"
-              )}>
+              <div 
+                className={cn(
+                  "odds-badge",
+                  stats.percentage >= 0.7 ? "odds-badge-positive" : 
+                  stats.percentage >= 0.5 ? "odds-badge-neutral" : 
+                  "odds-badge-negative"
+                )}
+                aria-label={`Hit rate: ${(stats.percentage * 100).toFixed(0)}%`}
+              >
                 {(stats.percentage * 100).toFixed(0)}%
               </div>
             </div>
@@ -116,12 +135,15 @@ function PlayerRowComponent({
       
       {/* Hit Rate - Desktop */}
       <td className="hidden md:table-cell px-3 md:px-4 py-2 md:py-3 text-center">
-        <div className={cn(
-          "odds-badge",
-          stats.percentage >= 0.7 ? "odds-badge-positive" : 
-          stats.percentage >= 0.5 ? "odds-badge-neutral" : 
-          "odds-badge-negative"
-        )}>
+        <div 
+          className={cn(
+            "odds-badge",
+            stats.percentage >= 0.7 ? "odds-badge-positive" : 
+            stats.percentage >= 0.5 ? "odds-badge-neutral" : 
+            "odds-badge-negative"
+          )}
+          aria-label={`Hit rate: ${(stats.percentage * 100).toFixed(0)}%`}
+        >
           {(stats.percentage * 100).toFixed(0)}%
         </div>
       </td>
@@ -135,10 +157,13 @@ function PlayerRowComponent({
       <td className="hidden md:table-cell px-3 md:px-4 py-2 md:py-3 text-center">
         <div className="flex flex-col">
           <span className="text-sm font-medium text-gray-900">{avgValue.toFixed(1)}</span>
-          <span className={cn(
-            "text-xs",
-            lineDiff > 0 ? "text-green-600" : lineDiff < 0 ? "text-red-600" : "text-gray-500"
-          )}>
+          <span 
+            className={cn(
+              "text-xs",
+              lineDiff > 0 ? "text-green-600" : lineDiff < 0 ? "text-red-600" : "text-gray-500"
+            )}
+            aria-label={`Difference from line: ${lineDiffFormatted}`}
+          >
             {lineDiffFormatted}
           </span>
         </div>
