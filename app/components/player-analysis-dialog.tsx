@@ -19,6 +19,8 @@ import {
 } from 'chart.js'
 import { cn } from "@/lib/utils"
 import { Skeleton, StatsCardSkeleton } from "@/components/ui/skeleton"
+import Image from "next/image"
+import { getSafeImageUrl } from "@/lib/image-utils"
 
 // Register ChartJS components
 ChartJS.register(
@@ -533,11 +535,16 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose }: PlayerAnalysis
                 {isLoading ? (
                   <Skeleton className="h-12 w-12 rounded-full" aria-hidden="true" />
                 ) : (
-                  <img 
-                    src={processedPlayer.player.image_url || '/placeholder-player.png'} 
-                    alt={`${processedPlayer.player.name}`} 
-                    className="h-12 w-12 rounded-full object-cover mr-3"
-                  />
+                  <div className="relative h-12 w-12 mr-3">
+                    <Image 
+                      src={getSafeImageUrl(processedPlayer.player.image_url)} 
+                      alt={`${processedPlayer.player.name}`} 
+                      fill
+                      sizes="48px"
+                      className="rounded-full object-cover"
+                      priority={true}
+                    />
+                  </div>
                 )}
                 <div>
                   {isLoading ? (

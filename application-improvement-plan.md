@@ -70,10 +70,10 @@ This document outlines a comprehensive plan for optimizing data retrieval and en
 
 ### 2.2 Asset Optimization
 
-- [ ] **2.2.1 Optimize images**
-  - Implement responsive images with srcset
-  - Use next/image for automatic optimization
-  - Implement lazy loading for images below the fold
+- [x] **2.2.1 Optimize images**
+  - [x] Implement responsive images with srcset
+  - [x] Use next/image for automatic optimization
+  - [x] Implement lazy loading for images below the fold
 
 - [ ] **2.2.2 Optimize bundle size**
   - Analyze and reduce JavaScript bundle size

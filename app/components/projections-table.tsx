@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { PlayerData } from '../types'
 import { calculateProjection, getAllCustomProjections } from '../lib/projections'
 import { createClient } from '@supabase/supabase-js'
+import Image from "next/image"
+import { getSafeImageUrl } from "@/lib/image-utils"
 
 interface ProjectionsTableProps {
   data: PlayerData[]
@@ -305,11 +307,16 @@ export function ProjectionsTable({ data, isLoading = false }: ProjectionsTablePr
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-3">
                         {item.player.image_url && (
-                          <img 
-                            src={item.player.image_url} 
-                            alt={item.player.name}
-                            className="h-8 w-8 rounded-full bg-gray-100"
-                          />
+                          <div className="relative h-8 w-8">
+                            <Image 
+                              src={getSafeImageUrl(item.player.image_url)} 
+                              alt={item.player.name}
+                              fill
+                              sizes="32px"
+                              className="rounded-full bg-gray-100 object-cover"
+                              loading="lazy"
+                            />
+                          </div>
                         )}
                         <div>
                           <div className="flex items-center gap-1.5">

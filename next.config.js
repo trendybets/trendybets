@@ -12,6 +12,21 @@ const nextConfig = {
         hostname: 'cdn.nba.com',
         pathname: '/headshots/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'ak-static.cms.nba.com',
+        pathname: '/wp-content/uploads/headshots/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.nba.com',
+        pathname: '**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'a.espncdn.com',
+        pathname: '**',
+      },
     ],
   },
 }

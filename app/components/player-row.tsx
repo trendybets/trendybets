@@ -4,6 +4,8 @@ import React, { memo } from 'react'
 import { PlayerData } from '../types'
 import { cn } from '@/lib/utils'
 import { TrendingUp, ChevronDown } from 'lucide-react'
+import Image from 'next/image'
+import { getSafeImageUrl } from '@/lib/image-utils'
 
 interface PlayerRowProps {
   player: PlayerData
@@ -76,11 +78,15 @@ function PlayerRowComponent({
             {/* Player Image and Info */}
             <div className="flex items-center w-full">
               {/* Player Image */}
-              <div className="relative mr-2 md:mr-3">
-                <img 
-                  src={player.player.image_url}
+              <div className="relative mr-2 md:mr-3 h-8 w-8 md:h-10 md:w-10">
+                <Image 
+                  src={getSafeImageUrl(player.player.image_url)}
                   alt={`${player.player.name}`}
-                  className="h-8 w-8 md:h-10 md:w-10 rounded-full border border-gray-200 bg-gray-100 team-logo"
+                  fill
+                  sizes="(max-width: 768px) 32px, 40px"
+                  className="rounded-full border border-gray-200 bg-gray-100 team-logo object-cover"
+                  priority={false}
+                  loading="lazy"
                 />
                 {stats.isStrong && (
                   <div 
