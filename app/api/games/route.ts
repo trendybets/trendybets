@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server"
 import { serverEnv } from "@/lib/env"
+import { withCache } from "@/lib/redis"
 
 // Add this line to tell Next.js this is a dynamic route
 export const dynamic = 'force-dynamic'
 
 // At the top of the file, add default sportsbook
 const DEFAULT_SPORTSBOOK = 'draftkings'
+// Redis cache TTL (5 minutes in seconds)
+const CACHE_TTL = 5 * 60;
 
 interface Fixture {
   id: string
@@ -45,41 +48,49 @@ async function fetchActiveFixtures() {
 
   console.log('Fetching active fixtures from:', url.replace(serverEnv.OPTIC_ODDS_API_KEY, '[REDACTED]'))
   
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      cache: 'no-store' // Ensure we're not using cached data
-    })
-    
-    if (!response.ok) {
-      console.error('Failed to fetch fixtures:', {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries())
-      })
-      throw new Error(`Failed to fetch fixtures: ${response.status} ${response.statusText}`)
-    }
-    
-    const data = await response.json()
-    console.log('Active fixtures response:', {
-      count: data.count || 0,
-      dataLength: data.data?.length || 0,
-      fixtures: data.data?.map((f: any) => ({
-        id: f.id,
-        startDate: f.start_date,
-        home: f.home_team_display,
-        away: f.away_team_display
-      })) || []
-    })
-    
-    return data.data || []
-  } catch (error) {
-    console.error('Error fetching active fixtures:', error)
-    throw error
-  }
+  const cacheKey = `games:active-fixtures`;
+  
+  return withCache(
+    cacheKey,
+    async () => {
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          cache: 'no-store' // Ensure we're not using cached data
+        })
+        
+        if (!response.ok) {
+          console.error('Failed to fetch fixtures:', {
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries())
+          })
+          throw new Error(`Failed to fetch fixtures: ${response.status} ${response.statusText}`)
+        }
+        
+        const data = await response.json()
+        console.log('Active fixtures response:', {
+          count: data.count || 0,
+          dataLength: data.data?.length || 0,
+          fixtures: data.data?.map((f: any) => ({
+            id: f.id,
+            startDate: f.start_date,
+            home: f.home_team_display,
+            away: f.away_team_display
+          })) || []
+        })
+        
+        return data.data || []
+      } catch (error) {
+        console.error('Error fetching active fixtures:', error)
+        throw error
+      }
+    },
+    CACHE_TTL
+  );
 }
 
 // Fetch team data
@@ -89,10 +100,18 @@ async function fetchTeams() {
     `league=nba&` +
     `key=${serverEnv.OPTIC_ODDS_API_KEY}`
 
-  const response = await fetch(url)
-  if (!response.ok) throw new Error('Failed to fetch teams')
-  const data = await response.json()
-  return data.data || []
+  const cacheKey = `games:teams`;
+  
+  return withCache(
+    cacheKey,
+    async () => {
+      const response = await fetch(url)
+      if (!response.ok) throw new Error('Failed to fetch teams')
+      const data = await response.json()
+      return data.data || []
+    },
+    CACHE_TTL
+  );
 }
 
 // Fetch odds for a fixture
@@ -111,35 +130,171 @@ async function fetchFixtureOdds(fixtureId: string) {
 
   console.log(`Fetching odds for fixture ${fixtureId}`)
   
+  const cacheKey = `games:fixture-odds:${fixtureId}`;
+  
+  return withCache(
+    cacheKey,
+    async () => {
+      try {
+        const response = await fetch(url, {
+          cache: 'no-store' // Ensure we're not using cached data
+        })
+        
+        if (!response.ok) {
+          console.error(`Failed to fetch odds for fixture ${fixtureId}:`, {
+            status: response.status,
+            statusText: response.statusText
+          })
+          return []
+        }
+        
+        const data = await response.json()
+        
+        // Log the raw odds data
+        console.log(`Raw odds data for fixture ${fixtureId}:`, {
+          count: data.data?.length || 0,
+        })
+        
+        return data.data || []
+      } catch (error) {
+        console.error(`Error fetching odds for fixture ${fixtureId}:`, error)
+        return []
+      }
+    },
+    CACHE_TTL
+  );
+}
+
+// Fetch unplayed fixtures
+async function fetchUnplayedFixtures() {
+  const url = `https://api.opticodds.com/api/v3/fixtures?` +
+    `sport=basketball&` +
+    `league=nba&` +
+    `status=unplayed&` +
+    `key=${serverEnv.OPTIC_ODDS_API_KEY}`
+  
+  console.log('Fetching unplayed fixtures from:', url.replace(serverEnv.OPTIC_ODDS_API_KEY, '[REDACTED]'))
+  
+  const cacheKey = `games:unplayed-fixtures`;
+  
+  return withCache(
+    cacheKey,
+    async () => {
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          cache: 'no-store' // Ensure we're not using cached data
+        })
+        
+        if (!response.ok) {
+          console.error('Failed to fetch unplayed fixtures:', {
+            status: response.status,
+            statusText: response.statusText
+          })
+          return []
+        }
+        
+        const data = await response.json()
+        const fixtures = data.data || []
+        console.log(`Found ${fixtures.length} unplayed fixtures`)
+        
+        return fixtures
+      } catch (error) {
+        console.error('Error fetching unplayed fixtures:', error)
+        return []
+      }
+    },
+    CACHE_TTL
+  );
+}
+
+// Fetch scheduled fixtures for the next week
+async function fetchScheduledFixtures() {
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date()
+  const todayFormatted = today.toISOString().split('T')[0]
+  
+  // Get one week from today
+  const nextWeek = new Date(today)
+  nextWeek.setDate(nextWeek.getDate() + 7)
+  const nextWeekFormatted = nextWeek.toISOString().split('T')[0]
+  
+  const url = `https://api.opticodds.com/api/v3/fixtures?` +
+    `sport=basketball&` +
+    `league=nba&` +
+    `from_start_date=${todayFormatted}&` +
+    `to_start_date=${nextWeekFormatted}&` +
+    `key=${serverEnv.OPTIC_ODDS_API_KEY}`
+  
+  console.log('Fetching scheduled fixtures from:', url.replace(serverEnv.OPTIC_ODDS_API_KEY, '[REDACTED]'))
+  
+  const cacheKey = `games:scheduled-fixtures:${todayFormatted}-${nextWeekFormatted}`;
+  
+  return withCache(
+    cacheKey,
+    async () => {
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          cache: 'no-store' // Ensure we're not using cached data
+        })
+        
+        if (!response.ok) {
+          console.error('Failed to fetch scheduled fixtures:', {
+            status: response.status,
+            statusText: response.statusText
+          })
+          return []
+        }
+        
+        const data = await response.json()
+        const fixtures = data.data || []
+        console.log(`Found ${fixtures.length} scheduled fixtures`)
+        
+        return fixtures
+      } catch (error) {
+        console.error('Error fetching scheduled fixtures:', error)
+        return []
+      }
+    },
+    CACHE_TTL
+  );
+}
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const forceRefresh = url.searchParams.get('refresh') === 'true';
+  const cacheKey = 'games:all-games';
+  
   try {
-    const response = await fetch(url, {
-      cache: 'no-store' // Ensure we're not using cached data
-    })
+    let gamesData;
     
-    if (!response.ok) {
-      console.error(`Failed to fetch odds for fixture ${fixtureId}:`, {
-        status: response.status,
-        statusText: response.statusText
-      })
-      return []
+    // If forceRefresh is true, we'll bypass the cache
+    if (forceRefresh) {
+      gamesData = await processGamesData();
+    } else {
+      // Use Redis caching for the data
+      gamesData = await withCache(
+        cacheKey,
+        processGamesData,
+        CACHE_TTL
+      );
     }
     
-    const data = await response.json()
-    
-    // Log the raw odds data
-    console.log(`Raw odds data for fixture ${fixtureId}:`, {
-      count: data.data?.length || 0,
-      hasOdds: data.data?.some((game: any) => game.odds?.length > 0) || false
-    })
-    
-    return data.data || []
+    return NextResponse.json(gamesData);
   } catch (error) {
-    console.error(`Error fetching odds for fixture ${fixtureId}:`, error)
-    return []
+    console.error('Error in /api/games:', error);
+    return NextResponse.json({ error: 'Failed to fetch games data' }, { status: 500 });
   }
 }
 
-export async function GET() {
+async function processGamesData() {
   try {
     const teams = await fetchTeams()
     const fixtures = await fetchActiveFixtures()
@@ -166,105 +321,45 @@ export async function GET() {
 
     // In case the active fixtures API doesn't return upcoming games,
     // let's also fetch from the unplayed endpoint
-    let additionalFixtures: any[] = []
-    try {
-      const url = `https://api.opticodds.com/api/v3/fixtures?` +
-        `sport=basketball&` +
-        `league=nba&` +
-        `status=unplayed&` +
-        `key=${serverEnv.OPTIC_ODDS_API_KEY}`
+    const additionalFixtures = await fetchUnplayedFixtures()
+    
+    // Log dates from additional fixtures
+    if (additionalFixtures.length > 0) {
+      const uniqueDates = Array.from(new Set(additionalFixtures.map((f: Fixture) => {
+        const date = new Date(f.start_date)
+        return date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'America/Los_Angeles'
+        })
+      })))
       
-      console.log('Fetching unplayed fixtures from:', url.replace(serverEnv.OPTIC_ODDS_API_KEY, '[REDACTED]'))
-      
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        cache: 'no-store' // Ensure we're not using cached data
+      console.log('Additional game dates:', {
+        count: uniqueDates.length,
+        dates: uniqueDates
       })
-      
-      if (response.ok) {
-        const data = await response.json()
-        additionalFixtures = data.data || []
-        console.log(`Found ${additionalFixtures.length} additional unplayed fixtures`)
-        
-        // Log dates from additional fixtures
-        if (additionalFixtures.length > 0) {
-          const uniqueDates = Array.from(new Set(additionalFixtures.map((f: Fixture) => {
-            const date = new Date(f.start_date)
-            return date.toLocaleDateString('en-US', {
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric',
-              timeZone: 'America/Los_Angeles'
-            })
-          })))
-          
-          console.log('Additional game dates:', {
-            count: uniqueDates.length,
-            dates: uniqueDates
-          })
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching additional fixtures:', error)
     }
 
     // Try one more source - fetch scheduled games with date range
-    let scheduledFixtures: any[] = []
-    try {
-      // Get today's date in YYYY-MM-DD format
-      const today = new Date()
-      const todayFormatted = today.toISOString().split('T')[0]
+    const scheduledFixtures = await fetchScheduledFixtures()
+    
+    // Log dates from scheduled fixtures
+    if (scheduledFixtures.length > 0) {
+      const uniqueDates = Array.from(new Set(scheduledFixtures.map((f: Fixture) => {
+        const date = new Date(f.start_date)
+        return date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'America/Los_Angeles'
+        })
+      })))
       
-      // Get one week from today
-      const nextWeek = new Date(today)
-      nextWeek.setDate(nextWeek.getDate() + 7)
-      const nextWeekFormatted = nextWeek.toISOString().split('T')[0]
-      
-      const url = `https://api.opticodds.com/api/v3/fixtures?` +
-        `sport=basketball&` +
-        `league=nba&` +
-        `from_start_date=${todayFormatted}&` +
-        `to_start_date=${nextWeekFormatted}&` +
-        `key=${serverEnv.OPTIC_ODDS_API_KEY}`
-      
-      console.log('Fetching scheduled fixtures from:', url.replace(serverEnv.OPTIC_ODDS_API_KEY, '[REDACTED]'))
-      
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        cache: 'no-store' // Ensure we're not using cached data
+      console.log('Scheduled game dates:', {
+        count: uniqueDates.length,
+        dates: uniqueDates
       })
-      
-      if (response.ok) {
-        const data = await response.json()
-        scheduledFixtures = data.data || []
-        console.log(`Found ${scheduledFixtures.length} scheduled fixtures`)
-        
-        // Log dates from scheduled fixtures
-        if (scheduledFixtures.length > 0) {
-          const uniqueDates = Array.from(new Set(scheduledFixtures.map((f: Fixture) => {
-            const date = new Date(f.start_date)
-            return date.toLocaleDateString('en-US', {
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric',
-              timeZone: 'America/Los_Angeles'
-            })
-          })))
-          
-          console.log('Scheduled game dates:', {
-            count: uniqueDates.length,
-            dates: uniqueDates
-          })
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching scheduled fixtures:', error)
     }
 
     // Combine and de-duplicate fixtures
@@ -448,9 +543,9 @@ export async function GET() {
     })
 
     console.log('Final processed games:', gamesWithValidOdds.length)
-    return NextResponse.json(gamesWithValidOdds)
+    return gamesWithValidOdds
   } catch (error) {
-    console.error('Error in /api/games:', error)
-    return NextResponse.json({ error: 'Failed to fetch games data' }, { status: 500 })
+    console.error('Error processing games data:', error)
+    throw error
   }
 } 

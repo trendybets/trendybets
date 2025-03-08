@@ -25,6 +25,7 @@
     "@radix-ui/react-tooltip": "^1.1.8",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.49.1",
+    "@t3-oss/env-nextjs": "^0.12.0",
     "@tabler/icons-react": "^3.30.0",
     "@tanstack/react-query": "^5.66.9",
     "@tanstack/react-table": "^8.21.2",
@@ -39,6 +40,7 @@
     "date-fns-tz": "^3.2.0",
     "eventsource": "^3.0.5",
     "framer-motion": "^12.4.7",
+    "ioredis": "^5.6.0",
     "lucide-react": "^0.475.0",
     "next": "14.2.16",
     "next-themes": "^0.4.4",
@@ -52,7 +54,8 @@
     "recharts": "^2.15.1",
     "sonner": "^1.7.4",
     "tailwind-merge": "^3.0.1",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@shadcn/ui": "^0.0.4",

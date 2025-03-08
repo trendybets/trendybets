@@ -6,10 +6,11 @@ This document outlines a comprehensive plan for optimizing data retrieval and en
 
 ### 1.1 Database Query Optimization
 
-- [ ] **1.1.1 Implement query caching**
-  - Add Redis or similar in-memory caching for frequently accessed data
-  - Cache player stats, team data, and fixture information with appropriate TTL
-  - Implement cache invalidation strategies for data that changes frequently
+- [x] **1.1.1 Implement query caching**
+  - [x] Add Redis for in-memory caching of frequently accessed data
+  - [x] Cache player stats, team data, and fixture information with appropriate TTL
+  - [x] Implement cache invalidation strategies with force refresh options
+  - [ ] Add cache analytics and monitoring
 
 - [x] **1.1.2 Optimize Supabase queries**
   - [x] Review and add appropriate indexes to frequently queried columns

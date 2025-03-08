@@ -344,15 +344,16 @@ export default function TrendyGamesView() {
   }, [games])
 
   // Function to load games data that can be called multiple times
-  const loadGamesData = async () => {
+  const loadGamesData = async (forceRefresh = false) => {
     try {
       setIsLoading(true)
       
-      // Add cache-busting query parameter
+      // Add cache-busting query parameter and refresh parameter
       const timestamp = new Date().getTime()
-      console.log('Fetching games data with timestamp:', timestamp)
+      const refreshParam = forceRefresh ? '&refresh=true' : ''
+      console.log('Fetching games data with timestamp:', timestamp, forceRefresh ? '(force refresh)' : '')
       
-      const data = await fetch('/api/games?t=' + timestamp, { 
+      const data = await fetch(`/api/games?t=${timestamp}${refreshParam}`, { 
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
@@ -479,8 +480,8 @@ export default function TrendyGamesView() {
 
   // Add a function to manually refresh the data
   const handleRefresh = () => {
-    console.log('Manual refresh triggered')
-    loadGamesData()
+    console.log('Manual refresh triggered with force refresh')
+    loadGamesData(true) // Pass true to force a cache refresh
   }
 
   // Debug log when games state updates

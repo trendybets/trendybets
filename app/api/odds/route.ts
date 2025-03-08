@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/supabase"
 import { normalizeTeamName, normalizePlayerId } from "@/lib/utils"
 import { performance } from 'perf_hooks'
+import { withCache } from "@/lib/redis"
 
 // Add this line to tell Next.js this is a dynamic route
 export const dynamic = 'force-dynamic'
@@ -20,35 +21,27 @@ const supabase = createClient<Database>(
 const calculateHitRate = (arr: number[], line: number) =>
   arr.length ? arr.filter(stat => stat > line).length / arr.length : 0
 
-// Cache for API responses
-const API_CACHE = new Map<string, { data: any, timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+// Redis cache TTL (5 minutes in seconds)
+const CACHE_TTL = 5 * 60;
 
 // Helper function to get cached data or fetch new data
 async function getCachedOrFetch(url: string, options: RequestInit = {}) {
-  const cacheKey = url;
-  const cachedData = API_CACHE.get(cacheKey);
+  const cacheKey = `api:${url}`;
   
-  // If we have cached data and it's not expired, use it
-  if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_TTL) {
-    console.log(`Using cached data for ${url}`);
-    return cachedData.data;
-  }
-  
-  // Otherwise fetch new data
-  console.log(`Fetching fresh data for ${url}`);
-  const response = await fetch(url, options);
-  
-  if (!response.ok) {
-    throw new Error(`Failed to fetch: ${response.status}`);
-  }
-  
-  const data = await response.json();
-  
-  // Cache the new data
-  API_CACHE.set(cacheKey, { data, timestamp: Date.now() });
-  
-  return data;
+  return withCache(
+    cacheKey,
+    async () => {
+      console.log(`Fetching fresh data for ${url}`);
+      const response = await fetch(url, options);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch: ${response.status}`);
+      }
+      
+      return response.json();
+    },
+    CACHE_TTL
+  );
 }
 
 export async function GET(request: Request) {
