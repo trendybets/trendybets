@@ -13,14 +13,20 @@ const redisOptions = {
     // Retry connection with exponential backoff
     const delay = Math.min(times * 50, 2000)
     return delay
-  }
+  },
+  maxRetriesPerRequest: 3,
+  enableOfflineQueue: false
 }
 
 // Create Redis client
 let redisClient: Redis | null = null
+let redisAvailable = false
+
+// In-memory fallback cache
+const memoryCache = new Map<string, { data: any, expiry: number }>()
 
 // Initialize Redis client
-export function getRedisClient(): Redis {
+export function getRedisClient(): Redis | null {
   if (!redisClient) {
     try {
       redisClient = new Redis(redisOptions)
@@ -28,18 +34,26 @@ export function getRedisClient(): Redis {
       // Log connection events
       redisClient.on('connect', () => {
         console.log('Redis client connected')
+        redisAvailable = true
       })
       
       redisClient.on('error', (err) => {
         console.error('Redis client error:', err)
+        redisAvailable = false
       })
       
       redisClient.on('reconnecting', () => {
         console.log('Redis client reconnecting')
       })
+
+      redisClient.on('end', () => {
+        console.log('Redis connection ended')
+        redisAvailable = false
+      })
     } catch (error) {
       console.error('Failed to create Redis client:', error)
-      throw error
+      redisAvailable = false
+      return null
     }
   }
   
@@ -51,6 +65,7 @@ export function closeRedisConnection(): Promise<void> {
   if (redisClient) {
     return redisClient.quit().then(() => {
       redisClient = null
+      redisAvailable = false
       console.log('Redis connection closed')
     })
   }
@@ -64,19 +79,32 @@ export function closeRedisConnection(): Promise<void> {
  * @returns Cached data or null if not found
  */
 export async function getFromCache<T>(key: string): Promise<T | null> {
-  try {
-    const redis = getRedisClient()
-    const cachedData = await redis.get(key)
-    
-    if (!cachedData) {
-      return null
+  // Try Redis first if available
+  if (redisAvailable && redisClient) {
+    try {
+      const cachedData = await redisClient.get(key)
+      
+      if (cachedData) {
+        return JSON.parse(cachedData) as T
+      }
+    } catch (error) {
+      console.error(`Error getting data from Redis cache for key ${key}:`, error)
+      redisAvailable = false
     }
-    
-    return JSON.parse(cachedData) as T
-  } catch (error) {
-    console.error(`Error getting data from cache for key ${key}:`, error)
-    return null
   }
+  
+  // Fallback to memory cache
+  const memCached = memoryCache.get(key)
+  if (memCached && memCached.expiry > Date.now()) {
+    return memCached.data as T
+  }
+  
+  // Clean up expired memory cache entries
+  if (memCached && memCached.expiry <= Date.now()) {
+    memoryCache.delete(key)
+  }
+  
+  return null
 }
 
 /**
@@ -86,12 +114,19 @@ export async function getFromCache<T>(key: string): Promise<T | null> {
  * @param ttl Time to live in seconds (default: 1 hour)
  */
 export async function setCache<T>(key: string, data: T, ttl: number = DEFAULT_TTL): Promise<void> {
-  try {
-    const redis = getRedisClient()
-    await redis.set(key, JSON.stringify(data), 'EX', ttl)
-  } catch (error) {
-    console.error(`Error setting data in cache for key ${key}:`, error)
+  // Try to set in Redis if available
+  if (redisAvailable && redisClient) {
+    try {
+      await redisClient.set(key, JSON.stringify(data), 'EX', ttl)
+    } catch (error) {
+      console.error(`Error setting data in Redis cache for key ${key}:`, error)
+      redisAvailable = false
+    }
   }
+  
+  // Always set in memory cache as fallback
+  const expiryMs = Date.now() + (ttl * 1000)
+  memoryCache.set(key, { data, expiry: expiryMs })
 }
 
 /**
@@ -99,12 +134,18 @@ export async function setCache<T>(key: string, data: T, ttl: number = DEFAULT_TT
  * @param key Cache key
  */
 export async function deleteFromCache(key: string): Promise<void> {
-  try {
-    const redis = getRedisClient()
-    await redis.del(key)
-  } catch (error) {
-    console.error(`Error deleting data from cache for key ${key}:`, error)
+  // Try to delete from Redis if available
+  if (redisAvailable && redisClient) {
+    try {
+      await redisClient.del(key)
+    } catch (error) {
+      console.error(`Error deleting data from Redis cache for key ${key}:`, error)
+      redisAvailable = false
+    }
   }
+  
+  // Always delete from memory cache
+  memoryCache.delete(key)
 }
 
 /**
@@ -112,16 +153,33 @@ export async function deleteFromCache(key: string): Promise<void> {
  * @param pattern Key pattern to match (e.g., "user:*")
  */
 export async function deleteByPattern(pattern: string): Promise<void> {
-  try {
-    const redis = getRedisClient()
-    const keys = await redis.keys(pattern)
-    
-    if (keys.length > 0) {
-      await redis.del(...keys)
-      console.log(`Deleted ${keys.length} keys matching pattern ${pattern}`)
+  // Try to delete from Redis if available
+  if (redisAvailable && redisClient) {
+    try {
+      const keys = await redisClient.keys(pattern)
+      
+      if (keys.length > 0) {
+        await redisClient.del(...keys)
+        console.log(`Deleted ${keys.length} Redis keys matching pattern ${pattern}`)
+      }
+    } catch (error) {
+      console.error(`Error deleting Redis keys with pattern ${pattern}:`, error)
+      redisAvailable = false
     }
-  } catch (error) {
-    console.error(`Error deleting keys with pattern ${pattern}:`, error)
+  }
+  
+  // Delete matching keys from memory cache
+  const regex = new RegExp(pattern.replace('*', '.*'))
+  let count = 0
+  for (const key of Array.from(memoryCache.keys())) {
+    if (regex.test(key)) {
+      memoryCache.delete(key)
+      count++
+    }
+  }
+  
+  if (count > 0) {
+    console.log(`Deleted ${count} memory cache keys matching pattern ${pattern}`)
   }
 }
 

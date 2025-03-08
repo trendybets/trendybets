@@ -15,6 +15,19 @@ A Redis client utility has been created in `lib/redis.ts` that provides:
 - Connection management with retry strategies
 - Functions for getting, setting, and deleting cache entries
 - A wrapper function for caching async operations
+- In-memory fallback cache when Redis is unavailable
+
+### Fallback Mechanism
+
+The caching system includes a fallback mechanism that uses an in-memory cache when Redis is unavailable:
+
+- Automatically detects when Redis is unavailable
+- Seamlessly switches to in-memory cache
+- Maintains the same API for cache operations
+- Attempts to reconnect to Redis in the background
+- Synchronizes data back to Redis when connection is restored
+
+This ensures that the application continues to function even if Redis is temporarily unavailable, providing a more resilient caching solution.
 
 ### Cache Keys
 
@@ -59,10 +72,12 @@ The TrendyGamesView component has been updated to support force refreshing the c
 2. **Improved Response Times**: Cached responses are served much faster than making new API calls.
 3. **Reduced Load**: The application puts less load on external services and databases.
 4. **Better User Experience**: Users experience faster page loads and data updates.
+5. **Increased Resilience**: The application continues to function even when Redis is unavailable.
 
 ## Future Improvements
 
 1. **Selective Cache Invalidation**: Implement more granular cache invalidation strategies.
 2. **Cache Warming**: Proactively cache frequently accessed data during off-peak hours.
 3. **Cache Analytics**: Add monitoring to track cache hit/miss rates and performance metrics.
-4. **Distributed Caching**: Scale the Redis implementation for higher availability and performance. 
+4. **Distributed Caching**: Scale the Redis implementation for higher availability and performance.
+5. **Persistent Fallback Cache**: Add persistence to the in-memory fallback cache to survive application restarts. 
