@@ -10,7 +10,7 @@ import {
 } from '@tanstack/react-table'
 import { PlayerData as BasePlayerData, NextGame, Player } from '../types'
 import { cn } from '@/lib/utils'
-import { PlayerAnalysisDialog } from './player-analysis-dialog'
+import { DynamicPlayerAnalysisDialog } from './dynamic-player-analysis-dialog'
 import { PlayerData } from '../types'
 import { ChevronDown, ChevronUp, Filter, Search, TrendingUp, AlertCircle } from 'lucide-react'
 import {
@@ -429,7 +429,7 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
       )}
 
       {/* Player Analysis Dialog */}
-      <PlayerAnalysisDialog
+      <DynamicPlayerAnalysisDialog
         player={selectedPlayer}
         isOpen={!!selectedPlayer}
         onClose={() => setSelectedPlayer(null)}

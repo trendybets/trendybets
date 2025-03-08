@@ -11,7 +11,7 @@ import {
 import { cn } from '@/lib/utils'
 import { calculateProjection } from '../lib/projections'
 import { PlayerData } from '../types'
-import { TrendsTable } from './trends-table'
+import { DynamicTrendsTable } from './dynamic-trends-table'
 import { CardSkeleton, StatsCardSkeleton } from "@/components/ui/skeleton"
 import { usePlayerOdds, useFilters } from '@/lib/context/app-state'
 import { fetchPlayerOddsData } from '@/lib/services/data-service'
@@ -179,7 +179,7 @@ export default function TrendyPropsView() {
       )}
 
       <div className="sports-card sports-card-elevated">
-        <TrendsTable 
+        <DynamicTrendsTable 
           data={filteredData} 
           isLoading={isLoading && playerOdds.length > 0}
           hasMore={hasMore}
