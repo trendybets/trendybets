@@ -48,21 +48,9 @@ export default function GameResearchView({
   game
 }: GameResearchProps) {
   const [activeTab, setActiveTab] = useState('overview');
-  const [selectedSportsbook, setSelectedSportsbook] = useState('all');
   const [oddsData, setOddsData] = useState<OddsData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'ascending' | 'descending' } | null>(null);
-  
-  // Available sportsbooks
-  const availableSportsbooks = [
-    { value: "all", label: "All Sportsbooks" },
-    { value: "draftkings", label: "DraftKings" },
-    { value: "betmgm", label: "BetMGM" },
-    { value: "caesars", label: "Caesars" },
-    { value: "bet365", label: "Bet365" },
-    { value: "fanduel", label: "FanDuel" },
-    { value: "espn_bet", label: "ESPN Bet" }
-  ];
   
   // Define tabs
   const tabs = [
@@ -73,40 +61,77 @@ export default function GameResearchView({
   ];
 
   // Format date for display
-  const formattedDate = new Date(game.startDate).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
+  const formattedDate = new Date(game.startDate).toLocaleString('en-US', {
     month: 'long',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit'
   });
 
-  // Fetch odds data when the component mounts or game changes
+  // Process odds data from game prop
   useEffect(() => {
-    const fetchOdds = async () => {
-      if (game && game.id) {
-        setIsLoading(true);
-        try {
-          const data = await fetchFixtureOdds(game.id);
-          setOddsData(data);
-        } catch (error) {
-          console.error('Error fetching odds data:', error);
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
+    console.log('Game odds data received:', game.odds);
+    
+    // Convert the odds data from the game prop to the format expected by the component
+    const processedOdds: OddsData[] = [];
+    
+    // Process moneyline odds
+    if (game.odds?.moneyline && game.odds.moneyline.length > 0) {
+      game.odds.moneyline.forEach(odd => {
+        processedOdds.push({
+          market_id: 'moneyline',
+          sportsbook: odd.sportsbook,
+          team_id: odd.team_id,
+          price: odd.price,
+          is_main: true
+        });
+      });
+    }
+    
+    // Process spread odds
+    if (game.odds?.spread && game.odds.spread.length > 0) {
+      game.odds.spread.forEach(odd => {
+        processedOdds.push({
+          market_id: 'point_spread',
+          sportsbook: odd.sportsbook,
+          team_id: odd.team_id,
+          price: odd.price,
+          points: odd.points,
+          is_main: true
+        });
+      });
+    }
+    
+    // Process total odds
+    if (game.odds?.total && game.odds.total.length > 0) {
+      game.odds.total.forEach(odd => {
+        processedOdds.push({
+          market_id: 'total_points',
+          sportsbook: odd.sportsbook,
+          team_id: '', // Total points don't have a team ID
+          price: odd.price,
+          points: odd.points,
+          selection_line: odd.selection_line,
+          is_main: true
+        });
+      });
+    }
+    
+    console.log('Processed odds data:', processedOdds);
+    setOddsData(processedOdds);
+  }, [game.odds]);
 
-    fetchOdds();
-  }, [game]);
+  // Log odds data when it changes
+  useEffect(() => {
+    console.log('Current odds data state:', oddsData);
+    console.log('Moneyline odds:', getMoneylineOdds());
+    console.log('Spread odds:', getSpreadOdds());
+    console.log('Total odds:', getTotalOdds());
+  }, [oddsData]);
 
   // Filter odds data by sportsbook
   const getFilteredOddsData = () => {
-    if (selectedSportsbook === 'all') {
-      return oddsData;
-    }
-    return oddsData.filter(odd => odd.sportsbook.toLowerCase() === selectedSportsbook.toLowerCase());
+    return oddsData;
   };
 
   // Get moneyline odds
@@ -150,8 +175,6 @@ export default function GameResearchView({
 
   // Find best moneyline odds for each team
   const getBestMoneylineOdds = () => {
-    if (selectedSportsbook !== 'all') return null;
-    
     const awayBest = getBestOdds('moneyline', game.awayTeam.id);
     const homeBest = getBestOdds('moneyline', game.homeTeam.id);
     
@@ -163,8 +186,6 @@ export default function GameResearchView({
 
   // Find best spread odds for each team
   const getBestSpreadOdds = () => {
-    if (selectedSportsbook !== 'all') return null;
-    
     const awayBest = getBestOdds('point_spread', game.awayTeam.id);
     const homeBest = getBestOdds('point_spread', game.homeTeam.id);
     
@@ -176,8 +197,6 @@ export default function GameResearchView({
 
   // Find best total odds
   const getBestTotalOdds = () => {
-    if (selectedSportsbook !== 'all') return null;
-    
     const overOdds = getFilteredOddsData()
       .filter(odd => odd.market_id === 'total_points' && odd.selection_line === 'over')
       .sort((a, b) => b.price - a.price);
@@ -356,26 +375,9 @@ export default function GameResearchView({
 
             {activeTab === 'odds' && (
               <div>
-                {/* Sportsbook Selector */}
+                {/* Odds Comparison Title */}
                 <div className="flex items-center justify-between mb-4">
                   <div className="text-lg font-semibold">Odds Comparison</div>
-                  <div className="flex items-center">
-                    <label htmlFor="sportsbook-select" className="mr-2 text-sm text-gray-600">
-                      Sportsbook:
-                    </label>
-                    <select
-                      id="sportsbook-select"
-                      value={selectedSportsbook}
-                      onChange={(e) => setSelectedSportsbook(e.target.value)}
-                      className="border border-gray-300 rounded px-2 py-1 text-sm"
-                    >
-                      {availableSportsbooks.map((book) => (
-                        <option key={book.value} value={book.value}>
-                          {book.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
 
                 {isLoading ? (
@@ -384,287 +386,298 @@ export default function GameResearchView({
                   </div>
                 ) : (
                   <>
-                    {/* Moneyline Odds */}
-                    <div className="mt-6">
-                      <h3 className="text-lg font-semibold mb-2">Moneyline Odds</h3>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                          <thead className="bg-gray-50 dark:bg-gray-700">
-                            <tr>
-                              <th 
-                                scope="col" 
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                                onClick={() => requestSort('sportsbook')}
-                              >
-                                Sportsbook <SortIndicator column="sportsbook" />
-                              </th>
-                              <th 
-                                scope="col" 
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                                onClick={() => requestSort('awayOdds')}
-                              >
-                                {game.awayTeam.name} <SortIndicator column="awayOdds" />
-                              </th>
-                              <th 
-                                scope="col" 
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                                onClick={() => requestSort('homeOdds')}
-                              >
-                                {game.homeTeam.name} <SortIndicator column="homeOdds" />
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                            {getMoneylineOdds().length > 0 ? (
-                              sortData(
-                                getMoneylineOdds()
-                                  .reduce((acc, odd) => {
-                                    const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
-                                    if (existingIndex === -1) {
-                                      acc.push({
-                                        sportsbook: odd.sportsbook,
-                                        awayOdds: odd.team_id === game.awayTeam.id ? odd.price : null,
-                                        homeOdds: odd.team_id === game.homeTeam.id ? odd.price : null
-                                      });
-                                    } else {
-                                      if (odd.team_id === game.awayTeam.id) {
-                                        acc[existingIndex].awayOdds = odd.price;
-                                      } else if (odd.team_id === game.homeTeam.id) {
-                                        acc[existingIndex].homeOdds = odd.price;
-                                      }
-                                    }
-                                    return acc;
-                                  }, [] as { sportsbook: string; awayOdds: number | null; homeOdds: number | null }[]),
-                                sortConfig?.key || 'sportsbook'
-                              )
-                                .map((item, index) => (
-                                  <tr key={index}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                      {item.sportsbook}
-                                    </td>
-                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${
-                                      getBestMoneylineOdds() && item.awayOdds === getBestMoneylineOdds()?.away 
-                                        ? 'font-bold text-green-600 dark:text-green-400' 
-                                        : 'text-gray-500 dark:text-gray-300'
-                                    }`}>
-                                      {item.awayOdds !== null ? formatOddsPrice(item.awayOdds) : '-'}
-                                    </td>
-                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${
-                                      getBestMoneylineOdds() && item.homeOdds === getBestMoneylineOdds()?.home 
-                                        ? 'font-bold text-green-600 dark:text-green-400' 
-                                        : 'text-gray-500 dark:text-gray-300'
-                                    }`}>
-                                      {item.homeOdds !== null ? formatOddsPrice(item.homeOdds) : '-'}
+                    {getMoneylineOdds().length === 0 && getSpreadOdds().length === 0 && getTotalOdds().length === 0 ? (
+                      <div className="bg-gray-50 dark:bg-gray-700 p-8 rounded-lg text-center">
+                        <p className="text-gray-500 dark:text-gray-300 mb-2">No odds data available for this game.</p>
+                        <p className="text-gray-500 dark:text-gray-300 text-sm">
+                          We're currently working on integrating odds from BetMGM, Caesars, DraftKings, and Bet365.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Moneyline Odds */}
+                        <div className="mt-6">
+                          <h3 className="text-lg font-semibold mb-2">Moneyline Odds</h3>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                              <thead className="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                  <th 
+                                    scope="col" 
+                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                    onClick={() => requestSort('sportsbook')}
+                                  >
+                                    Sportsbook <SortIndicator column="sportsbook" />
+                                  </th>
+                                  <th 
+                                    scope="col" 
+                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                    onClick={() => requestSort('awayOdds')}
+                                  >
+                                    {game.awayTeam.name} <SortIndicator column="awayOdds" />
+                                  </th>
+                                  <th 
+                                    scope="col" 
+                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                    onClick={() => requestSort('homeOdds')}
+                                  >
+                                    {game.homeTeam.name} <SortIndicator column="homeOdds" />
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                {getMoneylineOdds().length > 0 ? (
+                                  sortData(
+                                    getMoneylineOdds()
+                                      .reduce((acc, odd) => {
+                                        const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
+                                        if (existingIndex === -1) {
+                                          acc.push({
+                                            sportsbook: odd.sportsbook,
+                                            awayOdds: odd.team_id === game.awayTeam.id ? odd.price : null,
+                                            homeOdds: odd.team_id === game.homeTeam.id ? odd.price : null
+                                          });
+                                        } else {
+                                          if (odd.team_id === game.awayTeam.id) {
+                                            acc[existingIndex].awayOdds = odd.price;
+                                          } else if (odd.team_id === game.homeTeam.id) {
+                                            acc[existingIndex].homeOdds = odd.price;
+                                          }
+                                        }
+                                        return acc;
+                                      }, [] as { sportsbook: string; awayOdds: number | null; homeOdds: number | null }[]),
+                                    sortConfig?.key || 'sportsbook'
+                                  )
+                                    .map((item, index) => (
+                                      <tr key={index}>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                          {item.sportsbook}
+                                        </td>
+                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                          getBestMoneylineOdds() && item.awayOdds === getBestMoneylineOdds()?.away 
+                                            ? 'font-bold text-green-600 dark:text-green-400' 
+                                            : 'text-gray-500 dark:text-gray-300'
+                                        }`}>
+                                          {item.awayOdds !== null ? formatOddsPrice(item.awayOdds) : '-'}
+                                        </td>
+                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                          getBestMoneylineOdds() && item.homeOdds === getBestMoneylineOdds()?.home 
+                                            ? 'font-bold text-green-600 dark:text-green-400' 
+                                            : 'text-gray-500 dark:text-gray-300'
+                                        }`}>
+                                          {item.homeOdds !== null ? formatOddsPrice(item.homeOdds) : '-'}
+                                        </td>
+                                      </tr>
+                                    ))
+                                ) : (
+                                  <tr>
+                                    <td colSpan={3} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-center">
+                                      No moneyline odds available
                                     </td>
                                   </tr>
-                                ))
-                            ) : (
-                              <tr>
-                                <td colSpan={3} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-center">
-                                  No moneyline odds available
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
 
-                    {/* Spread Odds */}
-                    <div className="mt-6">
-                      <h3 className="text-lg font-semibold mb-2">Spread Odds</h3>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                          <thead className="bg-gray-50 dark:bg-gray-700">
-                            <tr>
-                              <th 
-                                scope="col" 
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                                onClick={() => requestSort('sportsbook')}
-                              >
-                                Sportsbook <SortIndicator column="sportsbook" />
-                              </th>
-                              <th 
-                                scope="col" 
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                                onClick={() => requestSort('awaySpread')}
-                              >
-                                {game.awayTeam.name} <SortIndicator column="awaySpread" />
-                              </th>
-                              <th 
-                                scope="col" 
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                                onClick={() => requestSort('homeSpread')}
-                              >
-                                {game.homeTeam.name} <SortIndicator column="homeSpread" />
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                            {getSpreadOdds().length > 0 ? (
-                              sortData(
-                                getSpreadOdds()
-                                  .reduce((acc, odd) => {
-                                    const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
-                                    if (existingIndex === -1) {
-                                      acc.push({
-                                        sportsbook: odd.sportsbook,
-                                        awaySpread: odd.team_id === game.awayTeam.id ? { points: odd.points, price: odd.price } : null,
-                                        homeSpread: odd.team_id === game.homeTeam.id ? { points: odd.points, price: odd.price } : null
-                                      });
-                                    } else {
-                                      if (odd.team_id === game.awayTeam.id) {
-                                        acc[existingIndex].awaySpread = { points: odd.points, price: odd.price };
-                                      } else if (odd.team_id === game.homeTeam.id) {
-                                        acc[existingIndex].homeSpread = { points: odd.points, price: odd.price };
-                                      }
-                                    }
-                                    return acc;
-                                  }, [] as { sportsbook: string; awaySpread: { points?: number; price: number } | null; homeSpread: { points?: number; price: number } | null }[]),
-                                sortConfig?.key || 'sportsbook'
-                              )
-                                .map((item, index) => (
-                                  <tr key={index}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                      {item.sportsbook}
-                                    </td>
-                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${
-                                      getBestSpreadOdds() && 
-                                      item.awaySpread && 
-                                      getBestSpreadOdds()?.away && 
-                                      item.awaySpread.price === getBestSpreadOdds()?.away?.price && 
-                                      item.awaySpread.points === getBestSpreadOdds()?.away?.points
-                                        ? 'font-bold text-green-600 dark:text-green-400' 
-                                        : 'text-gray-500 dark:text-gray-300'
-                                    }`}>
-                                      {item.awaySpread !== null ? `${item.awaySpread.points !== undefined && item.awaySpread.points > 0 ? '+' : ''}${item.awaySpread.points || 0} (${formatOddsPrice(item.awaySpread.price)})` : '-'}
-                                    </td>
-                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${
-                                      getBestSpreadOdds() && 
-                                      item.homeSpread && 
-                                      getBestSpreadOdds()?.home && 
-                                      item.homeSpread.price === getBestSpreadOdds()?.home?.price && 
-                                      item.homeSpread.points === getBestSpreadOdds()?.home?.points
-                                        ? 'font-bold text-green-600 dark:text-green-400' 
-                                        : 'text-gray-500 dark:text-gray-300'
-                                    }`}>
-                                      {item.homeSpread !== null ? `${item.homeSpread.points !== undefined && item.homeSpread.points > 0 ? '+' : ''}${item.homeSpread.points || 0} (${formatOddsPrice(item.homeSpread.price)})` : '-'}
+                        {/* Spread Odds */}
+                        <div className="mt-6">
+                          <h3 className="text-lg font-semibold mb-2">Spread Odds</h3>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                              <thead className="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                  <th 
+                                    scope="col" 
+                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                    onClick={() => requestSort('sportsbook')}
+                                  >
+                                    Sportsbook <SortIndicator column="sportsbook" />
+                                  </th>
+                                  <th 
+                                    scope="col" 
+                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                    onClick={() => requestSort('awaySpread')}
+                                  >
+                                    {game.awayTeam.name} <SortIndicator column="awaySpread" />
+                                  </th>
+                                  <th 
+                                    scope="col" 
+                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                    onClick={() => requestSort('homeSpread')}
+                                  >
+                                    {game.homeTeam.name} <SortIndicator column="homeSpread" />
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                {getSpreadOdds().length > 0 ? (
+                                  sortData(
+                                    getSpreadOdds()
+                                      .reduce((acc, odd) => {
+                                        const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
+                                        if (existingIndex === -1) {
+                                          acc.push({
+                                            sportsbook: odd.sportsbook,
+                                            awaySpread: odd.team_id === game.awayTeam.id ? { points: odd.points, price: odd.price } : null,
+                                            homeSpread: odd.team_id === game.homeTeam.id ? { points: odd.points, price: odd.price } : null
+                                          });
+                                        } else {
+                                          if (odd.team_id === game.awayTeam.id) {
+                                            acc[existingIndex].awaySpread = { points: odd.points, price: odd.price };
+                                          } else if (odd.team_id === game.homeTeam.id) {
+                                            acc[existingIndex].homeSpread = { points: odd.points, price: odd.price };
+                                          }
+                                        }
+                                        return acc;
+                                      }, [] as { sportsbook: string; awaySpread: { points?: number; price: number } | null; homeSpread: { points?: number; price: number } | null }[]),
+                                    sortConfig?.key || 'sportsbook'
+                                  )
+                                    .map((item, index) => (
+                                      <tr key={index}>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                          {item.sportsbook}
+                                        </td>
+                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                          getBestSpreadOdds() && 
+                                          item.awaySpread && 
+                                          getBestSpreadOdds()?.away && 
+                                          item.awaySpread.price === getBestSpreadOdds()?.away?.price && 
+                                          item.awaySpread.points === getBestSpreadOdds()?.away?.points
+                                            ? 'font-bold text-green-600 dark:text-green-400' 
+                                            : 'text-gray-500 dark:text-gray-300'
+                                        }`}>
+                                          {item.awaySpread !== null ? `${item.awaySpread.points !== undefined && item.awaySpread.points > 0 ? '+' : ''}${item.awaySpread.points || 0} (${formatOddsPrice(item.awaySpread.price)})` : '-'}
+                                        </td>
+                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                          getBestSpreadOdds() && 
+                                          item.homeSpread && 
+                                          getBestSpreadOdds()?.home && 
+                                          item.homeSpread.price === getBestSpreadOdds()?.home?.price && 
+                                          item.homeSpread.points === getBestSpreadOdds()?.home?.points
+                                            ? 'font-bold text-green-600 dark:text-green-400' 
+                                            : 'text-gray-500 dark:text-gray-300'
+                                        }`}>
+                                          {item.homeSpread !== null ? `${item.homeSpread.points !== undefined && item.homeSpread.points > 0 ? '+' : ''}${item.homeSpread.points || 0} (${formatOddsPrice(item.homeSpread.price)})` : '-'}
+                                        </td>
+                                      </tr>
+                                    ))
+                                ) : (
+                                  <tr>
+                                    <td colSpan={3} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-center">
+                                      No spread odds available
                                     </td>
                                   </tr>
-                                ))
-                            ) : (
-                              <tr>
-                                <td colSpan={3} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-center">
-                                  No spread odds available
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
 
-                    {/* Total Points Odds */}
-                    <div className="mt-6">
-                      <h3 className="text-lg font-semibold mb-2">Total Points Odds</h3>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                          <thead className="bg-gray-50 dark:bg-gray-700">
-                            <tr>
-                              <th 
-                                scope="col" 
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                                onClick={() => requestSort('sportsbook')}
-                              >
-                                Sportsbook <SortIndicator column="sportsbook" />
-                              </th>
-                              <th 
-                                scope="col" 
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
-                              >
-                                Total
-                              </th>
-                              <th 
-                                scope="col" 
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                                onClick={() => requestSort('overPrice')}
-                              >
-                                Over <SortIndicator column="overPrice" />
-                              </th>
-                              <th 
-                                scope="col" 
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                                onClick={() => requestSort('underPrice')}
-                              >
-                                Under <SortIndicator column="underPrice" />
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                            {getTotalOdds().length > 0 ? (
-                              sortData(
-                                getTotalOdds()
-                                  .reduce((acc, odd) => {
-                                    const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
-                                    const isOver = odd.selection_line === 'over';
-                                    
-                                    if (existingIndex === -1) {
-                                      acc.push({
-                                        sportsbook: odd.sportsbook,
-                                        total: odd.points,
-                                        overPrice: isOver ? odd.price : null,
-                                        underPrice: !isOver ? odd.price : null
-                                      });
-                                    } else {
-                                      if (isOver) {
-                                        acc[existingIndex].overPrice = odd.price;
-                                      } else {
-                                        acc[existingIndex].underPrice = odd.price;
-                                      }
-                                      // Update total points if not already set
-                                      if (!acc[existingIndex].total && odd.points) {
-                                        acc[existingIndex].total = odd.points;
-                                      }
-                                    }
-                                    return acc;
-                                  }, [] as { sportsbook: string; total?: number; overPrice: number | null; underPrice: number | null }[]),
-                                sortConfig?.key || 'sportsbook'
-                              )
-                                .map((item, index) => (
-                                  <tr key={index}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                      {item.sportsbook}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                                      {item.total || '-'}
-                                    </td>
-                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${
-                                      getBestTotalOdds() && item.overPrice === getBestTotalOdds()?.over
-                                        ? 'font-bold text-green-600 dark:text-green-400' 
-                                        : 'text-gray-500 dark:text-gray-300'
-                                    }`}>
-                                      {item.overPrice !== null ? formatOddsPrice(item.overPrice) : '-'}
-                                    </td>
-                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${
-                                      getBestTotalOdds() && item.underPrice === getBestTotalOdds()?.under
-                                        ? 'font-bold text-green-600 dark:text-green-400' 
-                                        : 'text-gray-500 dark:text-gray-300'
-                                    }`}>
-                                      {item.underPrice !== null ? formatOddsPrice(item.underPrice) : '-'}
+                        {/* Total Points Odds */}
+                        <div className="mt-6">
+                          <h3 className="text-lg font-semibold mb-2">Total Points Odds</h3>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                              <thead className="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                  <th 
+                                    scope="col" 
+                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                    onClick={() => requestSort('sportsbook')}
+                                  >
+                                    Sportsbook <SortIndicator column="sportsbook" />
+                                  </th>
+                                  <th 
+                                    scope="col" 
+                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                  >
+                                    Total
+                                  </th>
+                                  <th 
+                                    scope="col" 
+                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                    onClick={() => requestSort('overPrice')}
+                                  >
+                                    Over <SortIndicator column="overPrice" />
+                                  </th>
+                                  <th 
+                                    scope="col" 
+                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                    onClick={() => requestSort('underPrice')}
+                                  >
+                                    Under <SortIndicator column="underPrice" />
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                {getTotalOdds().length > 0 ? (
+                                  sortData(
+                                    getTotalOdds()
+                                      .reduce((acc, odd) => {
+                                        const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
+                                        const isOver = odd.selection_line === 'over';
+                                        
+                                        if (existingIndex === -1) {
+                                          acc.push({
+                                            sportsbook: odd.sportsbook,
+                                            total: odd.points,
+                                            overPrice: isOver ? odd.price : null,
+                                            underPrice: !isOver ? odd.price : null
+                                          });
+                                        } else {
+                                          if (isOver) {
+                                            acc[existingIndex].overPrice = odd.price;
+                                          } else {
+                                            acc[existingIndex].underPrice = odd.price;
+                                          }
+                                          // Update total points if not already set
+                                          if (!acc[existingIndex].total && odd.points) {
+                                            acc[existingIndex].total = odd.points;
+                                          }
+                                        }
+                                        return acc;
+                                      }, [] as { sportsbook: string; total?: number; overPrice: number | null; underPrice: number | null }[]),
+                                    sortConfig?.key || 'sportsbook'
+                                  )
+                                    .map((item, index) => (
+                                      <tr key={index}>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                          {item.sportsbook}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                          {item.total || '-'}
+                                        </td>
+                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                          getBestTotalOdds() && item.overPrice === getBestTotalOdds()?.over
+                                            ? 'font-bold text-green-600 dark:text-green-400' 
+                                            : 'text-gray-500 dark:text-gray-300'
+                                        }`}>
+                                          {item.overPrice !== null ? formatOddsPrice(item.overPrice) : '-'}
+                                        </td>
+                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                          getBestTotalOdds() && item.underPrice === getBestTotalOdds()?.under
+                                            ? 'font-bold text-green-600 dark:text-green-400' 
+                                            : 'text-gray-500 dark:text-gray-300'
+                                        }`}>
+                                          {item.underPrice !== null ? formatOddsPrice(item.underPrice) : '-'}
+                                        </td>
+                                      </tr>
+                                    ))
+                                ) : (
+                                  <tr>
+                                    <td colSpan={4} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-center">
+                                      No total points odds available
                                     </td>
                                   </tr>
-                                ))
-                            ) : (
-                              <tr>
-                                <td colSpan={4} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-center">
-                                  No total points odds available
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
               </div>

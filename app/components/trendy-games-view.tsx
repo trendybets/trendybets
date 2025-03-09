@@ -601,6 +601,16 @@ export default function TrendyGamesView() {
 
   // Add a function to open the research modal
   const handleOpenResearch = (game: TableRow) => {
+    console.log('Opening research modal for game:', {
+      id: game.id,
+      homeTeam: game.homeTeam.name,
+      awayTeam: game.awayTeam.name
+    });
+    
+    // Find the original fixture with full odds data
+    const fixture = games.find((f: Game) => f.id === game.id);
+    console.log('Found fixture with odds:', fixture);
+    
     setResearchModal({
       isOpen: true,
       gameId: game.id,
@@ -768,7 +778,11 @@ export default function TrendyGamesView() {
           homeTeam: researchModal.homeTeam,
           awayTeam: researchModal.awayTeam,
           startDate: researchModal.startDate,
-          odds: {}
+          odds: {
+            moneyline: games.find((f: Game) => f.id === researchModal.gameId)?.odds?.moneyline || [],
+            spread: games.find((f: Game) => f.id === researchModal.gameId)?.odds?.spread || [],
+            total: games.find((f: Game) => f.id === researchModal.gameId)?.odds?.total || []
+          }
         }}
       />
     </div>
@@ -835,6 +849,17 @@ function OddsTable({
 
   const tableData = useMemo(() => 
     fixtures.map(fixture => {
+      console.log('Processing fixture:', {
+        id: fixture.id,
+        homeTeam: fixture.home_team.name,
+        awayTeam: fixture.away_team.name,
+        hasOdds: {
+          moneyline: fixture.odds?.moneyline?.length || 0,
+          spread: fixture.odds?.spread?.length || 0,
+          total: fixture.odds?.total?.length || 0
+        }
+      });
+      
       // Find best spread for each team across all sportsbooks
       const homeSpreadOdds = fixture.odds?.spread?.filter(odd => 
         odd.is_home && SUPPORTED_SPORTSBOOKS.includes(odd.sportsbook.toLowerCase())
