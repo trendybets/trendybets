@@ -17,7 +17,7 @@ import {
 import { ChevronRightIcon, ChevronLeftIcon } from 'lucide-react'
 import { Line } from 'react-chartjs-2'
 import { fetchGames } from '../lib/api'
-import GameResearchViewOptimized from './game-research-view-optimized'
+import GameResearchView from './game-research-view'
 
 type Fixture = Database['public']['Tables']['fixtures']['Row'] & {
   home_team: Database['public']['Tables']['teams']['Row']
@@ -760,7 +760,7 @@ export default function TrendyGamesView() {
       <TrendsModal />
       
       {/* Add the research modal */}
-      <GameResearchViewOptimized
+      <GameResearchView
         isOpen={researchModal.isOpen}
         onClose={() => setResearchModal({ ...researchModal, isOpen: false })}
         game={{

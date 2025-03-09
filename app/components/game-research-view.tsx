@@ -48,12 +48,11 @@ export default function GameResearchView({
   game
 }: GameResearchProps) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [selectedSportsbook, setSelectedSportsbook] = useState('all');
   const [oddsData, setOddsData] = useState<OddsData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'ascending' | 'descending' } | null>(null);
   
-  // State for selected sportsbook
-  const [selectedSportsbook, setSelectedSportsbook] = useState<string>("all");
-
   // Available sportsbooks
   const availableSportsbooks = [
     { value: "all", label: "All Sportsbooks" },
@@ -68,9 +67,9 @@ export default function GameResearchView({
   // Define tabs
   const tabs = [
     { id: 'overview', name: 'Overview' },
-    { id: 'odds', name: 'Game Odds' },
-    { id: 'props', name: 'Player Props' },
-    { id: 'stats', name: 'Team Statistics' }
+    { id: 'odds', name: 'Odds' },
+    { id: 'stats', name: 'Team Stats' },
+    { id: 'props', name: 'Player Props' }
   ];
 
   // Format date for display
@@ -147,6 +146,90 @@ export default function GameResearchView({
       });
     
     return odds.length > 0 ? odds[0] : null;
+  };
+
+  // Find best moneyline odds for each team
+  const getBestMoneylineOdds = () => {
+    if (selectedSportsbook !== 'all') return null;
+    
+    const awayBest = getBestOdds('moneyline', game.awayTeam.id);
+    const homeBest = getBestOdds('moneyline', game.homeTeam.id);
+    
+    return {
+      away: awayBest ? awayBest.price : null,
+      home: homeBest ? homeBest.price : null
+    };
+  };
+
+  // Find best spread odds for each team
+  const getBestSpreadOdds = () => {
+    if (selectedSportsbook !== 'all') return null;
+    
+    const awayBest = getBestOdds('point_spread', game.awayTeam.id);
+    const homeBest = getBestOdds('point_spread', game.homeTeam.id);
+    
+    return {
+      away: awayBest ? { points: awayBest.points, price: awayBest.price } : null,
+      home: homeBest ? { points: homeBest.points, price: homeBest.price } : null
+    };
+  };
+
+  // Find best total odds
+  const getBestTotalOdds = () => {
+    if (selectedSportsbook !== 'all') return null;
+    
+    const overOdds = getFilteredOddsData()
+      .filter(odd => odd.market_id === 'total_points' && odd.selection_line === 'over')
+      .sort((a, b) => b.price - a.price);
+    
+    const underOdds = getFilteredOddsData()
+      .filter(odd => odd.market_id === 'total_points' && odd.selection_line === 'under')
+      .sort((a, b) => b.price - a.price);
+    
+    return {
+      over: overOdds.length > 0 ? overOdds[0].price : null,
+      under: underOdds.length > 0 ? underOdds[0].price : null
+    };
+  };
+
+  // Sort function for odds tables
+  const sortData = <T extends Record<string, any>>(data: T[], key: string): T[] => {
+    if (!sortConfig || sortConfig.key !== key) return data;
+    
+    return [...data].sort((a, b) => {
+      if (a[key] === null) return 1;
+      if (b[key] === null) return -1;
+      
+      if (a[key] < b[key]) {
+        return sortConfig.direction === 'ascending' ? -1 : 1;
+      }
+      if (a[key] > b[key]) {
+        return sortConfig.direction === 'ascending' ? 1 : -1;
+      }
+      return 0;
+    });
+  };
+
+  // Request sort for a specific column
+  const requestSort = (key: string) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // Get sort direction for a column
+  const getSortDirection = (key: string) => {
+    if (!sortConfig || sortConfig.key !== key) return null;
+    return sortConfig.direction;
+  };
+
+  // Sort indicator component
+  const SortIndicator = ({ column }: { column: string }) => {
+    const direction = getSortDirection(column);
+    if (!direction) return <span className="ml-1">↕</span>;
+    return <span className="ml-1">{direction === 'ascending' ? '↑' : '↓'}</span>;
   };
 
   if (!isOpen) return null;
@@ -308,46 +391,69 @@ export default function GameResearchView({
                         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                           <thead className="bg-gray-50 dark:bg-gray-700">
                             <tr>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                Sportsbook
+                              <th 
+                                scope="col" 
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                onClick={() => requestSort('sportsbook')}
+                              >
+                                Sportsbook <SortIndicator column="sportsbook" />
                               </th>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                {game.awayTeam.name}
+                              <th 
+                                scope="col" 
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                onClick={() => requestSort('awayOdds')}
+                              >
+                                {game.awayTeam.name} <SortIndicator column="awayOdds" />
                               </th>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                {game.homeTeam.name}
+                              <th 
+                                scope="col" 
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                onClick={() => requestSort('homeOdds')}
+                              >
+                                {game.homeTeam.name} <SortIndicator column="homeOdds" />
                               </th>
                             </tr>
                           </thead>
                           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                             {getMoneylineOdds().length > 0 ? (
-                              getMoneylineOdds()
-                                .reduce((acc, odd) => {
-                                  const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
-                                  if (existingIndex === -1) {
-                                    acc.push({
-                                      sportsbook: odd.sportsbook,
-                                      awayOdds: odd.team_id === game.awayTeam.id ? odd.price : null,
-                                      homeOdds: odd.team_id === game.homeTeam.id ? odd.price : null
-                                    });
-                                  } else {
-                                    if (odd.team_id === game.awayTeam.id) {
-                                      acc[existingIndex].awayOdds = odd.price;
-                                    } else if (odd.team_id === game.homeTeam.id) {
-                                      acc[existingIndex].homeOdds = odd.price;
+                              sortData(
+                                getMoneylineOdds()
+                                  .reduce((acc, odd) => {
+                                    const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
+                                    if (existingIndex === -1) {
+                                      acc.push({
+                                        sportsbook: odd.sportsbook,
+                                        awayOdds: odd.team_id === game.awayTeam.id ? odd.price : null,
+                                        homeOdds: odd.team_id === game.homeTeam.id ? odd.price : null
+                                      });
+                                    } else {
+                                      if (odd.team_id === game.awayTeam.id) {
+                                        acc[existingIndex].awayOdds = odd.price;
+                                      } else if (odd.team_id === game.homeTeam.id) {
+                                        acc[existingIndex].homeOdds = odd.price;
+                                      }
                                     }
-                                  }
-                                  return acc;
-                                }, [] as { sportsbook: string; awayOdds: number | null; homeOdds: number | null }[])
+                                    return acc;
+                                  }, [] as { sportsbook: string; awayOdds: number | null; homeOdds: number | null }[]),
+                                sortConfig?.key || 'sportsbook'
+                              )
                                 .map((item, index) => (
                                   <tr key={index}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                       {item.sportsbook}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                      getBestMoneylineOdds() && item.awayOdds === getBestMoneylineOdds()?.away 
+                                        ? 'font-bold text-green-600 dark:text-green-400' 
+                                        : 'text-gray-500 dark:text-gray-300'
+                                    }`}>
                                       {item.awayOdds !== null ? formatOddsPrice(item.awayOdds) : '-'}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                      getBestMoneylineOdds() && item.homeOdds === getBestMoneylineOdds()?.home 
+                                        ? 'font-bold text-green-600 dark:text-green-400' 
+                                        : 'text-gray-500 dark:text-gray-300'
+                                    }`}>
                                       {item.homeOdds !== null ? formatOddsPrice(item.homeOdds) : '-'}
                                     </td>
                                   </tr>
@@ -371,46 +477,77 @@ export default function GameResearchView({
                         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                           <thead className="bg-gray-50 dark:bg-gray-700">
                             <tr>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                Sportsbook
+                              <th 
+                                scope="col" 
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                onClick={() => requestSort('sportsbook')}
+                              >
+                                Sportsbook <SortIndicator column="sportsbook" />
                               </th>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                {game.awayTeam.name}
+                              <th 
+                                scope="col" 
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                onClick={() => requestSort('awaySpread')}
+                              >
+                                {game.awayTeam.name} <SortIndicator column="awaySpread" />
                               </th>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                {game.homeTeam.name}
+                              <th 
+                                scope="col" 
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                onClick={() => requestSort('homeSpread')}
+                              >
+                                {game.homeTeam.name} <SortIndicator column="homeSpread" />
                               </th>
                             </tr>
                           </thead>
                           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                             {getSpreadOdds().length > 0 ? (
-                              getSpreadOdds()
-                                .reduce((acc, odd) => {
-                                  const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
-                                  if (existingIndex === -1) {
-                                    acc.push({
-                                      sportsbook: odd.sportsbook,
-                                      awaySpread: odd.team_id === game.awayTeam.id ? { points: odd.points, price: odd.price } : null,
-                                      homeSpread: odd.team_id === game.homeTeam.id ? { points: odd.points, price: odd.price } : null
-                                    });
-                                  } else {
-                                    if (odd.team_id === game.awayTeam.id) {
-                                      acc[existingIndex].awaySpread = { points: odd.points, price: odd.price };
-                                    } else if (odd.team_id === game.homeTeam.id) {
-                                      acc[existingIndex].homeSpread = { points: odd.points, price: odd.price };
+                              sortData(
+                                getSpreadOdds()
+                                  .reduce((acc, odd) => {
+                                    const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
+                                    if (existingIndex === -1) {
+                                      acc.push({
+                                        sportsbook: odd.sportsbook,
+                                        awaySpread: odd.team_id === game.awayTeam.id ? { points: odd.points, price: odd.price } : null,
+                                        homeSpread: odd.team_id === game.homeTeam.id ? { points: odd.points, price: odd.price } : null
+                                      });
+                                    } else {
+                                      if (odd.team_id === game.awayTeam.id) {
+                                        acc[existingIndex].awaySpread = { points: odd.points, price: odd.price };
+                                      } else if (odd.team_id === game.homeTeam.id) {
+                                        acc[existingIndex].homeSpread = { points: odd.points, price: odd.price };
+                                      }
                                     }
-                                  }
-                                  return acc;
-                                }, [] as { sportsbook: string; awaySpread: { points?: number; price: number } | null; homeSpread: { points?: number; price: number } | null }[])
+                                    return acc;
+                                  }, [] as { sportsbook: string; awaySpread: { points?: number; price: number } | null; homeSpread: { points?: number; price: number } | null }[]),
+                                sortConfig?.key || 'sportsbook'
+                              )
                                 .map((item, index) => (
                                   <tr key={index}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                       {item.sportsbook}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                      getBestSpreadOdds() && 
+                                      item.awaySpread && 
+                                      getBestSpreadOdds()?.away && 
+                                      item.awaySpread.price === getBestSpreadOdds()?.away?.price && 
+                                      item.awaySpread.points === getBestSpreadOdds()?.away?.points
+                                        ? 'font-bold text-green-600 dark:text-green-400' 
+                                        : 'text-gray-500 dark:text-gray-300'
+                                    }`}>
                                       {item.awaySpread !== null ? `${item.awaySpread.points !== undefined && item.awaySpread.points > 0 ? '+' : ''}${item.awaySpread.points || 0} (${formatOddsPrice(item.awaySpread.price)})` : '-'}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                      getBestSpreadOdds() && 
+                                      item.homeSpread && 
+                                      getBestSpreadOdds()?.home && 
+                                      item.homeSpread.price === getBestSpreadOdds()?.home?.price && 
+                                      item.homeSpread.points === getBestSpreadOdds()?.home?.points
+                                        ? 'font-bold text-green-600 dark:text-green-400' 
+                                        : 'text-gray-500 dark:text-gray-300'
+                                    }`}>
                                       {item.homeSpread !== null ? `${item.homeSpread.points !== undefined && item.homeSpread.points > 0 ? '+' : ''}${item.homeSpread.points || 0} (${formatOddsPrice(item.homeSpread.price)})` : '-'}
                                     </td>
                                   </tr>
@@ -434,47 +571,65 @@ export default function GameResearchView({
                         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                           <thead className="bg-gray-50 dark:bg-gray-700">
                             <tr>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                Sportsbook
+                              <th 
+                                scope="col" 
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                onClick={() => requestSort('sportsbook')}
+                              >
+                                Sportsbook <SortIndicator column="sportsbook" />
                               </th>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              <th 
+                                scope="col" 
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                              >
                                 Total
                               </th>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                Over
+                              <th 
+                                scope="col" 
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                onClick={() => requestSort('overPrice')}
+                              >
+                                Over <SortIndicator column="overPrice" />
                               </th>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                Under
+                              <th 
+                                scope="col" 
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                onClick={() => requestSort('underPrice')}
+                              >
+                                Under <SortIndicator column="underPrice" />
                               </th>
                             </tr>
                           </thead>
                           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                             {getTotalOdds().length > 0 ? (
-                              getTotalOdds()
-                                .reduce((acc, odd) => {
-                                  const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
-                                  const isOver = odd.selection_line === 'over';
-                                  
-                                  if (existingIndex === -1) {
-                                    acc.push({
-                                      sportsbook: odd.sportsbook,
-                                      total: odd.points,
-                                      overPrice: isOver ? odd.price : null,
-                                      underPrice: !isOver ? odd.price : null
-                                    });
-                                  } else {
-                                    if (isOver) {
-                                      acc[existingIndex].overPrice = odd.price;
+                              sortData(
+                                getTotalOdds()
+                                  .reduce((acc, odd) => {
+                                    const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
+                                    const isOver = odd.selection_line === 'over';
+                                    
+                                    if (existingIndex === -1) {
+                                      acc.push({
+                                        sportsbook: odd.sportsbook,
+                                        total: odd.points,
+                                        overPrice: isOver ? odd.price : null,
+                                        underPrice: !isOver ? odd.price : null
+                                      });
                                     } else {
-                                      acc[existingIndex].underPrice = odd.price;
+                                      if (isOver) {
+                                        acc[existingIndex].overPrice = odd.price;
+                                      } else {
+                                        acc[existingIndex].underPrice = odd.price;
+                                      }
+                                      // Update total points if not already set
+                                      if (!acc[existingIndex].total && odd.points) {
+                                        acc[existingIndex].total = odd.points;
+                                      }
                                     }
-                                    // Update total points if not already set
-                                    if (!acc[existingIndex].total && odd.points) {
-                                      acc[existingIndex].total = odd.points;
-                                    }
-                                  }
-                                  return acc;
-                                }, [] as { sportsbook: string; total?: number; overPrice: number | null; underPrice: number | null }[])
+                                    return acc;
+                                  }, [] as { sportsbook: string; total?: number; overPrice: number | null; underPrice: number | null }[]),
+                                sortConfig?.key || 'sportsbook'
+                              )
                                 .map((item, index) => (
                                   <tr key={index}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
@@ -483,10 +638,18 @@ export default function GameResearchView({
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                                       {item.total || '-'}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                      getBestTotalOdds() && item.overPrice === getBestTotalOdds()?.over
+                                        ? 'font-bold text-green-600 dark:text-green-400' 
+                                        : 'text-gray-500 dark:text-gray-300'
+                                    }`}>
                                       {item.overPrice !== null ? formatOddsPrice(item.overPrice) : '-'}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                                      getBestTotalOdds() && item.underPrice === getBestTotalOdds()?.under
+                                        ? 'font-bold text-green-600 dark:text-green-400' 
+                                        : 'text-gray-500 dark:text-gray-300'
+                                    }`}>
                                       {item.underPrice !== null ? formatOddsPrice(item.underPrice) : '-'}
                                     </td>
                                   </tr>
@@ -507,56 +670,112 @@ export default function GameResearchView({
               </div>
             )}
 
-            {activeTab === 'props' && (
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-lg font-semibold">Player Props</div>
-                  <div className="flex items-center space-x-2">
-                    <select
-                      className="border border-gray-300 rounded px-2 py-1 text-sm"
-                      defaultValue="all"
-                    >
-                      <option value="all">All Players</option>
-                      <option value={`${game.homeTeam.id}`}>{game.homeTeam.name} Players</option>
-                      <option value={`${game.awayTeam.id}`}>{game.awayTeam.name} Players</option>
-                    </select>
-                    <select
-                      className="border border-gray-300 rounded px-2 py-1 text-sm"
-                      defaultValue="all"
-                    >
-                      <option value="all">All Prop Types</option>
-                      <option value="points">Points</option>
-                      <option value="rebounds">Rebounds</option>
-                      <option value="assists">Assists</option>
-                      <option value="threes">Three Pointers</option>
-                    </select>
-                  </div>
-                </div>
-                
-                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center">
-                  <p className="text-gray-500 dark:text-gray-300">Player props data will be implemented in the next phase.</p>
-                  <p className="text-gray-500 dark:text-gray-300 mt-2">This section will display player props for both teams with odds comparison across sportsbooks.</p>
-                </div>
-              </div>
-            )}
-
             {activeTab === 'stats' && (
               <div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
                     <h3 className="text-lg font-semibold mb-4">{game.awayTeam.name} Statistics</h3>
                     <div className="space-y-3">
-                      <p className="text-gray-500 dark:text-gray-300">Team statistics will be implemented in the next phase.</p>
-                      <p className="text-gray-500 dark:text-gray-300">This section will display team statistics, recent form, and head-to-head records.</p>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Points Per Game</span>
+                        <span className="font-medium">--</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Rebounds Per Game</span>
+                        <span className="font-medium">--</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Assists Per Game</span>
+                        <span className="font-medium">--</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Field Goal %</span>
+                        <span className="font-medium">--</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">3-Point %</span>
+                        <span className="font-medium">--</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Recent Form</span>
+                        <span className="font-medium">--</span>
+                      </div>
                     </div>
                   </div>
                   
                   <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
                     <h3 className="text-lg font-semibold mb-4">{game.homeTeam.name} Statistics</h3>
                     <div className="space-y-3">
-                      <p className="text-gray-500 dark:text-gray-300">Team statistics will be implemented in the next phase.</p>
-                      <p className="text-gray-500 dark:text-gray-300">This section will display team statistics, recent form, and head-to-head records.</p>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Points Per Game</span>
+                        <span className="font-medium">--</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Rebounds Per Game</span>
+                        <span className="font-medium">--</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Assists Per Game</span>
+                        <span className="font-medium">--</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Field Goal %</span>
+                        <span className="font-medium">--</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">3-Point %</span>
+                        <span className="font-medium">--</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Recent Form</span>
+                        <span className="font-medium">--</span>
+                      </div>
                     </div>
+                  </div>
+                </div>
+                
+                <div className="mt-6 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-4">Head-to-Head Record</h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600 dark:text-gray-400">Last 5 Games</span>
+                      <div className="flex space-x-2">
+                        <span className="font-medium">{game.awayTeam.name}: --</span>
+                        <span className="font-medium">{game.homeTeam.name}: --</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600 dark:text-gray-400">This Season</span>
+                      <div className="flex space-x-2">
+                        <span className="font-medium">{game.awayTeam.name}: --</span>
+                        <span className="font-medium">{game.homeTeam.name}: --</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600 dark:text-gray-400">Average Score</span>
+                      <div className="flex space-x-2">
+                        <span className="font-medium">{game.awayTeam.name}: --</span>
+                        <span className="font-medium">{game.homeTeam.name}: --</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Note: Team statistics will be implemented in the next phase. This section will display actual team statistics, recent form, and head-to-head records.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'props' && (
+              <div>
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-4">Player Props</h3>
+                  <div className="space-y-3">
+                    <p className="text-gray-500 dark:text-gray-300">
+                      Player props will be implemented in the next phase. This section will display player props for the selected game, with odds comparison across sportsbooks.
+                    </p>
                   </div>
                 </div>
               </div>
