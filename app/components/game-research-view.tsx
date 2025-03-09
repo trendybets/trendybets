@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { fetchPlayerOdds } from '../lib/api'
+import { PlayerData } from '../types'
 
 // Define Team interface
 interface Team {
@@ -50,6 +52,10 @@ export default function GameResearchView({
   const [oddsData, setOddsData] = useState<OddsData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'ascending' | 'descending' } | null>(null);
+  const [playerProps, setPlayerProps] = useState<PlayerData[]>([]);
+  const [isLoadingProps, setIsLoadingProps] = useState(false);
+  const [selectedStatType, setSelectedStatType] = useState('points');
+  const [selectedTeam, setSelectedTeam] = useState('all');
   
   // Define tabs
   const tabs = [
@@ -119,6 +125,36 @@ export default function GameResearchView({
     console.log('Processed odds data:', processedOdds);
     setOddsData(processedOdds);
   }, [game.odds]);
+
+  // Fetch player props when the component mounts or game changes
+  useEffect(() => {
+    const fetchProps = async () => {
+      if (game && game.id) {
+        setIsLoadingProps(true);
+        try {
+          // Fetch player props for this specific game
+          const response = await fetchPlayerOdds(0); // Fetch all fixtures
+          
+          // Filter props for this specific game
+          const gameProps = response.data.filter(prop => 
+            prop.next_game && 
+            prop.next_game.fixture_id === game.id
+          );
+          
+          console.log(`Found ${gameProps.length} player props for game ${game.id}`);
+          setPlayerProps(gameProps);
+        } catch (error) {
+          console.error('Error fetching player props:', error);
+        } finally {
+          setIsLoadingProps(false);
+        }
+      }
+    };
+
+    if (activeTab === 'props') {
+      fetchProps();
+    }
+  }, [game.id, activeTab]);
 
   // Log odds data when it changes
   useEffect(() => {
@@ -782,14 +818,131 @@ export default function GameResearchView({
 
             {activeTab === 'props' && (
               <div>
-                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold mb-4">Player Props</h3>
-                  <div className="space-y-3">
-                    <p className="text-gray-500 dark:text-gray-300">
-                      Player props will be implemented in the next phase. This section will display player props for the selected game, with odds comparison across sportsbooks.
-                    </p>
+                {/* Player Props Filters */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-lg font-semibold">Player Props</div>
+                  <div className="flex items-center space-x-2">
+                    <select
+                      className="border border-gray-300 rounded px-2 py-1 text-sm"
+                      value={selectedStatType}
+                      onChange={(e) => setSelectedStatType(e.target.value)}
+                    >
+                      <option value="points">Points</option>
+                      <option value="assists">Assists</option>
+                      <option value="rebounds">Rebounds</option>
+                    </select>
+                    <select
+                      className="border border-gray-300 rounded px-2 py-1 text-sm"
+                      value={selectedTeam}
+                      onChange={(e) => setSelectedTeam(e.target.value)}
+                    >
+                      <option value="all">All Teams</option>
+                      <option value={game.homeTeam.id}>{game.homeTeam.name}</option>
+                      <option value={game.awayTeam.id}>{game.awayTeam.name}</option>
+                    </select>
                   </div>
                 </div>
+                
+                {isLoadingProps ? (
+                  <div className="flex justify-center items-center h-64">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                  </div>
+                ) : (
+                  <>
+                    {playerProps.length === 0 ? (
+                      <div className="bg-gray-50 dark:bg-gray-700 p-8 rounded-lg text-center">
+                        <p className="text-gray-500 dark:text-gray-300 mb-2">No player props available for this game.</p>
+                        <p className="text-gray-500 dark:text-gray-300 text-sm">
+                          We're currently working on integrating player props data.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {playerProps
+                          .filter(prop => 
+                            (selectedStatType === 'all' || prop.stat_type === selectedStatType) &&
+                            (selectedTeam === 'all' || prop.player.team === selectedTeam)
+                          )
+                          .map((prop, index) => (
+                            <div key={index} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                              <div className="flex items-center mb-3">
+                                <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mr-3">
+                                  {prop.player.image_url ? (
+                                    <Image
+                                      src={prop.player.image_url}
+                                      alt={prop.player.name}
+                                      width={40}
+                                      height={40}
+                                      className="rounded-full"
+                                    />
+                                  ) : (
+                                    <span className="text-lg font-bold text-gray-500">{prop.player.name.charAt(0)}</span>
+                                  )}
+                                </div>
+                                <div>
+                                  <h3 className="font-semibold text-gray-900 dark:text-white">{prop.player.name}</h3>
+                                  <p className="text-sm text-gray-500 dark:text-gray-400">{prop.player.team} • {prop.player.position}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-2 mb-3">
+                                <div className="bg-gray-50 dark:bg-gray-700 p-2 rounded">
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">Line</p>
+                                  <p className="font-semibold text-gray-900 dark:text-white">{prop.line} {prop.stat_type}</p>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700 p-2 rounded">
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">Hit Rate (Last 5)</p>
+                                  <p className={`font-semibold ${
+                                    prop.hit_rates[prop.stat_type as keyof typeof prop.hit_rates]?.last5 > 0.6 
+                                      ? 'text-green-600 dark:text-green-400' 
+                                      : 'text-gray-900 dark:text-white'
+                                  }`}>
+                                    {Math.round(prop.hit_rates[prop.stat_type as keyof typeof prop.hit_rates]?.last5 * 100)}%
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-3 gap-2">
+                                <div className="bg-gray-50 dark:bg-gray-700 p-2 rounded">
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">Last 5</p>
+                                  <p className="font-semibold text-gray-900 dark:text-white">
+                                    {prop.averages[prop.stat_type as keyof typeof prop.averages]?.last5.toFixed(1)}
+                                  </p>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700 p-2 rounded">
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">Last 10</p>
+                                  <p className="font-semibold text-gray-900 dark:text-white">
+                                    {prop.averages[prop.stat_type as keyof typeof prop.averages]?.last10.toFixed(1)}
+                                  </p>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700 p-2 rounded">
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">Season</p>
+                                  <p className="font-semibold text-gray-900 dark:text-white">
+                                    {prop.averages[prop.stat_type as keyof typeof prop.averages]?.season.toFixed(1)}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              {prop.recommended_bet && (
+                                <div className={`mt-3 p-2 rounded text-sm ${
+                                  prop.recommended_bet.type === 'over' 
+                                    ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' 
+                                    : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                                }`}>
+                                  <span className="font-semibold">
+                                    {prop.recommended_bet.type === 'over' ? 'Over' : 'Under'} {prop.line}
+                                  </span> • 
+                                  <span className="ml-1">
+                                    {prop.recommended_bet.confidence} confidence
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </div>
