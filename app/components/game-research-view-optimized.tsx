@@ -1,31 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Line } from 'react-chartjs-2'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip as ChartTooltip,
-  Legend,
-} from 'chart.js'
-
-// Register ChartJS components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  ChartTooltip,
-  Legend
-)
+import { fetchFixtureOdds } from '../lib/api'
 
 // Define Team interface
 interface Team {
@@ -47,78 +26,85 @@ interface Game {
   };
 }
 
-// Define movement interfaces
-interface SpreadMovement {
-  timestamp: number;
+// Define types for odds data
+interface OddsData {
+  market_id: string;
   sportsbook: string;
-  homeTeamSpread: number;
-  homeTeamPrice: number;
-  awayTeamSpread: number;
-  awayTeamPrice: number;
-}
-
-interface TotalMovement {
-  timestamp: number;
-  sportsbook: string;
-  points: number;
-  overPrice: number;
-  underPrice: number;
-}
-
-interface MoneylineMovement {
-  timestamp: number;
-  sportsbook: string;
-  homeTeamPrice: number;
-  awayTeamPrice: number;
-}
-
-interface LineMovementData {
-  [gameId: string]: {
-    spread: SpreadMovement[];
-    total: TotalMovement[];
-    moneyline: MoneylineMovement[];
-  };
+  team_id: string;
+  price: number;
+  points?: number;
+  selection_line?: string;
+  is_main: boolean;
 }
 
 export interface GameResearchProps {
   isOpen: boolean;
   onClose: () => void;
   game: Game;
-  lineMovementData?: LineMovementData;
 }
 
 export default function GameResearchViewOptimized({
   isOpen,
   onClose,
-  game,
-  lineMovementData
+  game
 }: GameResearchProps) {
   const [selectedTab, setSelectedTab] = useState('odds')
   const [selectedSportsbook, setSelectedSportsbook] = useState('all')
+  const [oddsData, setOddsData] = useState<OddsData[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   
-  // Get filtered line movement data based on selected sportsbook
-  const filteredLineMovementData = lineMovementData && lineMovementData[game.id] 
-    ? {
-        spread: selectedSportsbook === 'all' 
-          ? lineMovementData[game.id].spread 
-          : lineMovementData[game.id].spread.filter(item => item.sportsbook === selectedSportsbook),
-        total: selectedSportsbook === 'all' 
-          ? lineMovementData[game.id].total 
-          : lineMovementData[game.id].total.filter(item => item.sportsbook === selectedSportsbook),
-        moneyline: selectedSportsbook === 'all' 
-          ? lineMovementData[game.id].moneyline 
-          : lineMovementData[game.id].moneyline.filter(item => item.sportsbook === selectedSportsbook)
+  // Fetch odds data when the component mounts or game changes
+  useEffect(() => {
+    const fetchOdds = async () => {
+      if (game && game.id) {
+        setIsLoading(true);
+        try {
+          const data = await fetchFixtureOdds(game.id);
+          setOddsData(data);
+        } catch (error) {
+          console.error('Error fetching odds data:', error);
+        } finally {
+          setIsLoading(false);
+        }
       }
-    : null
-  
-  // Get unique sportsbooks from line movement data
-  const uniqueSportsbooks = lineMovementData && lineMovementData[game.id]
-    ? Array.from(new Set([
-        ...lineMovementData[game.id].spread.map(item => item.sportsbook),
-        ...lineMovementData[game.id].total.map(item => item.sportsbook),
-        ...lineMovementData[game.id].moneyline.map(item => item.sportsbook)
-      ]))
-    : []
+    };
+
+    fetchOdds();
+  }, [game]);
+
+  // Filter odds data by sportsbook
+  const getFilteredOddsData = () => {
+    if (selectedSportsbook === 'all') {
+      return oddsData;
+    }
+    return oddsData.filter(odd => odd.sportsbook.toLowerCase() === selectedSportsbook.toLowerCase());
+  };
+
+  // Get moneyline odds
+  const getMoneylineOdds = () => {
+    return getFilteredOddsData().filter(odd => odd.market_id === 'moneyline');
+  };
+
+  // Get spread odds
+  const getSpreadOdds = () => {
+    return getFilteredOddsData().filter(odd => odd.market_id === 'point_spread');
+  };
+
+  // Get total points odds
+  const getTotalOdds = () => {
+    return getFilteredOddsData().filter(odd => odd.market_id === 'total_points');
+  };
+
+  // Format odds price
+  const formatOddsPrice = (price: number) => {
+    if (price >= 0) {
+      return `+${price}`;
+    }
+    return price.toString();
+  };
+
+  // Get unique sportsbooks from odds data
+  const uniqueSportsbooks = Array.from(new Set(oddsData.map(odd => odd.sportsbook)));
   
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -131,8 +117,9 @@ export default function GameResearchViewOptimized({
         </DialogDescription>
         
         <Tabs defaultValue={selectedTab} onValueChange={setSelectedTab}>
-          <TabsList className="grid grid-cols-2">
-            <TabsTrigger value="odds">Odds & Line Movement</TabsTrigger>
+          <TabsList className="grid grid-cols-3">
+            <TabsTrigger value="odds">Game Odds</TabsTrigger>
+            <TabsTrigger value="props">Player Props</TabsTrigger>
             <TabsTrigger value="stats">Team Stats</TabsTrigger>
           </TabsList>
           
@@ -178,163 +165,264 @@ export default function GameResearchViewOptimized({
               </div>
             </div>
 
-            {/* Spread Line Movement Chart */}
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-2">Spread Line Movement</h3>
-              {filteredLineMovementData && filteredLineMovementData.spread && filteredLineMovementData.spread.length > 0 ? (
-                <div className="h-64">
-                  <Line
-                    data={{
-                      labels: filteredLineMovementData.spread
-                        .sort((a: SpreadMovement, b: SpreadMovement) => a.timestamp - b.timestamp)
-                        .map((item: SpreadMovement) => new Date(item.timestamp).toLocaleTimeString()),
-                      datasets: [
-                        {
-                          label: `${game.homeTeam.name} Spread`,
-                          data: filteredLineMovementData.spread
-                            .sort((a: SpreadMovement, b: SpreadMovement) => a.timestamp - b.timestamp)
-                            .map((item: SpreadMovement) => item.homeTeamSpread),
-                          borderColor: '#8884d8',
-                          backgroundColor: 'rgba(136, 132, 216, 0.5)',
-                          pointRadius: 4,
-                          pointHoverRadius: 8,
-                          tension: 0.1
-                        }
-                      ]
-                    }}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: {
-                          position: 'top',
-                        },
-                        tooltip: {
-                          callbacks: {
-                            label: function(context) {
-                              return `${context.dataset.label}: ${context.parsed.y}`;
-                            },
-                            title: function(tooltipItems) {
-                              const index = tooltipItems[0].dataIndex;
-                              const sortedData = filteredLineMovementData.spread
-                                .sort((a: SpreadMovement, b: SpreadMovement) => a.timestamp - b.timestamp);
-                              return new Date(sortedData[index].timestamp).toLocaleString();
-                            }
-                          }
-                        }
-                      },
-                      scales: {
-                        y: {
-                          title: {
-                            display: true,
-                            text: 'Spread'
-                          }
-                        },
-                        x: {
-                          title: {
-                            display: true,
-                            text: 'Time'
-                          }
-                        }
-                      }
-                    }}
-                  />
+            {isLoading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+              </div>
+            ) : (
+              <>
+                {/* Moneyline Odds */}
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold mb-2">Moneyline Odds</h3>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead className="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Sportsbook
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {game.awayTeam.name}
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {game.homeTeam.name}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {getMoneylineOdds().length > 0 ? (
+                          getMoneylineOdds()
+                            .reduce((acc, odd) => {
+                              const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
+                              if (existingIndex === -1) {
+                                acc.push({
+                                  sportsbook: odd.sportsbook,
+                                  awayOdds: odd.team_id === game.awayTeam.id ? odd.price : null,
+                                  homeOdds: odd.team_id === game.homeTeam.id ? odd.price : null
+                                });
+                              } else {
+                                if (odd.team_id === game.awayTeam.id) {
+                                  acc[existingIndex].awayOdds = odd.price;
+                                } else if (odd.team_id === game.homeTeam.id) {
+                                  acc[existingIndex].homeOdds = odd.price;
+                                }
+                              }
+                              return acc;
+                            }, [] as { sportsbook: string; awayOdds: number | null; homeOdds: number | null }[])
+                            .map((item, index) => (
+                              <tr key={index}>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                  {item.sportsbook}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                  {item.awayOdds !== null ? formatOddsPrice(item.awayOdds) : '-'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                  {item.homeOdds !== null ? formatOddsPrice(item.homeOdds) : '-'}
+                                </td>
+                              </tr>
+                            ))
+                        ) : (
+                          <tr>
+                            <td colSpan={3} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-center">
+                              No moneyline odds available
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-lg">
-                  {selectedSportsbook !== 'all' ? (
-                    <p className="text-gray-500">No spread data available for {selectedSportsbook}</p>
-                  ) : (
-                    <p className="text-gray-500">No spread data available</p>
-                  )}
+
+                {/* Spread Odds */}
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold mb-2">Spread Odds</h3>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead className="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Sportsbook
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {game.awayTeam.name}
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {game.homeTeam.name}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {getSpreadOdds().length > 0 ? (
+                          getSpreadOdds()
+                            .reduce((acc, odd) => {
+                              const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
+                              if (existingIndex === -1) {
+                                acc.push({
+                                  sportsbook: odd.sportsbook,
+                                  awaySpread: odd.team_id === game.awayTeam.id ? { points: odd.points, price: odd.price } : null,
+                                  homeSpread: odd.team_id === game.homeTeam.id ? { points: odd.points, price: odd.price } : null
+                                });
+                              } else {
+                                if (odd.team_id === game.awayTeam.id) {
+                                  acc[existingIndex].awaySpread = { points: odd.points, price: odd.price };
+                                } else if (odd.team_id === game.homeTeam.id) {
+                                  acc[existingIndex].homeSpread = { points: odd.points, price: odd.price };
+                                }
+                              }
+                              return acc;
+                            }, [] as { sportsbook: string; awaySpread: { points?: number; price: number } | null; homeSpread: { points?: number; price: number } | null }[])
+                            .map((item, index) => (
+                              <tr key={index}>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                  {item.sportsbook}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                  {item.awaySpread !== null ? `${item.awaySpread.points !== undefined && item.awaySpread.points > 0 ? '+' : ''}${item.awaySpread.points || 0} (${formatOddsPrice(item.awaySpread.price)})` : '-'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                  {item.homeSpread !== null ? `${item.homeSpread.points !== undefined && item.homeSpread.points > 0 ? '+' : ''}${item.homeSpread.points || 0} (${formatOddsPrice(item.homeSpread.price)})` : '-'}
+                                </td>
+                              </tr>
+                            ))
+                        ) : (
+                          <tr>
+                            <td colSpan={3} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-center">
+                              No spread odds available
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              )}
+
+                {/* Total Points Odds */}
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold mb-2">Total Points Odds</h3>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead className="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Sportsbook
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Total
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Over
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Under
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {getTotalOdds().length > 0 ? (
+                          getTotalOdds()
+                            .reduce((acc, odd) => {
+                              const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
+                              const isOver = odd.selection_line === 'over';
+                              
+                              if (existingIndex === -1) {
+                                acc.push({
+                                  sportsbook: odd.sportsbook,
+                                  total: odd.points,
+                                  overPrice: isOver ? odd.price : null,
+                                  underPrice: !isOver ? odd.price : null
+                                });
+                              } else {
+                                if (isOver) {
+                                  acc[existingIndex].overPrice = odd.price;
+                                } else {
+                                  acc[existingIndex].underPrice = odd.price;
+                                }
+                                // Update total points if not already set
+                                if (!acc[existingIndex].total && odd.points) {
+                                  acc[existingIndex].total = odd.points;
+                                }
+                              }
+                              return acc;
+                            }, [] as { sportsbook: string; total?: number; overPrice: number | null; underPrice: number | null }[])
+                            .map((item, index) => (
+                              <tr key={index}>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                  {item.sportsbook}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                  {item.total || '-'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                  {item.overPrice !== null ? formatOddsPrice(item.overPrice) : '-'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                  {item.underPrice !== null ? formatOddsPrice(item.underPrice) : '-'}
+                                </td>
+                              </tr>
+                            ))
+                        ) : (
+                          <tr>
+                            <td colSpan={4} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-center">
+                              No total points odds available
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+          </TabsContent>
+          
+          <TabsContent value="props">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-lg font-semibold">Player Props</div>
+              <div className="flex items-center space-x-2">
+                <select
+                  className="border border-gray-300 rounded px-2 py-1 text-sm"
+                  defaultValue="all"
+                >
+                  <option value="all">All Players</option>
+                  <option value={`${game.homeTeam.id}`}>{game.homeTeam.name} Players</option>
+                  <option value={`${game.awayTeam.id}`}>{game.awayTeam.name} Players</option>
+                </select>
+                <select
+                  className="border border-gray-300 rounded px-2 py-1 text-sm"
+                  defaultValue="all"
+                >
+                  <option value="all">All Prop Types</option>
+                  <option value="points">Points</option>
+                  <option value="rebounds">Rebounds</option>
+                  <option value="assists">Assists</option>
+                  <option value="threes">Three Pointers</option>
+                </select>
+              </div>
             </div>
             
-            {/* Total Points Line Movement Chart */}
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-2">Total Points Line Movement</h3>
-              {filteredLineMovementData && filteredLineMovementData.total && filteredLineMovementData.total.length > 0 ? (
-                <div className="h-64">
-                  <Line
-                    data={{
-                      labels: filteredLineMovementData.total
-                        .sort((a: TotalMovement, b: TotalMovement) => a.timestamp - b.timestamp)
-                        .map((item: TotalMovement) => new Date(item.timestamp).toLocaleTimeString()),
-                      datasets: [
-                        {
-                          label: 'Total Points',
-                          data: filteredLineMovementData.total
-                            .sort((a: TotalMovement, b: TotalMovement) => a.timestamp - b.timestamp)
-                            .map((item: TotalMovement) => item.points),
-                          borderColor: '#82ca9d',
-                          backgroundColor: 'rgba(130, 202, 157, 0.5)',
-                          pointRadius: 4,
-                          pointHoverRadius: 8,
-                          tension: 0.1
-                        }
-                      ]
-                    }}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: {
-                          position: 'top',
-                        },
-                        tooltip: {
-                          callbacks: {
-                            label: function(context) {
-                              return `${context.dataset.label}: ${context.parsed.y}`;
-                            },
-                            title: function(tooltipItems) {
-                              const index = tooltipItems[0].dataIndex;
-                              const sortedData = filteredLineMovementData.total
-                                .sort((a: TotalMovement, b: TotalMovement) => a.timestamp - b.timestamp);
-                              return new Date(sortedData[index].timestamp).toLocaleString();
-                            }
-                          }
-                        }
-                      },
-                      scales: {
-                        y: {
-                          title: {
-                            display: true,
-                            text: 'Total Points'
-                          }
-                        },
-                        x: {
-                          title: {
-                            display: true,
-                            text: 'Time'
-                          }
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-lg">
-                  {selectedSportsbook !== 'all' ? (
-                    <p className="text-gray-500">No total points data available for {selectedSportsbook}</p>
-                  ) : (
-                    <p className="text-gray-500">No total points data available</p>
-                  )}
-                </div>
-              )}
+            <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center">
+              <p className="text-gray-500 dark:text-gray-300">Player props data will be implemented in the next phase.</p>
+              <p className="text-gray-500 dark:text-gray-300 mt-2">This section will display player props for both teams with odds comparison across sportsbooks.</p>
             </div>
           </TabsContent>
           
           <TabsContent value="stats">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="border rounded-lg p-4">
-                <h3 className="text-lg font-semibold mb-4">{game.awayTeam.name} Stats</h3>
-                <p className="text-gray-500">Team stats will be displayed here</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4">{game.awayTeam.name} Statistics</h3>
+                <div className="space-y-3">
+                  <p className="text-gray-500 dark:text-gray-300">Team statistics will be implemented in the next phase.</p>
+                  <p className="text-gray-500 dark:text-gray-300">This section will display team statistics, recent form, and head-to-head records.</p>
+                </div>
               </div>
               
-              <div className="border rounded-lg p-4">
-                <h3 className="text-lg font-semibold mb-4">{game.homeTeam.name} Stats</h3>
-                <p className="text-gray-500">Team stats will be displayed here</p>
+              <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4">{game.homeTeam.name} Statistics</h3>
+                <div className="space-y-3">
+                  <p className="text-gray-500 dark:text-gray-300">Team statistics will be implemented in the next phase.</p>
+                  <p className="text-gray-500 dark:text-gray-300">This section will display team statistics, recent form, and head-to-head records.</p>
+                </div>
               </div>
             </div>
           </TabsContent>

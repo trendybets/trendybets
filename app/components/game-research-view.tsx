@@ -4,29 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Line } from 'react-chartjs-2'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip as ChartTooltip,
-  Legend,
-} from 'chart.js'
 import { fetchFixtureOdds } from '../lib/api'
-
-// Register ChartJS components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  ChartTooltip,
-  Legend
-)
 
 // Define Team interface
 interface Team {
@@ -47,53 +25,31 @@ interface Game {
   };
 }
 
-// Define types for line movement data
-interface SpreadMovement {
-  timestamp: number;
+// Define types for odds data
+interface OddsData {
+  market_id: string;
   sportsbook: string;
-  homeTeamSpread: number;
-  homeTeamPrice: number;
-  awayTeamSpread: number;
-  awayTeamPrice: number;
-}
-
-interface TotalMovement {
-  timestamp: number;
-  sportsbook: string;
-  points: number;
-  overPrice: number;
-  underPrice: number;
-}
-
-interface MoneylineMovement {
-  timestamp: number;
-  sportsbook: string;
-  homeTeamPrice: number;
-  awayTeamPrice: number;
-}
-
-interface LineMovementData {
-  [gameId: string]: {
-    spread: SpreadMovement[];
-    total: TotalMovement[];
-    moneyline: MoneylineMovement[];
-  };
+  team_id: string;
+  price: number;
+  points?: number;
+  selection_line?: string;
+  is_main: boolean;
 }
 
 export interface GameResearchProps {
   isOpen: boolean;
   onClose: () => void;
   game: Game;
-  lineMovementData?: LineMovementData;
 }
 
 export default function GameResearchView({
   isOpen,
   onClose,
-  game,
-  lineMovementData
+  game
 }: GameResearchProps) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [oddsData, setOddsData] = useState<OddsData[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   
   // State for selected sportsbook
   const [selectedSportsbook, setSelectedSportsbook] = useState<string>("all");
@@ -127,36 +83,70 @@ export default function GameResearchView({
     minute: '2-digit'
   });
 
-  // Get filtered line movement data based on the selected timeframe
-  const getFilteredLineMovementData = () => {
-    if (!lineMovementData || !lineMovementData[game.id]) {
-      return null;
+  // Fetch odds data when the component mounts or game changes
+  useEffect(() => {
+    const fetchOdds = async () => {
+      if (game && game.id) {
+        setIsLoading(true);
+        try {
+          const data = await fetchFixtureOdds(game.id);
+          setOddsData(data);
+        } catch (error) {
+          console.error('Error fetching odds data:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchOdds();
+  }, [game]);
+
+  // Filter odds data by sportsbook
+  const getFilteredOddsData = () => {
+    if (selectedSportsbook === 'all') {
+      return oddsData;
     }
-    
-    // If no filtering needed, return all data
-    return lineMovementData[game.id];
+    return oddsData.filter(odd => odd.sportsbook.toLowerCase() === selectedSportsbook.toLowerCase());
   };
-  
-  // Get filtered line movement data
-  const filteredLineMovementData = getFilteredLineMovementData();
-  
-  // Get the latest timestamp from the line movement data
-  const getLatestTimestamp = () => {
-    if (!filteredLineMovementData) return null;
-    
-    const timestamps: number[] = [];
-    
-    if (filteredLineMovementData.spread && filteredLineMovementData.spread.length > 0) {
-      timestamps.push(...filteredLineMovementData.spread.map((item: { timestamp: number }) => item.timestamp));
+
+  // Get moneyline odds
+  const getMoneylineOdds = () => {
+    return getFilteredOddsData().filter(odd => odd.market_id === 'moneyline');
+  };
+
+  // Get spread odds
+  const getSpreadOdds = () => {
+    return getFilteredOddsData().filter(odd => odd.market_id === 'point_spread');
+  };
+
+  // Get total points odds
+  const getTotalOdds = () => {
+    return getFilteredOddsData().filter(odd => odd.market_id === 'total_points');
+  };
+
+  // Format odds price
+  const formatOddsPrice = (price: number) => {
+    if (price >= 0) {
+      return `+${price}`;
     }
-    if (filteredLineMovementData.total && filteredLineMovementData.total.length > 0) {
-      timestamps.push(...filteredLineMovementData.total.map((item: { timestamp: number }) => item.timestamp));
-    }
-    if (filteredLineMovementData.moneyline && filteredLineMovementData.moneyline.length > 0) {
-      timestamps.push(...filteredLineMovementData.moneyline.map((item: { timestamp: number }) => item.timestamp));
-    }
+    return price.toString();
+  };
+
+  // Get best odds for a market and team
+  const getBestOdds = (market: string, teamId: string) => {
+    const odds = getFilteredOddsData()
+      .filter(odd => odd.market_id === market && odd.team_id === teamId)
+      .sort((a, b) => {
+        // For moneyline and point spread, higher price is better
+        if (market === 'moneyline' || market === 'point_spread') {
+          return b.price - a.price;
+        }
+        // For total points, it depends on the selection line
+        return 0;
+      });
     
-    return timestamps.length > 0 ? Math.max(...timestamps) : null;
+    return odds.length > 0 ? odds[0] : null;
   };
 
   if (!isOpen) return null;
@@ -227,13 +217,6 @@ export default function GameResearchView({
           </div>
         </div>
 
-        {/* Last Updated Timestamp */}
-        <div className="px-4 pt-2 text-xs text-gray-500">
-          {filteredLineMovementData && getLatestTimestamp() ? (
-            <span>Last updated: {getLatestTimestamp()}</span>
-          ) : null}
-        </div>
-
         {/* Tabs */}
         <div className="p-4">
           <div className="border-b border-gray-200 dark:border-gray-700">
@@ -292,7 +275,7 @@ export default function GameResearchView({
               <div>
                 {/* Sportsbook Selector */}
                 <div className="flex items-center justify-between mb-4">
-                  <div className="text-lg font-semibold">Line Movement</div>
+                  <div className="text-lg font-semibold">Odds Comparison</div>
                   <div className="flex items-center">
                     <label htmlFor="sportsbook-select" className="mr-2 text-sm text-gray-600">
                       Sportsbook:
@@ -312,259 +295,270 @@ export default function GameResearchView({
                   </div>
                 </div>
 
-                {/* Spread Line Movement Chart */}
-                <div className="mt-6">
-                  <h3 className="text-lg font-semibold mb-2">Spread Line Movement</h3>
-                  {filteredLineMovementData && filteredLineMovementData.spread && filteredLineMovementData.spread.length > 0 ? (
-                    <div className="h-64">
-                      <Line
-                        data={{
-                          labels: filteredLineMovementData.spread
-                            .sort((a: SpreadMovement, b: SpreadMovement) => a.timestamp - b.timestamp)
-                            .map((item: SpreadMovement) => new Date(item.timestamp).toLocaleTimeString()),
-                          datasets: [
-                            {
-                              label: `${game.homeTeam.name} Spread`,
-                              data: filteredLineMovementData.spread
-                                .sort((a: SpreadMovement, b: SpreadMovement) => a.timestamp - b.timestamp)
-                                .map((item: SpreadMovement) => item.homeTeamSpread),
-                              borderColor: '#8884d8',
-                              backgroundColor: 'rgba(136, 132, 216, 0.5)',
-                              pointRadius: 4,
-                              pointHoverRadius: 8,
-                              tension: 0.1
-                            }
-                          ]
-                        }}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              position: 'top',
-                            },
-                            tooltip: {
-                              callbacks: {
-                                label: function(context) {
-                                  return `${context.dataset.label}: ${context.parsed.y}`;
-                                },
-                                title: function(tooltipItems) {
-                                  return new Date(filteredLineMovementData.spread[tooltipItems[0].dataIndex].timestamp).toLocaleString();
-                                }
-                              }
-                            }
-                          },
-                          scales: {
-                            y: {
-                              title: {
-                                display: true,
-                                text: 'Spread'
-                              }
-                            },
-                            x: {
-                              title: {
-                                display: true,
-                                text: 'Time'
-                              }
-                            }
-                          }
-                        }}
-                      />
+                {isLoading ? (
+                  <div className="flex justify-center items-center h-64">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Moneyline Odds */}
+                    <div className="mt-6">
+                      <h3 className="text-lg font-semibold mb-2">Moneyline Odds</h3>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                          <thead className="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                Sportsbook
+                              </th>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {game.awayTeam.name}
+                              </th>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {game.homeTeam.name}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            {getMoneylineOdds().length > 0 ? (
+                              getMoneylineOdds()
+                                .reduce((acc, odd) => {
+                                  const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
+                                  if (existingIndex === -1) {
+                                    acc.push({
+                                      sportsbook: odd.sportsbook,
+                                      awayOdds: odd.team_id === game.awayTeam.id ? odd.price : null,
+                                      homeOdds: odd.team_id === game.homeTeam.id ? odd.price : null
+                                    });
+                                  } else {
+                                    if (odd.team_id === game.awayTeam.id) {
+                                      acc[existingIndex].awayOdds = odd.price;
+                                    } else if (odd.team_id === game.homeTeam.id) {
+                                      acc[existingIndex].homeOdds = odd.price;
+                                    }
+                                  }
+                                  return acc;
+                                }, [] as { sportsbook: string; awayOdds: number | null; homeOdds: number | null }[])
+                                .map((item, index) => (
+                                  <tr key={index}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                      {item.sportsbook}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                      {item.awayOdds !== null ? formatOddsPrice(item.awayOdds) : '-'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                      {item.homeOdds !== null ? formatOddsPrice(item.homeOdds) : '-'}
+                                    </td>
+                                  </tr>
+                                ))
+                            ) : (
+                              <tr>
+                                <td colSpan={3} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-center">
+                                  No moneyline odds available
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-lg">
-                      {selectedSportsbook !== 'all' ? (
-                        <>
-                          <p>No spread line movement data available</p>
-                        </>
-                      ) : (
-                        <>
-                          <p>No spread line movement data available</p>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
 
-                {/* Total Points Line Movement Chart */}
-                <div className="mt-6">
-                  <h3 className="text-lg font-semibold mb-2">Total Points Line Movement</h3>
-                  {filteredLineMovementData && filteredLineMovementData.total && filteredLineMovementData.total.length > 0 ? (
-                    <div className="h-64">
-                      <Line
-                        data={{
-                          labels: filteredLineMovementData.total
-                            .sort((a: TotalMovement, b: TotalMovement) => a.timestamp - b.timestamp)
-                            .map((item) => new Date(item.timestamp)),
-                          datasets: [
-                            {
-                              label: 'Total Points',
-                              data: filteredLineMovementData.total
-                                .sort((a: TotalMovement, b: TotalMovement) => a.timestamp - b.timestamp)
-                                .map((item) => item.points),
-                              borderColor: '#82ca9d',
-                              backgroundColor: 'rgba(130, 202, 157, 0.2)',
-                              pointRadius: 4,
-                              pointHoverRadius: 8,
-                              stepped: true,
-                            }
-                          ]
-                        }}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          scales: {
-                            x: {
-                              title: {
-                                display: true,
-                                text: 'Time'
-                              },
-                              ticks: {
-                                callback: function(value, index, values) {
-                                  const date = new Date(this.getLabelForValue(index as number));
-                                  return date.toLocaleTimeString();
-                                }
-                              }
-                            },
-                            y: {
-                              title: {
-                                display: true,
-                                text: 'Total Points'
-                              }
-                            }
-                          },
-                          plugins: {
-                            tooltip: {
-                              callbacks: {
-                                label: function(context) {
-                                  return `Total Points: ${context.parsed.y}`;
-                                },
-                                title: function(tooltipItems) {
-                                  return new Date(tooltipItems[0].parsed.x).toLocaleString();
-                                }
-                              }
-                            }
-                          }
-                        }}
-                      />
+                    {/* Spread Odds */}
+                    <div className="mt-6">
+                      <h3 className="text-lg font-semibold mb-2">Spread Odds</h3>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                          <thead className="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                Sportsbook
+                              </th>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {game.awayTeam.name}
+                              </th>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {game.homeTeam.name}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            {getSpreadOdds().length > 0 ? (
+                              getSpreadOdds()
+                                .reduce((acc, odd) => {
+                                  const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
+                                  if (existingIndex === -1) {
+                                    acc.push({
+                                      sportsbook: odd.sportsbook,
+                                      awaySpread: odd.team_id === game.awayTeam.id ? { points: odd.points, price: odd.price } : null,
+                                      homeSpread: odd.team_id === game.homeTeam.id ? { points: odd.points, price: odd.price } : null
+                                    });
+                                  } else {
+                                    if (odd.team_id === game.awayTeam.id) {
+                                      acc[existingIndex].awaySpread = { points: odd.points, price: odd.price };
+                                    } else if (odd.team_id === game.homeTeam.id) {
+                                      acc[existingIndex].homeSpread = { points: odd.points, price: odd.price };
+                                    }
+                                  }
+                                  return acc;
+                                }, [] as { sportsbook: string; awaySpread: { points?: number; price: number } | null; homeSpread: { points?: number; price: number } | null }[])
+                                .map((item, index) => (
+                                  <tr key={index}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                      {item.sportsbook}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                      {item.awaySpread !== null ? `${item.awaySpread.points !== undefined && item.awaySpread.points > 0 ? '+' : ''}${item.awaySpread.points || 0} (${formatOddsPrice(item.awaySpread.price)})` : '-'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                      {item.homeSpread !== null ? `${item.homeSpread.points !== undefined && item.homeSpread.points > 0 ? '+' : ''}${item.homeSpread.points || 0} (${formatOddsPrice(item.homeSpread.price)})` : '-'}
+                                    </td>
+                                  </tr>
+                                ))
+                            ) : (
+                              <tr>
+                                <td colSpan={3} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-center">
+                                  No spread odds available
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-lg">
-                      {selectedSportsbook !== 'all' ? (
-                        <>
-                          <p>No total points line movement data available</p>
-                        </>
-                      ) : (
-                        <>
-                          <p>No total points line movement data available</p>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
 
-                {/* Moneyline Movement Chart */}
-                <div className="mt-6">
-                  <h3 className="text-lg font-semibold mb-2">Moneyline Movement</h3>
-                  {filteredLineMovementData && filteredLineMovementData.moneyline && filteredLineMovementData.moneyline.length > 0 ? (
-                    <div className="h-64">
-                      <Line
-                        data={{
-                          labels: filteredLineMovementData.moneyline
-                            .sort((a: MoneylineMovement, b: MoneylineMovement) => a.timestamp - b.timestamp)
-                            .map((item) => new Date(item.timestamp)),
-                          datasets: [
-                            {
-                              label: game.homeTeam.name,
-                              data: filteredLineMovementData.moneyline
-                                .sort((a: MoneylineMovement, b: MoneylineMovement) => a.timestamp - b.timestamp)
-                                .map((item) => item.homeTeamPrice),
-                              borderColor: '#8884d8',
-                              backgroundColor: 'rgba(136, 132, 216, 0.2)',
-                              pointRadius: 4,
-                              pointHoverRadius: 8,
-                              stepped: true,
-                            },
-                            {
-                              label: game.awayTeam.name,
-                              data: filteredLineMovementData.moneyline
-                                .sort((a: MoneylineMovement, b: MoneylineMovement) => a.timestamp - b.timestamp)
-                                .map((item) => item.awayTeamPrice),
-                              borderColor: '#82ca9d',
-                              backgroundColor: 'rgba(130, 202, 157, 0.2)',
-                              pointRadius: 4,
-                              pointHoverRadius: 8,
-                              stepped: true,
-                            }
-                          ]
-                        }}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          scales: {
-                            x: {
-                              title: {
-                                display: true,
-                                text: 'Time'
-                              },
-                              ticks: {
-                                callback: function(value, index, values) {
-                                  const date = new Date(this.getLabelForValue(index as number));
-                                  return date.toLocaleTimeString();
-                                }
-                              }
-                            },
-                            y: {
-                              title: {
-                                display: true,
-                                text: 'Moneyline'
-                              }
-                            }
-                          },
-                          plugins: {
-                            tooltip: {
-                              callbacks: {
-                                label: function(context) {
-                                  const datasetLabel = context.dataset.label || '';
-                                  return `${datasetLabel}: ${context.parsed.y}`;
-                                },
-                                title: function(tooltipItems) {
-                                  return new Date(tooltipItems[0].parsed.x).toLocaleString();
-                                }
-                              }
-                            }
-                          }
-                        }}
-                      />
+                    {/* Total Points Odds */}
+                    <div className="mt-6">
+                      <h3 className="text-lg font-semibold mb-2">Total Points Odds</h3>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                          <thead className="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                Sportsbook
+                              </th>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                Total
+                              </th>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                Over
+                              </th>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                Under
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            {getTotalOdds().length > 0 ? (
+                              getTotalOdds()
+                                .reduce((acc, odd) => {
+                                  const existingIndex = acc.findIndex(item => item.sportsbook === odd.sportsbook);
+                                  const isOver = odd.selection_line === 'over';
+                                  
+                                  if (existingIndex === -1) {
+                                    acc.push({
+                                      sportsbook: odd.sportsbook,
+                                      total: odd.points,
+                                      overPrice: isOver ? odd.price : null,
+                                      underPrice: !isOver ? odd.price : null
+                                    });
+                                  } else {
+                                    if (isOver) {
+                                      acc[existingIndex].overPrice = odd.price;
+                                    } else {
+                                      acc[existingIndex].underPrice = odd.price;
+                                    }
+                                    // Update total points if not already set
+                                    if (!acc[existingIndex].total && odd.points) {
+                                      acc[existingIndex].total = odd.points;
+                                    }
+                                  }
+                                  return acc;
+                                }, [] as { sportsbook: string; total?: number; overPrice: number | null; underPrice: number | null }[])
+                                .map((item, index) => (
+                                  <tr key={index}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                      {item.sportsbook}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                      {item.total || '-'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                      {item.overPrice !== null ? formatOddsPrice(item.overPrice) : '-'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                      {item.underPrice !== null ? formatOddsPrice(item.underPrice) : '-'}
+                                    </td>
+                                  </tr>
+                                ))
+                            ) : (
+                              <tr>
+                                <td colSpan={4} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-center">
+                                  No total points odds available
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-64 border border-gray-200 rounded-lg">
-                      {selectedSportsbook !== 'all' ? (
-                        <>
-                          <p>No moneyline movement data available</p>
-                        </>
-                      ) : (
-                        <>
-                          <p>No moneyline movement data available</p>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
+                  </>
+                )}
               </div>
             )}
 
             {activeTab === 'props' && (
               <div>
-                <h3>Player Props Content</h3>
-                <p>Player props would go here</p>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-lg font-semibold">Player Props</div>
+                  <div className="flex items-center space-x-2">
+                    <select
+                      className="border border-gray-300 rounded px-2 py-1 text-sm"
+                      defaultValue="all"
+                    >
+                      <option value="all">All Players</option>
+                      <option value={`${game.homeTeam.id}`}>{game.homeTeam.name} Players</option>
+                      <option value={`${game.awayTeam.id}`}>{game.awayTeam.name} Players</option>
+                    </select>
+                    <select
+                      className="border border-gray-300 rounded px-2 py-1 text-sm"
+                      defaultValue="all"
+                    >
+                      <option value="all">All Prop Types</option>
+                      <option value="points">Points</option>
+                      <option value="rebounds">Rebounds</option>
+                      <option value="assists">Assists</option>
+                      <option value="threes">Three Pointers</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center">
+                  <p className="text-gray-500 dark:text-gray-300">Player props data will be implemented in the next phase.</p>
+                  <p className="text-gray-500 dark:text-gray-300 mt-2">This section will display player props for both teams with odds comparison across sportsbooks.</p>
+                </div>
               </div>
             )}
 
             {activeTab === 'stats' && (
               <div>
-                <h3>Team Statistics Content</h3>
-                <p>Team statistics would go here</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold mb-4">{game.awayTeam.name} Statistics</h3>
+                    <div className="space-y-3">
+                      <p className="text-gray-500 dark:text-gray-300">Team statistics will be implemented in the next phase.</p>
+                      <p className="text-gray-500 dark:text-gray-300">This section will display team statistics, recent form, and head-to-head records.</p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold mb-4">{game.homeTeam.name} Statistics</h3>
+                    <div className="space-y-3">
+                      <p className="text-gray-500 dark:text-gray-300">Team statistics will be implemented in the next phase.</p>
+                      <p className="text-gray-500 dark:text-gray-300">This section will display team statistics, recent form, and head-to-head records.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>

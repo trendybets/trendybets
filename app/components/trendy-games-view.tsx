@@ -295,31 +295,6 @@ export default function TrendyGamesView() {
     startDate: ''
   })
   
-  // State for line movement data (static, no longer updated via streaming)
-  const [lineMovementData, setLineMovementData] = useState<Record<string, {
-    spread: Array<{
-      timestamp: number
-      sportsbook: string
-      homeTeamSpread: number
-      homeTeamPrice: number
-      awayTeamSpread: number
-      awayTeamPrice: number
-    }>
-    total: Array<{
-      timestamp: number
-      sportsbook: string
-      points: number
-      overPrice: number
-      underPrice: number
-    }>
-    moneyline: Array<{
-      timestamp: number
-      sportsbook: string
-      homeTeamPrice: number
-      awayTeamPrice: number
-    }>
-  }>>({})
-  
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [showRefreshNotification, setShowRefreshNotification] = useState(false)
   
@@ -795,7 +770,6 @@ export default function TrendyGamesView() {
           startDate: researchModal.startDate,
           odds: {}
         }}
-        lineMovementData={lineMovementData}
       />
     </div>
   )
