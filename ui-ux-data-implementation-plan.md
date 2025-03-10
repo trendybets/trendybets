@@ -114,6 +114,13 @@ This document outlines our strategy for enhancing the user interface, improving 
     - [ ] Add responsive design for mobile devices
     - [x] Implement loading states for data fetching
 
+  - [x] **2.2.5 Unified Game Research View**
+    - [x] Redesign to display all sections (Overview, Odds, Team Stats, Player Props) on a single scrollable page
+    - [x] Implement smooth scroll navigation when clicking on tabs
+    - [x] Add sticky header with tabs that remain visible while scrolling
+    - [x] Include visual section dividers and consistent spacing between sections
+    - [x] Add "jump to top" button for easy navigation
+
 - [ ] **2.2.3 Trendy Props Page**
   - [ ] Implement complete player prop data with proper formatting
   - [ ] Add more detailed player statistics
@@ -214,6 +221,14 @@ This document outlines our strategy for enhancing the user interface, improving 
   - [x] Add loading states for data fetching
   - [ ] Implement responsive design for mobile devices
 
+- [x] **4.2.5 Enhanced Game Research View**
+  - [x] Redesign to unified scrollable view with all sections
+  - [x] Add section headers and visual dividers
+  - [x] Implement smooth scroll navigation
+  - [x] Add sticky header with tabs
+  - [x] Include "back to top" button for easy navigation
+  - [ ] Enhance section content with more detailed information (future enhancement)
+
 ### 4.3 Trendy Props Page
 - [ ] Complete player prop data implementation
 - [ ] Enhance filtering system with multiple criteria
@@ -278,6 +293,7 @@ This document outlines our strategy for enhancing the user interface, improving 
 - [x] Fix odds data not displaying in the modal - implemented direct data passing from Trendy Games View
 - [x] Remove unnecessary sportsbook dropdown filter
 - [x] Implement player props section
+- [x] Redesign Game Research View to unified scrollable layout with enhanced sections
 
 ### 7.2 Trendy Props Page Improvements
 - [ ] **CURRENT FOCUS**: Enhance filtering and sorting capabilities
