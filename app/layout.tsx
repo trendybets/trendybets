@@ -25,6 +25,7 @@ const navigation = [
   { name: 'Calculators', href: '/calculators' },
   { name: 'Trendy Props', href: '/trendy-props' },
   { name: 'Run Predictions', href: '/run-predictions' },
+  { name: 'Design System', href: '/design-system' },
 ]
 
 export default function RootLayout({
@@ -42,7 +43,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AppStateProvider>
-            <div className="min-h-screen bg-background text-foreground">
+            <div className="min-h-screen bg-primary-black-50 text-primary-black-800 dark:bg-primary-black-900 dark:text-primary-black-50">
               <Navbar />
               <main className="flex-1">
                 {children}

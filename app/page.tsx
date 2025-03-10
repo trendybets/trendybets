@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import TrendyGamesView from './components/trendy-games-view'
 import { LoginPopup } from './components/auth/login-popup'
-import { Button } from "@/components/ui/button"
+import { Button } from "@/app/components/ui/Button"
 
 export default function Home() {
   const [showLoginPopup, setShowLoginPopup] = useState(false)
@@ -38,16 +38,16 @@ export default function Home() {
   }, [supabase.auth])
   
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-primary-black-50">
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900">TrendyBets</h1>
+          <h1 className="text-2xl font-bold text-primary-black-900">TrendyBets</h1>
           <div>
             {loading ? (
               <Button disabled variant="outline">Loading...</Button>
             ) : user ? (
               <div className="flex items-center gap-4">
-                <span className="text-sm text-gray-700">Welcome, {user.user_metadata?.username || user.email}</span>
+                <span className="text-sm text-primary-black-700">Welcome, {user.user_metadata?.username || user.email}</span>
                 <Button 
                   variant="outline" 
                   onClick={async () => {
