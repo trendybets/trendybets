@@ -5,6 +5,8 @@ import Image from "next/image"
 import { formatOdds } from "@/lib/format-odds"
 import { useState } from "react"
 import { Card } from "@/components/ui/card"
+import { Button } from "@/app/components/ui/Button"
+import { colors } from "@/app/styles/design-system"
 
 // Add team colors
 const teamColors: Record<string, { primary: string; secondary: string }> = {
