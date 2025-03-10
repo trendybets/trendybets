@@ -287,9 +287,9 @@ export default function TrendyPropsView() {
       )}
       
       {/* Summary Cards */}
-      <ResponsiveGrid columns={{ xs: 1, md: 3 }} gap="md" className="mt-6">
+      <ResponsiveGrid columns={{ xs: 1, md: 2 }} gap="md" className="mt-6">
         {/* Total Props Card */}
-        <ResponsiveCard>
+        <ResponsiveCard className="border border-primary-black-200 dark:border-primary-black-700 shadow-sm overflow-hidden">
           <ResponsiveCardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -309,7 +309,7 @@ export default function TrendyPropsView() {
         </ResponsiveCard>
         
         {/* Strong Trends Card */}
-        <ResponsiveCard>
+        <ResponsiveCard className="border border-primary-black-200 dark:border-primary-black-700 shadow-sm overflow-hidden">
           <ResponsiveCardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -327,29 +327,9 @@ export default function TrendyPropsView() {
             </div>
           </ResponsiveCardContent>
         </ResponsiveCard>
-        
-        {/* Average Hit Rate Card */}
-        <ResponsiveCard>
-          <ResponsiveCardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-primary-black-500 dark:text-primary-black-400">Average Hit Rate</p>
-                <h3 className="text-3xl font-bold text-primary-black-900 dark:text-primary-black-100 mt-1">
-                  {(summaryStats.averageHitRate * 100).toFixed(1)}%
-                </h3>
-                <p className="text-xs text-primary-black-500 dark:text-primary-black-400 mt-1">
-                  Based on last 10 games
-                </p>
-              </div>
-              <div className="h-12 w-12 bg-primary-black-100 dark:bg-primary-black-700 rounded-full flex items-center justify-center">
-                <Filter className="h-6 w-6 text-primary-black-500 dark:text-primary-black-400" />
-              </div>
-            </div>
-          </ResponsiveCardContent>
-        </ResponsiveCard>
       </ResponsiveGrid>
 
-      <ResponsiveCard elevated className="p-0 mt-8">
+      <ResponsiveCard elevated className="p-0 mt-8 overflow-hidden border border-primary-black-200 dark:border-primary-black-700 shadow-sm">
         <DynamicTrendsTable 
           data={filteredData} 
           isLoading={isLoading && playerOdds.length > 0}
@@ -368,13 +348,14 @@ export default function TrendyPropsView() {
       </ResponsiveCard>
 
       {/* Pagination controls */}
-      <div className="mt-6 mb-4 flex items-center justify-between">
+      <div className="mt-6 mb-8 flex items-center justify-between bg-white dark:bg-primary-black-800 p-4 rounded-lg border border-primary-black-200 dark:border-primary-black-700 shadow-sm">
         <Button
           onClick={loadPrevPage}
           disabled={pagination.page <= 1 || isLoading}
           variant="outline"
           size="sm"
           className={cn(
+            "transition-all duration-200",
             pagination.page <= 1 && "opacity-50 cursor-not-allowed"
           )}
         >
@@ -382,7 +363,7 @@ export default function TrendyPropsView() {
           <span className="hidden sm:inline">Previous</span>
         </Button>
         
-        <span className="text-sm text-center py-2 text-primary-black-700 dark:text-primary-black-300">
+        <span className="text-sm text-center py-2 font-medium text-primary-black-700 dark:text-primary-black-300">
           Page {pagination.page} of {pagination.totalPages || 1} 
           <span className="hidden sm:inline"> ({pagination.total} total players)</span>
         </span>
@@ -393,6 +374,7 @@ export default function TrendyPropsView() {
           variant="outline"
           size="sm"
           className={cn(
+            "transition-all duration-200",
             !hasMore && "opacity-50 cursor-not-allowed"
           )}
         >

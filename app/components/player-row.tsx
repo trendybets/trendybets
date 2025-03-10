@@ -57,6 +57,7 @@ interface PlayerRowProps {
   }
   getTimeframeNumber: (tf: string) => number
   getAverageValue: (row: PlayerData, timeframeNumber: number) => number
+  className?: string
 }
 
 /**
@@ -70,7 +71,8 @@ function PlayerRowComponent({
   onHover,
   calculateHits,
   getTimeframeNumber,
-  getAverageValue
+  getAverageValue,
+  className
 }: PlayerRowProps) {
   const timeframeNumber = getTimeframeNumber(timeframe)
   const stats = calculateHits(player, timeframeNumber)
@@ -160,7 +162,8 @@ function PlayerRowComponent({
         "border-t border-primary-black-100 dark:border-primary-black-700 transition-colors cursor-pointer",
         isHovered 
           ? "bg-primary-black-50 dark:bg-primary-black-800" 
-          : "hover:bg-primary-black-50 dark:hover:bg-primary-black-800"
+          : "hover:bg-primary-black-50 dark:hover:bg-primary-black-800",
+        className
       )}
       onClick={() => onSelect(player)}
       onMouseEnter={() => onHover(true)}

@@ -100,118 +100,125 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full overflow-hidden rounded-lg shadow-sm">
       {/* Filters and Search */}
-      <div className="p-4 border-b border-primary-black-100 dark:border-primary-black-700 bg-white dark:bg-primary-black-800">
-        <div className="flex flex-col md:flex-row gap-4">
+      <div className="p-5 border-b border-primary-black-200 dark:border-primary-black-700 bg-gradient-to-r from-primary-blue-200 via-primary-blue-50 to-primary-blue-200 dark:from-primary-blue-900/40 dark:via-primary-blue-900/20 dark:to-primary-blue-900/40 relative shadow-sm">
+        {/* Subtle pattern overlay */}
+        <div className="absolute inset-0 opacity-5 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none"></div>
+        
+        {/* Filter section title */}
+        <div className="flex items-center mb-3 text-primary-blue-600 dark:text-primary-blue-400">
+          <Filter className="h-4 w-4 mr-2" />
+          <h3 className="text-sm font-semibold uppercase tracking-wider">Filter Props</h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 relative z-10">
           {/* Search */}
-          <div className="relative flex-grow">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-primary-black-400" />
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <Search className="h-4 w-4 text-primary-blue-500 dark:text-primary-blue-400" />
             </div>
             <input
               type="text"
               placeholder="Search players..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4 py-2 w-full rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 placeholder-primary-black-400 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent"
+              className="pl-10 pr-4 py-2.5 w-full rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 placeholder-primary-black-400 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent transition-all duration-200 hover:border-primary-blue-300 dark:hover:border-primary-blue-600"
             />
           </div>
           
-          {/* Filters */}
-          <div className="flex flex-wrap gap-2">
-            {/* Timeframe Filter */}
-            <div className="relative inline-block">
-              <select
-                value={timeframe}
-                onChange={(e) => setTimeframe(e.target.value)}
-                className="appearance-none pl-3 pr-8 py-2 rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent"
-              >
-                <option value="L5">Last 5 Games</option>
-                <option value="L10">Last 10 Games</option>
-                <option value="L20">Last 20 Games</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                <ChevronDown className="h-4 w-4 text-primary-black-400" />
-              </div>
+          {/* Timeframe Filter */}
+          <div className="relative">
+            <select
+              value={timeframe}
+              onChange={(e) => setTimeframe(e.target.value)}
+              className="appearance-none w-full pl-3 pr-8 py-2.5 rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent transition-all duration-200 hover:border-primary-blue-300 dark:hover:border-primary-blue-600"
+            >
+              <option value="L5">Last 5 Games</option>
+              <option value="L10">Last 10 Games</option>
+              <option value="L20">Last 20 Games</option>
+            </select>
+            <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+              <ChevronDown className="h-4 w-4 text-primary-blue-500 dark:text-primary-blue-400" />
             </div>
-            
-            {/* Stat Type Filter */}
-            <div className="relative inline-block">
-              <select
-                value={statType}
-                onChange={(e) => setStatType(e.target.value)}
-                className="appearance-none pl-3 pr-8 py-2 rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent"
-              >
-                <option value="All Props">All Props</option>
-                <option value="Points">Points</option>
-                <option value="Assists">Assists</option>
-                <option value="Rebounds">Rebounds</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                <ChevronDown className="h-4 w-4 text-primary-black-400" />
-              </div>
+          </div>
+          
+          {/* Stat Type Filter */}
+          <div className="relative">
+            <select
+              value={statType}
+              onChange={(e) => setStatType(e.target.value)}
+              className="appearance-none w-full pl-3 pr-8 py-2.5 rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent transition-all duration-200 hover:border-primary-blue-300 dark:hover:border-primary-blue-600"
+            >
+              <option value="All Props">All Props</option>
+              <option value="Points">Points</option>
+              <option value="Assists">Assists</option>
+              <option value="Rebounds">Rebounds</option>
+            </select>
+            <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+              <ChevronDown className="h-4 w-4 text-primary-blue-500 dark:text-primary-blue-400" />
             </div>
-            
-            {/* Team Filter */}
-            {setFilters && filters && (
-              <>
-                <div className="relative inline-block">
-                  <select
-                    value={filters.team}
-                    onChange={(e) => handleFilterChange('team', e.target.value)}
-                    className="appearance-none pl-3 pr-8 py-2 rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent"
-                  >
-                    <option value="all">All Teams</option>
-                    {availableTeams?.map(team => (
-                      <option key={team} value={team}>{team}</option>
-                    ))}
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                    <ChevronDown className="h-4 w-4 text-primary-black-400" />
-                  </div>
-                </div>
-                
-                {/* Fixture Filter */}
-                <div className="relative inline-block">
-                  <select
-                    value={filters.fixture}
-                    onChange={(e) => handleFilterChange('fixture', e.target.value)}
-                    className="appearance-none pl-3 pr-8 py-2 rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent"
-                  >
-                    <option value="all">All Games</option>
-                    {availableFixtures?.map(fixture => (
-                      <option key={fixture} value={fixture}>{fixture}</option>
-                    ))}
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                    <ChevronDown className="h-4 w-4 text-primary-black-400" />
-                  </div>
-                </div>
-              </>
-            )}
           </div>
         </div>
+        
+        {/* Second row of filters */}
+        {setFilters && filters && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 relative z-10">
+            {/* Team Filter */}
+            <div className="relative">
+              <select
+                value={filters.team}
+                onChange={(e) => handleFilterChange('team', e.target.value)}
+                className="appearance-none w-full pl-3 pr-8 py-2.5 rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent transition-all duration-200 hover:border-primary-blue-300 dark:hover:border-primary-blue-600"
+              >
+                <option value="all">All Teams</option>
+                {availableTeams?.map(team => (
+                  <option key={team} value={team}>{team}</option>
+                ))}
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                <ChevronDown className="h-4 w-4 text-primary-blue-500 dark:text-primary-blue-400" />
+              </div>
+            </div>
+            
+            {/* Fixture Filter */}
+            <div className="relative">
+              <select
+                value={filters.fixture}
+                onChange={(e) => handleFilterChange('fixture', e.target.value)}
+                className="appearance-none w-full pl-3 pr-8 py-2.5 rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent transition-all duration-200 hover:border-primary-blue-300 dark:hover:border-primary-blue-600"
+              >
+                <option value="all">All Games</option>
+                {availableFixtures?.map(fixture => (
+                  <option key={fixture} value={fixture}>{fixture}</option>
+                ))}
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                <ChevronDown className="h-4 w-4 text-primary-blue-500 dark:text-primary-blue-400" />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-primary-black-100 dark:divide-primary-black-700">
-          <thead className="bg-primary-black-50 dark:bg-primary-black-800">
+        <table className="min-w-full divide-y divide-primary-black-200 dark:divide-primary-black-700">
+          <thead className="bg-primary-blue-50 dark:bg-primary-blue-900/20">
             <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-primary-black-600 dark:text-primary-black-300 uppercase tracking-wider">
                 Player
               </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-primary-black-600 dark:text-primary-black-300 uppercase tracking-wider">
                 Prop Line
               </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-primary-black-600 dark:text-primary-black-300 uppercase tracking-wider">
                 Average
               </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-primary-black-600 dark:text-primary-black-300 uppercase tracking-wider">
                 Hit Rate
               </th>
-              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-3.5 text-right text-xs font-semibold text-primary-black-600 dark:text-primary-black-300 uppercase tracking-wider">
                 Details
               </th>
             </tr>
@@ -224,7 +231,7 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                 </td>
               </tr>
             ) : filteredAndSortedData.length > 0 ? (
-              filteredAndSortedData.map((player) => (
+              filteredAndSortedData.map((player, index) => (
                 <PlayerRow 
                   key={`${player.player.id}-${player.stat_type}`}
                   player={player}
@@ -235,6 +242,7 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                   calculateHits={calculateHits}
                   getTimeframeNumber={getTimeframeNumber}
                   getAverageValue={getAverageValue}
+                  className={index % 2 === 0 ? "bg-white dark:bg-primary-black-900" : "bg-primary-black-50/50 dark:bg-primary-black-800/50"}
                 />
               ))
             ) : (
@@ -250,11 +258,11 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
       
       {/* Load More Button */}
       {hasMore && !isLoading && (
-        <div className="p-4 flex justify-center">
+        <div className="p-5 flex justify-center border-t border-primary-black-100 dark:border-primary-black-700">
           <Button
             onClick={onLoadMore}
             variant="outline"
-            className="text-primary-blue-500 border-primary-blue-500 hover:bg-primary-blue-50"
+            className="text-primary-blue-500 border-primary-blue-500 hover:bg-primary-blue-50 transition-colors duration-200"
           >
             Load More
           </Button>
