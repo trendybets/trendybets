@@ -17,6 +17,49 @@ module.exports = {
     },
     extend: {
       colors: {
+        // Design System Colors
+        'primary-blue': {
+          50: '#e6f1ff',
+          100: '#cce3ff',
+          200: '#99c7ff',
+          300: '#66aaff',
+          400: '#338eff',
+          500: '#0072ff', // Primary Blue
+          600: '#005bd9',
+          700: '#0044b3',
+          800: '#002e8c',
+          900: '#001766',
+        },
+        'primary-green': {
+          50: '#e6f9f0',
+          100: '#ccf3e1',
+          200: '#99e7c2',
+          300: '#66dba4',
+          400: '#33cf85',
+          500: '#00c366', // Primary Green
+          600: '#00a355',
+          700: '#008244',
+          800: '#006233',
+          900: '#004122',
+        },
+        'primary-black': {
+          50: '#f2f2f2',
+          100: '#e6e6e6',
+          200: '#cccccc',
+          300: '#b3b3b3',
+          400: '#999999',
+          500: '#808080',
+          600: '#666666',
+          700: '#4d4d4d',
+          800: '#333333', // Primary Dark
+          900: '#1a1a1a',
+        },
+        'semantic-success': '#00c366', // Same as primary-green-500
+        'semantic-warning': '#ffb100',
+        'semantic-error': '#ff3b30',
+        'semantic-info': '#0072ff', // Same as primary-blue-500
+
+        // Legacy Colors (keeping for backward compatibility)
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -51,6 +94,10 @@ module.exports = {
           foreground: "hsl(var(--card-foreground))",
         },
       },
+      fontFamily: {
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', '"Noto Sans"', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', '"Liberation Mono"', '"Courier New"', 'monospace'],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
@@ -82,6 +129,16 @@ module.exports = {
     },
   },
   safelist: [
+    // Design System Colors
+    {
+      pattern: /^(bg|text|border|ring|stroke|fill)-(primary-blue|primary-green|primary-black)-(50|100|200|300|400|500|600|700|800|900)$/,
+      variants: ["hover", "ui-selected", "active"],
+    },
+    {
+      pattern: /^(bg|text|border|ring|stroke|fill)-(semantic)-(success|warning|error|info)$/,
+      variants: ["hover", "ui-selected", "active"],
+    },
+    // Legacy Patterns
     {
       pattern:
         /^(bg-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950))$/,
