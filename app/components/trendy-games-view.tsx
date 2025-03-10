@@ -618,12 +618,12 @@ export default function TrendyGamesView() {
       homeTeam: {
         id: game.homeTeam.id,
         name: game.homeTeam.name,
-        logo: `/team-logos/${getTeamAbbreviation(game.homeTeam.name).toLowerCase()}.png`
+        logo: game.homeTeam.logo || `https://cdn.opticodds.com/team-logos/basketball/${game.homeTeam.id}.png`
       },
       awayTeam: {
         id: game.awayTeam.id,
         name: game.awayTeam.name,
-        logo: `/team-logos/${getTeamAbbreviation(game.awayTeam.name).toLowerCase()}.png`
+        logo: game.awayTeam.logo || `https://cdn.opticodds.com/team-logos/basketball/${game.awayTeam.id}.png`
       },
       startDate: game.startDate
     })
