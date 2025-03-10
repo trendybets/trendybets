@@ -203,9 +203,6 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                 Player
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
-                Team
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
                 Next Game
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
@@ -219,6 +216,9 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
                 Hit Rate
+              </th>
+              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
+                Details
               </th>
             </tr>
           </thead>

@@ -199,28 +199,23 @@ function PlayerRowComponent({
             )}
           </div>
           
-          {/* Player Name and Position */}
+          {/* Player Name, Position and Team */}
           <div>
             <div className="font-medium text-primary-black-900 dark:text-primary-black-100">
               {player.player.name}
             </div>
-            <div className="text-xs text-primary-black-500 dark:text-primary-black-400">
-              {player.player.position}
+            <div className="flex items-center text-xs text-primary-black-500 dark:text-primary-black-400">
+              <span>{player.player.position}</span>
+              <span className="mx-1">•</span>
+              <div className="flex items-center">
+                <div 
+                  className="w-2 h-2 rounded-full mr-1"
+                  style={{ backgroundColor: teamColor.primary }}
+                ></div>
+                <span>{player.player.team}</span>
+              </div>
             </div>
           </div>
-        </div>
-      </td>
-      
-      {/* Team */}
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="flex items-center">
-          <div 
-            className="w-4 h-4 rounded-full mr-2"
-            style={{ backgroundColor: teamColor.primary }}
-          ></div>
-          <span className="text-primary-black-800 dark:text-primary-black-200">
-            {player.player.team}
-          </span>
         </div>
       </td>
       
