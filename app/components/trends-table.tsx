@@ -203,16 +203,10 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                 Player
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
-                Next Game
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
-                Stat
+                Prop Line
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
                 Average
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
-                Line
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-primary-black-500 dark:text-primary-black-300 uppercase tracking-wider">
                 Hit Rate
@@ -225,8 +219,8 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
           <tbody className="bg-white dark:bg-primary-black-900 divide-y divide-primary-black-100 dark:divide-primary-black-700">
             {isLoading && filteredAndSortedData.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-4">
-                  <TableSkeleton rows={10} columns={7} />
+                <td colSpan={5} className="px-6 py-4">
+                  <TableSkeleton rows={10} columns={5} />
                 </td>
               </tr>
             ) : filteredAndSortedData.length > 0 ? (
@@ -245,7 +239,7 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
               ))
             ) : (
               <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-primary-black-500 dark:text-primary-black-400">
+                <td colSpan={5} className="px-6 py-4 text-center text-primary-black-500 dark:text-primary-black-400">
                   No players found matching your criteria
                 </td>
               </tr>

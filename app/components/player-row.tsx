@@ -131,6 +131,27 @@ function PlayerRowComponent({
   }
   
   const recommendation = getRecommendation()
+  
+  // Format hit rate display based on recommendation
+  const getHitRateDisplay = () => {
+    if (recommendation === 'OVER') {
+      // For OVER bets, show the actual hits
+      return {
+        hits: stats.hits,
+        total: stats.total,
+        percentage: hitRatePercent
+      }
+    } else {
+      // For UNDER bets, show the inverse (misses)
+      return {
+        hits: stats.total - stats.hits,
+        total: stats.total,
+        percentage: 100 - hitRatePercent
+      }
+    }
+  }
+  
+  const hitRateDisplay = getHitRateDisplay()
 
   return (
     <tr 
@@ -219,27 +240,23 @@ function PlayerRowComponent({
         </div>
       </td>
       
-      {/* Next Game */}
+      {/* Prop Line - Merged Stat Type and Line */}
       <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-primary-black-800 dark:text-primary-black-200">
-          {player.next_game ? (
-            <div className="flex flex-col">
-              <span>{player.next_game.home_team} vs {player.next_game.away_team}</span>
-              <span className="text-xs text-primary-black-500 dark:text-primary-black-400">
-                {new Date(player.next_game.date).toLocaleDateString()}
-              </span>
+        <div className="flex items-center">
+          <span className="px-2 py-1 text-xs font-medium rounded-full bg-primary-black-100 dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-200 mr-2">
+            {player.stat_type}
+          </span>
+          <span className="text-primary-black-800 dark:text-primary-black-200 font-medium">
+            {player.line.toFixed(1)}
+          </span>
+          
+          {/* Next Game Info - Small text below */}
+          {player.next_game && (
+            <div className="ml-2 text-xs text-primary-black-400 dark:text-primary-black-500">
+              <span>vs {player.next_game.home_team === player.player.team ? player.next_game.away_team : player.next_game.home_team}</span>
             </div>
-          ) : (
-            <span className="text-primary-black-400 dark:text-primary-black-500">No upcoming game</span>
           )}
         </div>
-      </td>
-      
-      {/* Stat Type */}
-      <td className="px-6 py-4 whitespace-nowrap">
-        <span className="px-2 py-1 text-xs font-medium rounded-full bg-primary-black-100 dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-200">
-          {player.stat_type}
-        </span>
       </td>
       
       {/* Average */}
@@ -261,13 +278,6 @@ function PlayerRowComponent({
         </div>
       </td>
       
-      {/* Line */}
-      <td className="px-6 py-4 whitespace-nowrap">
-        <span className="text-primary-black-800 dark:text-primary-black-200 font-medium">
-          {player.line.toFixed(1)}
-        </span>
-      </td>
-      
       {/* Hit Rate */}
       <td className="px-6 py-4 whitespace-nowrap">
         <div className="flex flex-col">
@@ -275,14 +285,14 @@ function PlayerRowComponent({
           <div className="w-full bg-primary-black-100 dark:bg-primary-black-700 rounded-full h-2.5 mb-1">
             <div 
               className={cn("h-2.5 rounded-full", hitRateColor)}
-              style={{ width: `${hitRatePercent}%` }}
+              style={{ width: `${hitRateDisplay.percentage}%` }}
             ></div>
           </div>
           
           {/* Hit Rate Text */}
           <div className="flex justify-between items-center">
             <span className="text-xs text-primary-black-500 dark:text-primary-black-400">
-              {stats.hits}/{stats.total} ({hitRatePercent}%)
+              {hitRateDisplay.hits}/{hitRateDisplay.total} ({hitRateDisplay.percentage}%)
             </span>
             
             {/* Recommendation */}

@@ -175,7 +175,7 @@ This document outlines our strategy for enhancing the user interface, improving 
     - [x] Improve typography and spacing for better readability
   
   - [ ] **2.2.3.2 Filtering System** - CURRENT FOCUS
-    - [ ] Enhance the filter UI with better visual feedback
+    - [ ] Enhance filter UI with better visual feedback
     - [ ] Implement multi-select filters for teams and prop types
     - [ ] Add advanced sorting options (hit rate, line value, recent performance)
     - [ ] Create filter presets for common queries (hot trends, value plays)
@@ -194,6 +194,13 @@ This document outlines our strategy for enhancing the user interface, improving 
     - [x] Implement matchup-specific analysis for current game
     - [x] Show historical performance against current opponent
     - [x] Add betting insights based on trends and matchups
+    
+  - [x] **2.2.3.5 Table Layout Optimization**
+    - [x] Move team information under player name for better space utilization
+    - [x] Remove Next Game column and include opponent info in a more compact format
+    - [x] Merge Stat and Line columns into a single "Prop Line" column
+    - [x] Reorder columns for better information hierarchy
+    - [x] Fix hit rate display to show correct format for under bets (e.g., 14/20 under instead of 6/20)
 
 - [ ] **2.2.4 Player Profile Modal**
   - [ ] Complete performance history charts with actual data
@@ -306,21 +313,28 @@ This document outlines our strategy for enhancing the user interface, improving 
   - [x] Add tooltips with additional context for statistics
   - [x] Improve typography and spacing for better readability
 
-- [ ] **4.3.2 Filtering System** - CURRENT FOCUS
+- [x] **4.3.2 Table Layout Optimization**
+  - [x] Move team information under player name for better space utilization
+  - [x] Remove Next Game column and include opponent info in a more compact format
+  - [x] Merge Stat and Line columns into a single "Prop Line" column
+  - [x] Reorder columns for better information hierarchy
+  - [x] Fix hit rate display to show correct format for under bets (e.g., 14/20 under instead of 6/20)
+
+- [ ] **4.3.3 Filtering System** - CURRENT FOCUS
   - [ ] Enhance filter UI with better visual feedback
   - [ ] Implement multi-select filters for teams and prop types
   - [ ] Add advanced sorting options (hit rate, line value, recent performance)
   - [ ] Create filter presets for common queries (hot trends, value plays)
   - [ ] Add a more intuitive search experience with autocomplete
 
-- [x] **4.3.3 Data Display**
+- [x] **4.3.4 Data Display**
   - [x] Implement complete player prop data with proper formatting
   - [x] Add more detailed player statistics for different timeframes
   - [x] Show prop comparison across sportsbooks with best odds highlighting
   - [x] Display recent performance trends with visual indicators
   - [x] Add matchup-specific context for each prop
 
-- [x] **4.3.4 Player Analysis Integration**
+- [x] **4.3.5 Player Analysis Integration**
   - [x] Enhance player analysis dialog with more detailed statistics
   - [x] Add quick access to player game logs and performance history
   - [x] Implement matchup-specific analysis for current game
@@ -388,10 +402,10 @@ This document outlines our strategy for enhancing the user interface, improving 
 ### 7.2 Trendy Props Page Improvements - CURRENT FOCUS
 - [x] Redesign player cards with team color accents and improved layout
 - [x] Add visual hit rate indicators with color-coded progress bars
+- [x] Optimize table layout by moving team information under player name
+- [x] Remove Next Game column and merge Stat and Line columns
+- [x] Fix hit rate display to show correct format for under bets
 - [ ] Enhance filtering system with better UI and more options
-- [x] Implement player headshots and trend indicators
-- [x] Improve data display with more detailed statistics
-- [ ] Optimize table layout by moving team information under player name
 
 ### 7.3 Authentication System
 - [ ] Implement basic login/signup functionality
