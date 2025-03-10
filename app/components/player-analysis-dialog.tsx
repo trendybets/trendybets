@@ -40,6 +40,7 @@ interface PlayerAnalysisDialogProps {
   player: PlayerData | null
   isOpen: boolean
   onClose: () => void
+  onError?: () => void
 }
 
 type TimeframeKey = 'last5' | 'last10' | 'season'
@@ -67,7 +68,7 @@ interface Fixture {
   is_live?: boolean;
 }
 
-export function PlayerAnalysisDialog({ player, isOpen, onClose }: PlayerAnalysisDialogProps) {
+export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: PlayerAnalysisDialogProps) {
   const [selectedTimeframe, setSelectedTimeframe] = useState('L10')
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [processedPlayer, setProcessedPlayer] = useState<PlayerData | null>(null)
@@ -75,49 +76,51 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose }: PlayerAnalysis
   
   // Process player data to ensure opponent names are set
   useEffect(() => {
-    if (!player) {
-      setProcessedPlayer(null);
-      return;
-    }
-    
-    // Clone the player object to avoid mutating props
-    const processedData = { ...player };
-    
-    // Process games to ensure opponent names are set
-    if (processedData.games) {
-      processedData.games = processedData.games.map((game, index) => {
-        // If game already has opponent name, use it
-        if (game.opponent) return game;
-        
-        // Create a more descriptive placeholder based on available data
-        let opponentName = "";
-        
-        // Use date if available
-        if (game.date) {
-          const dateStr = game.date;
-          opponentName = `Game on ${dateStr}`;
+    try {
+      if (!player) {
+        setProcessedPlayer(null);
+        return;
+      }
+      
+      // Clone the player object to avoid mutating props
+      const processedData = { ...player };
+      
+      // Process games to ensure opponent names are set
+      if (processedData.games) {
+        processedData.games = processedData.games.map((game, index) => {
+          // If game already has opponent name, use it
+          if (game.opponent) return game;
           
-          // Add home/away info if available
-          if (typeof game.is_away === 'boolean') {
-            opponentName = game.is_away ? `Away (${dateStr})` : `Home (${dateStr})`;
+          // Create a more descriptive placeholder based on available data
+          let opponentName = "";
+          
+          // Use date if available
+          if (game.date) {
+            const dateStr = game.date;
+            opponentName = `Game on ${dateStr}`;
+            
+            // Add home/away info if available
+            if (typeof game.is_away !== 'undefined') {
+              opponentName += game.is_away ? " (Away)" : " (Home)";
+            }
+          } else {
+            // Fallback to generic name
+            opponentName = `Game ${index + 1}`;
           }
-        } else if (typeof game.is_away === 'boolean') {
-          // Use home/away status if available
-          opponentName = game.is_away ? `Away Game ${index + 1}` : `Home Game ${index + 1}`;
-        } else {
-          // Fallback
-          opponentName = `Game ${index + 1}`;
-        }
-        
-        return {
-          ...game,
-          opponent: opponentName
-        };
-      });
+          
+          return {
+            ...game,
+            opponent: opponentName
+          };
+        });
+      }
+      
+      setProcessedPlayer(processedData);
+    } catch (error) {
+      console.error("Error processing player data:", error);
+      if (onError) onError();
     }
-    
-    setProcessedPlayer(processedData);
-  }, [player]);
+  }, [player, onError]);
   
   useEffect(() => {
     if (player) {
@@ -397,61 +400,265 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose }: PlayerAnalysis
     ]
   };
 
-  const options = {
-    responsive: true,
-    plugins: {
-      legend: {
-        display: false,
-      },
-      tooltip: {
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        titleColor: '#fff',
-        bodyColor: '#fff',
-        callbacks: {
-          title: function(context: any) {
-            return chartData.labels[context[0].dataIndex];
-          },
-          label: function(context: any) {
-            const value = context.raw;
-            if (context.dataset.type !== 'line') {
-              return `${processedPlayer.stat_type}: ${value} ${value > getLineValue() ? '(OVER)' : '(UNDER)'} ${getLineValue()}`;
-            }
-            return undefined;
-          }
-        }
+  // Helper functions for calculations
+  const calculateAverage = (player: PlayerData): number => {
+    if (!player.games || player.games.length === 0) return 0;
+    
+    const numGames = player.games.length;
+    let total = 0;
+    
+    player.games.forEach(game => {
+      if (player.stat_type.toLowerCase() === 'points') {
+        total += game.points;
+      } else if (player.stat_type.toLowerCase() === 'assists') {
+        total += game.assists;
+      } else if (player.stat_type.toLowerCase() === 'rebounds' || player.stat_type.toLowerCase() === 'total_rebounds') {
+        total += game.total_rebounds;
       }
-    },
-    scales: {
-      y: {
-        type: 'linear' as const,
-        beginAtZero: true,
-        grid: {
-          color: 'rgba(0, 0, 0, 0.1)',
-        },
-        border: {
-          display: false,
-        },
-        ticks: {
-          color: '#666',
-          font: {
-            size: 12
-          }
-        }
-      },
-      x: {
-        type: 'category' as const,
-        grid: {
-          display: false,
-        },
-        ticks: {
-          color: '#666',
-          font: {
-            size: 11
-          }
-        }
+    });
+    
+    return total / numGames;
+  };
+
+  const calculateHitRate = (player: PlayerData): number => {
+    if (!player.games || player.games.length === 0 || !player.line) return 0;
+    
+    const numGames = player.games.length;
+    let hits = 0;
+    
+    player.games.forEach(game => {
+      let value = 0;
+      if (player.stat_type.toLowerCase() === 'points') {
+        value = game.points;
+      } else if (player.stat_type.toLowerCase() === 'assists') {
+        value = game.assists;
+      } else if (player.stat_type.toLowerCase() === 'rebounds' || player.stat_type.toLowerCase() === 'total_rebounds') {
+        value = game.total_rebounds;
+      }
+      
+      if (value > player.line) {
+        hits++;
+      }
+    });
+    
+    return Math.round((hits / numGames) * 100);
+  };
+
+  const calculateStreak = (player: PlayerData): number => {
+    if (!player.games || player.games.length === 0 || !player.line) return 0;
+    
+    let streak = 0;
+    let currentStreak = 0;
+    let isOver = false;
+    
+    // Check the first game to determine the streak type
+    if (player.games.length > 0) {
+      let value = 0;
+      if (player.stat_type.toLowerCase() === 'points') {
+        value = player.games[0].points;
+      } else if (player.stat_type.toLowerCase() === 'assists') {
+        value = player.games[0].assists;
+      } else if (player.stat_type.toLowerCase() === 'rebounds' || player.stat_type.toLowerCase() === 'total_rebounds') {
+        value = player.games[0].total_rebounds;
+      }
+      
+      isOver = value > player.line;
+      currentStreak = 1;
+    }
+    
+    // Calculate the streak
+    for (let i = 1; i < player.games.length; i++) {
+      let value = 0;
+      if (player.stat_type.toLowerCase() === 'points') {
+        value = player.games[i].points;
+      } else if (player.stat_type.toLowerCase() === 'assists') {
+        value = player.games[i].assists;
+      } else if (player.stat_type.toLowerCase() === 'rebounds' || player.stat_type.toLowerCase() === 'total_rebounds') {
+        value = player.games[i].total_rebounds;
+      }
+      
+      const currentIsOver = value > player.line;
+      
+      if (currentIsOver === isOver) {
+        currentStreak++;
+      } else {
+        break;
       }
     }
-  }
+    
+    return currentStreak;
+  };
+
+  const calculateStreakType = (player: PlayerData): string => {
+    if (!player.games || player.games.length === 0 || !player.line) return '';
+    
+    let value = 0;
+    if (player.stat_type.toLowerCase() === 'points') {
+      value = player.games[0].points;
+    } else if (player.stat_type.toLowerCase() === 'assists') {
+      value = player.games[0].assists;
+    } else if (player.stat_type.toLowerCase() === 'rebounds' || player.stat_type.toLowerCase() === 'total_rebounds') {
+      value = player.games[0].total_rebounds;
+    }
+    
+    return value > player.line ? 'Overs' : 'Unders';
+  };
+
+  // Function to generate chart options with better styling
+  const getChartOptions = (title: string) => {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top' as const,
+          labels: {
+            color: 'rgb(107, 114, 128)',
+            font: {
+              family: "'Inter', sans-serif",
+              size: 12
+            },
+            boxWidth: 15,
+            padding: 15
+          }
+        },
+        title: {
+          display: true,
+          text: title,
+          color: 'rgb(31, 41, 55)',
+          font: {
+            family: "'Inter', sans-serif",
+            size: 16,
+            weight: 'bold' as const
+          },
+          padding: {
+            top: 10,
+            bottom: 20
+          }
+        },
+        tooltip: {
+          backgroundColor: 'rgba(17, 24, 39, 0.8)',
+          titleColor: 'rgb(243, 244, 246)',
+          bodyColor: 'rgb(243, 244, 246)',
+          borderColor: 'rgba(107, 114, 128, 0.2)',
+          borderWidth: 1,
+          padding: 10,
+          bodyFont: {
+            family: "'Inter', sans-serif",
+            size: 12
+          },
+          titleFont: {
+            family: "'Inter', sans-serif",
+            size: 14,
+            weight: 'bold' as const
+          },
+          displayColors: true,
+          boxWidth: 8,
+          boxHeight: 8,
+          boxPadding: 4,
+          usePointStyle: true
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            display: false
+          },
+          ticks: {
+            color: 'rgb(107, 114, 128)',
+            font: {
+              family: "'Inter', sans-serif",
+              size: 10
+            },
+            maxRotation: 45,
+            minRotation: 45
+          }
+        },
+        y: {
+          grid: {
+            color: 'rgba(229, 231, 235, 0.5)'
+          },
+          ticks: {
+            color: 'rgb(107, 114, 128)',
+            font: {
+              family: "'Inter', sans-serif",
+              size: 12
+            }
+          }
+        }
+      }
+    };
+  };
+
+  // Function to generate performance chart data
+  const generatePerformanceChartData = (player: PlayerData | null, statType: string, timeframe: string) => {
+    if (!player || !player.games || player.games.length === 0) {
+      return {
+        labels: [] as string[],
+        datasets: [] as any[]
+      };
+    }
+
+    // Get the appropriate number of games based on timeframe
+    const numGames = timeframe === 'L5' ? 5 : timeframe === 'L10' ? 10 : 20;
+    const games = player.games.slice(0, numGames).reverse(); // Reverse to show oldest to newest
+
+    // Get the appropriate stat values based on stat type
+    const statValues = games.map(game => {
+      if (statType.toLowerCase() === 'points') {
+        return game.points;
+      } else if (statType.toLowerCase() === 'assists') {
+        return game.assists;
+      } else if (statType.toLowerCase() === 'rebounds' || statType.toLowerCase() === 'total_rebounds') {
+        return game.total_rebounds;
+      }
+      return 0;
+    });
+
+    // Calculate the line value
+    const lineValue = player.line || 0;
+
+    // Generate labels (game dates or opponent names)
+    const labels = games.map(game => {
+      if (game.opponent) {
+        return game.opponent;
+      } else if (game.date) {
+        return game.date;
+      }
+      return 'Game';
+    });
+
+    // Generate datasets
+    return {
+      labels,
+      datasets: [
+        {
+          type: 'bar' as const,
+          label: statType,
+          data: statValues,
+          backgroundColor: statValues.map(value => 
+            value >= lineValue ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)'
+          ),
+          borderColor: statValues.map(value => 
+            value >= lineValue ? 'rgb(22, 163, 74)' : 'rgb(220, 38, 38)'
+          ),
+          borderWidth: 1,
+          borderRadius: 4,
+        },
+        {
+          type: 'line' as const,
+          label: 'Line',
+          data: Array(games.length).fill(lineValue),
+          borderColor: 'rgba(59, 130, 246, 0.8)',
+          borderWidth: 2,
+          borderDash: [5, 5],
+          pointRadius: 0,
+          fill: false,
+        }
+      ]
+    };
+  };
 
   // Format confidence level
   const getConfidenceLabel = () => {
@@ -740,8 +947,12 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose }: PlayerAnalysis
                         ) : (
                           <div className="h-64" aria-label={`${processedPlayer.stat_type} performance chart for the last ${selectedTimeframe.slice(1)} games`}>
                             <Bar 
-                              options={options} 
-                              data={chartData as any} 
+                              data={generatePerformanceChartData(
+                                processedPlayer, 
+                                processedPlayer.stat_type || 'Points', 
+                                selectedTimeframe
+                              ) as any} 
+                              options={getChartOptions(`${processedPlayer.stat_type || 'Stat'} Performance`)}
                             />
                           </div>
                         )}
@@ -826,9 +1037,97 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose }: PlayerAnalysis
                 hidden={activeTab !== 'performance'}
               >
                 {activeTab === 'performance' && (
-                  <div className="p-6">
-                    {/* Performance tab content would go here */}
-                    <p>Performance analysis content</p>
+                  <div className="space-y-6 mt-6">
+                    <div className="bg-white dark:bg-primary-black-900 rounded-lg border border-primary-black-100 dark:border-primary-black-700 p-4">
+                      <h3 className="text-lg font-semibold text-primary-black-900 dark:text-primary-black-100 mb-4">
+                        {processedPlayer?.stat_type || 'Stat'} Performance History
+                      </h3>
+                      
+                      <div className="flex space-x-2 mb-4">
+                        <button
+                          onClick={() => setSelectedTimeframe('L5')}
+                          className={cn(
+                            "px-3 py-1 text-sm rounded-md transition-colors",
+                            selectedTimeframe === 'L5'
+                              ? "bg-primary-blue-500 text-white"
+                              : "bg-primary-black-100 dark:bg-primary-black-700 text-primary-black-700 dark:text-primary-black-300 hover:bg-primary-black-200 dark:hover:bg-primary-black-600"
+                          )}
+                        >
+                          L5
+                        </button>
+                        <button
+                          onClick={() => setSelectedTimeframe('L10')}
+                          className={cn(
+                            "px-3 py-1 text-sm rounded-md transition-colors",
+                            selectedTimeframe === 'L10'
+                              ? "bg-primary-blue-500 text-white"
+                              : "bg-primary-black-100 dark:bg-primary-black-700 text-primary-black-700 dark:text-primary-black-300 hover:bg-primary-black-200 dark:hover:bg-primary-black-600"
+                          )}
+                        >
+                          L10
+                        </button>
+                        <button
+                          onClick={() => setSelectedTimeframe('L20')}
+                          className={cn(
+                            "px-3 py-1 text-sm rounded-md transition-colors",
+                            selectedTimeframe === 'L20'
+                              ? "bg-primary-blue-500 text-white"
+                              : "bg-primary-black-100 dark:bg-primary-black-700 text-primary-black-700 dark:text-primary-black-300 hover:bg-primary-black-200 dark:hover:bg-primary-black-600"
+                          )}
+                        >
+                          L20
+                        </button>
+                      </div>
+                      
+                      <div className="h-64 w-full">
+                        {processedPlayer ? (
+                          <Bar 
+                            data={generatePerformanceChartData(
+                              processedPlayer, 
+                              processedPlayer.stat_type || 'Points', 
+                              selectedTimeframe
+                            )} 
+                            options={getChartOptions(`${processedPlayer.stat_type || 'Stat'} Performance`)}
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-full">
+                            <p className="text-primary-black-500 dark:text-primary-black-400">No data available</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Performance Summary */}
+                      {processedPlayer && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                          <div className="bg-primary-black-50 dark:bg-primary-black-800 rounded-lg p-4">
+                            <h4 className="text-sm font-medium text-primary-black-500 dark:text-primary-black-400 mb-1">Average</h4>
+                            <p className="text-2xl font-bold text-primary-black-900 dark:text-primary-black-100">
+                              {processedPlayer.games && processedPlayer.games.length > 0 
+                                ? calculateAverage(processedPlayer).toFixed(1) 
+                                : 'N/A'}
+                            </p>
+                          </div>
+                          
+                          <div className="bg-primary-black-50 dark:bg-primary-black-800 rounded-lg p-4">
+                            <h4 className="text-sm font-medium text-primary-black-500 dark:text-primary-black-400 mb-1">Hit Rate</h4>
+                            <p className="text-2xl font-bold text-primary-black-900 dark:text-primary-black-100">
+                              {processedPlayer.games && processedPlayer.games.length > 0 
+                                ? `${calculateHitRate(processedPlayer)}%` 
+                                : 'N/A'}
+                            </p>
+                          </div>
+                          
+                          <div className="bg-primary-black-50 dark:bg-primary-black-800 rounded-lg p-4">
+                            <h4 className="text-sm font-medium text-primary-black-500 dark:text-primary-black-400 mb-1">Current Streak</h4>
+                            <p className="text-2xl font-bold text-primary-black-900 dark:text-primary-black-100">
+                              {processedPlayer.games && processedPlayer.games.length > 0 
+                                ? `${calculateStreak(processedPlayer)} ${calculateStreakType(processedPlayer)}` 
+                                : 'N/A'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

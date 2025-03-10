@@ -1,11 +1,14 @@
 'use client'
 
-import { Suspense, lazy, useState, useEffect } from 'react'
+import { Suspense, lazy, useState, useEffect, useCallback, useRef } from 'react'
 import { PlayerData } from '../types'
 import { Skeleton } from '@/components/ui/skeleton'
 import { colors } from '@/app/styles/design-system'
 import { X, AlertCircle } from 'lucide-react'
 import { Button } from '@/app/components/ui/Button'
+
+// Simple cache for player data
+const playerCache = new Map<string, PlayerData>()
 
 // Dynamically import the PlayerAnalysisDialog component
 const PlayerAnalysisDialog = lazy(() => import('./player-analysis-dialog').then(mod => ({ 
@@ -25,6 +28,19 @@ interface DynamicPlayerAnalysisDialogProps {
 export function DynamicPlayerAnalysisDialog({ player, isOpen, onClose }: DynamicPlayerAnalysisDialogProps) {
   const [hasError, setHasError] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
+  const [cachedPlayer, setCachedPlayer] = useState<PlayerData | null>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  
+  // Cache the player data when it changes
+  useEffect(() => {
+    if (player && player.player && player.player.id) {
+      const cacheKey = `${player.player.id}-${player.stat_type}`
+      if (!playerCache.has(cacheKey)) {
+        playerCache.set(cacheKey, player)
+      }
+      setCachedPlayer(player)
+    }
+  }, [player])
   
   // Reset error state when dialog opens/closes
   useEffect(() => {
@@ -40,6 +56,27 @@ export function DynamicPlayerAnalysisDialog({ player, isOpen, onClose }: Dynamic
     }
   }, [isOpen])
   
+  // Handle ESC key press
+  useEffect(() => {
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen) {
+        onClose()
+      }
+    }
+    
+    window.addEventListener('keydown', handleEscKey)
+    return () => {
+      window.removeEventListener('keydown', handleEscKey)
+    }
+  }, [isOpen, onClose])
+  
+  // Handle backdrop click
+  const handleBackdropClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose()
+    }
+  }, [onClose])
+  
   // Handle errors in the lazy-loaded component
   const handleError = () => {
     setHasError(true)
@@ -51,22 +88,30 @@ export function DynamicPlayerAnalysisDialog({ player, isOpen, onClose }: Dynamic
   return (
     <div 
       className={`fixed inset-0 z-50 flex items-center justify-center bg-primary-black-900/50 backdrop-blur-sm transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
-      onClick={(e) => {
-        // Close dialog when clicking on the backdrop
-        if (e.target === e.currentTarget) {
-          onClose()
-        }
-      }}
+      onClick={handleBackdropClick}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="player-analysis-title"
     >
       <div 
+        ref={dialogRef}
         className={`bg-white dark:bg-primary-black-800 rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl border border-primary-black-100 dark:border-primary-black-700 transition-transform duration-300 ${isVisible ? 'translate-y-0' : 'translate-y-8'}`}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Close Button - Always visible */}
+        <button 
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 rounded-full hover:bg-primary-black-100 dark:hover:bg-primary-black-700 transition-colors z-10"
+          aria-label="Close dialog"
+        >
+          <X className="h-6 w-6 text-primary-black-500 dark:text-primary-black-400" />
+        </button>
+        
         {/* Error State */}
         {hasError && (
           <div className="flex flex-col items-center justify-center p-8 text-center">
             <AlertCircle className="h-12 w-12 text-semantic-error mb-4" />
-            <h3 className="text-xl font-bold text-primary-black-900 dark:text-primary-black-100 mb-2">
+            <h3 className="text-xl font-bold text-primary-black-900 dark:text-primary-black-100 mb-2" id="player-analysis-title">
               Something went wrong
             </h3>
             <p className="text-primary-black-600 dark:text-primary-black-400 mb-6">
@@ -82,7 +127,7 @@ export function DynamicPlayerAnalysisDialog({ player, isOpen, onClose }: Dynamic
         {!hasError && !player && (
           <div className="flex flex-col items-center justify-center p-8 text-center">
             <AlertCircle className="h-12 w-12 text-primary-blue-500 mb-4" />
-            <h3 className="text-xl font-bold text-primary-black-900 dark:text-primary-black-100 mb-2">
+            <h3 className="text-xl font-bold text-primary-black-900 dark:text-primary-black-100 mb-2" id="player-analysis-title">
               No Player Data
             </h3>
             <p className="text-primary-black-600 dark:text-primary-black-400 mb-6">
@@ -97,16 +142,7 @@ export function DynamicPlayerAnalysisDialog({ player, isOpen, onClose }: Dynamic
         {/* Loading State */}
         {!hasError && player && (
           <Suspense fallback={
-            <div className="relative">
-              {/* Close Button */}
-              <button 
-                onClick={onClose}
-                className="absolute top-0 right-0 p-2 rounded-full hover:bg-primary-black-100 dark:hover:bg-primary-black-700 transition-colors"
-                aria-label="Close dialog"
-              >
-                <X className="h-6 w-6 text-primary-black-500 dark:text-primary-black-400" />
-              </button>
-              
+            <div className="relative pt-6">
               <div className="animate-pulse space-y-6">
                 {/* Header */}
                 <div className="flex items-center justify-between">
@@ -140,6 +176,7 @@ export function DynamicPlayerAnalysisDialog({ player, isOpen, onClose }: Dynamic
               player={player} 
               isOpen={isOpen} 
               onClose={onClose} 
+              onError={handleError}
             />
           </Suspense>
         )}
