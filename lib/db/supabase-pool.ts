@@ -12,10 +12,10 @@ interface PoolConfig {
 
 // Default pool configuration
 const DEFAULT_POOL_CONFIG: PoolConfig = {
-  min: 2,
-  max: 10,
-  idleTimeoutMs: 30000, // 30 seconds
-  acquireTimeoutMs: 5000 // 5 seconds
+  min: 3,                // Increased from 2 to 3
+  max: 20,               // Increased from 10 to 20
+  idleTimeoutMs: 60000,  // Increased from 30s to 60s
+  acquireTimeoutMs: 10000 // Increased from 5s to 10s
 }
 
 // Connection with metadata
@@ -23,6 +23,8 @@ interface PooledConnection {
   client: SupabaseClient<Database>
   lastUsed: number
   inUse: boolean
+  healthCheckPassed?: boolean
+  lastHealthCheck?: number
 }
 
 /**
@@ -77,7 +79,9 @@ class SupabaseConnectionPool {
     const connection: PooledConnection = {
       client,
       lastUsed: Date.now(),
-      inUse: false
+      inUse: false,
+      healthCheckPassed: true,
+      lastHealthCheck: Date.now()
     }
     
     this.pool.push(connection)
@@ -89,8 +93,8 @@ class SupabaseConnectionPool {
    * @returns A Supabase client
    */
   public async getConnection(): Promise<SupabaseClient<Database>> {
-    // Find an available connection
-    let connection = this.pool.find(conn => !conn.inUse)
+    // Find an available and healthy connection
+    let connection = this.pool.find(conn => !conn.inUse && conn.healthCheckPassed !== false)
     
     // If no available connection and we haven't reached max, create a new one
     if (!connection && this.pool.length < this.config.max) {
@@ -123,8 +127,8 @@ class SupabaseConnectionPool {
           return reject(new Error('Timeout waiting for available connection'))
         }
         
-        // Try to find an available connection
-        const connection = this.pool.find(conn => !conn.inUse)
+        // Try to find an available and healthy connection
+        const connection = this.pool.find(conn => !conn.inUse && conn.healthCheckPassed !== false)
         
         if (connection) {
           resolve(connection)
@@ -152,6 +156,27 @@ class SupabaseConnectionPool {
   }
 
   /**
+   * Check if a connection is healthy
+   * @param connection The connection to check
+   * @returns True if the connection is healthy
+   */
+  private async checkConnectionHealth(connection: PooledConnection): Promise<boolean> {
+    try {
+      // Simple query to check if connection is healthy
+      const { data, error } = await connection.client.from('_health_check')
+        .select('count(*)')
+        .limit(1)
+        .maybeSingle()
+      
+      // If the table doesn't exist, that's fine - the query will error but the connection is still valid
+      return !error || error.code === '42P01'; // 42P01 is the Postgres error code for "relation does not exist"
+    } catch (error) {
+      console.error('Connection health check failed:', error)
+      return false
+    }
+  }
+
+  /**
    * Start the maintenance routine to clean up idle connections
    */
   private startMaintenance(): void {
@@ -165,6 +190,26 @@ class SupabaseConnectionPool {
    */
   private performMaintenance(): void {
     const now = Date.now()
+    
+    // Check health of connections that haven't been checked recently
+    this.pool.forEach(async (connection, index) => {
+      // Check health every 5 minutes or if the connection has been idle for a while
+      const shouldCheckHealth = 
+        !connection.lastHealthCheck || 
+        now - connection.lastHealthCheck > 5 * 60 * 1000 || // 5 minutes
+        (!connection.inUse && now - connection.lastUsed > this.config.idleTimeoutMs / 2);
+      
+      if (shouldCheckHealth) {
+        connection.lastHealthCheck = now;
+        connection.healthCheckPassed = await this.checkConnectionHealth(connection);
+        
+        // If connection is unhealthy and not in use, remove it
+        if (!connection.healthCheckPassed && !connection.inUse && this.pool.length > this.config.min) {
+          console.log('Removing unhealthy connection from pool');
+          this.pool.splice(index, 1);
+        }
+      }
+    });
     
     // Remove idle connections, but keep at least min connections
     if (this.pool.length > this.config.min) {
@@ -192,18 +237,63 @@ class SupabaseConnectionPool {
   }
 
   /**
+   * Execute an operation with retry logic
+   * @param operation The operation to execute
+   * @param retries Number of retries
+   * @param delay Initial delay in ms
+   * @returns Result of the operation
+   */
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    retries = 3,
+    delay = 1000
+  ): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      if (retries <= 0) throw error;
+      
+      console.log(`Database operation failed, retrying in ${delay}ms... (${retries} retries left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      return this.executeWithRetry(operation, retries - 1, delay * 1.5);
+    }
+  }
+
+  /**
    * Get the current pool status
    */
   public getPoolStatus(): {
     total: number
     inUse: number
     idle: number
+    healthy: number
   } {
     const total = this.pool.length
     const inUse = this.pool.filter(conn => conn.inUse).length
     const idle = total - inUse
+    const healthy = this.pool.filter(conn => conn.healthCheckPassed).length
     
-    return { total, inUse, idle }
+    return { total, inUse, idle, healthy }
+  }
+
+  /**
+   * Execute an operation with a pooled client and retry logic
+   * @param clientFn Function to get the client
+   * @param operation Operation to execute with the client
+   * @returns Result of the operation
+   */
+  public async withPooledClient<T>(
+    clientFn: () => Promise<SupabaseClient<Database>>,
+    operation: (client: SupabaseClient<Database>) => Promise<T>
+  ): Promise<T> {
+    const client = await clientFn();
+    
+    try {
+      return await this.executeWithRetry(() => operation(client));
+    } finally {
+      this.releaseConnection(client);
+    }
   }
 
   /**
@@ -348,4 +438,4 @@ export async function shutdownPools(): Promise<void> {
     await anonPool.shutdown()
     anonPool = null
   }
-} 
+}

@@ -1,1 +1,0 @@
-{"points": {"N": 10, "decay_factor": 0.7, "home_advantage": 0.1, "opponent_weight": 0.5}, "assists": {"N": 10, "decay_factor": 0.7, "home_advantage": 0.05, "opponent_weight": 1.5}, "total_rebounds": {"N": 10, "decay_factor": 0.7, "home_advantage": 0.0, "opponent_weight": 0.5}}

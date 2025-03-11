@@ -1,0 +1,41 @@
+{
+  "name": "trendybets-direct-sync",
+  "version": "1.0.0",
+  "description": "Direct database sync system for TrendyBets",
+  "main": "simple-scheduler.js",
+  "scripts": {
+    "start": "node simple-scheduler.js",
+    "reset-and-sync": "node reset-and-sync.js",
+    "sync:sports": "node simple-scheduler.js sports",
+    "sync:leagues": "node simple-scheduler.js leagues",
+    "sync:teams": "node simple-scheduler.js teams",
+    "sync:players": "node simple-scheduler.js players",
+    "sync:player-history": "node simple-scheduler.js player-history",
+    "sync:sportsbooks": "node simple-scheduler.js sportsbooks",
+    "sync:fixtures": "node simple-scheduler.js fixtures",
+    "sync:odds": "node simple-scheduler.js odds",
+    "sync:markets": "node simple-scheduler.js markets",
+    "sync:fixtures-completed": "node simple-scheduler.js fixtures-completed",
+    "sync:fixture-results": "node simple-scheduler.js fixture-results",
+    "sync:player-odds": "node simple-scheduler.js player-odds",
+    "sync:sports:force": "node simple-scheduler.js sports --force",
+    "sync:leagues:force": "node simple-scheduler.js leagues --force",
+    "sync:teams:force": "node simple-scheduler.js teams --force",
+    "sync:players:force": "node simple-scheduler.js players --force",
+    "sync:player-history:force": "node simple-scheduler.js player-history --force",
+    "sync:sportsbooks:force": "node simple-scheduler.js sportsbooks --force",
+    "sync:fixtures:force": "node simple-scheduler.js fixtures --force",
+    "sync:odds:force": "node simple-scheduler.js odds --force",
+    "sync:markets:force": "node simple-scheduler.js markets --force",
+    "sync:fixtures-completed:force": "node simple-scheduler.js fixtures-completed --force",
+    "sync:fixture-results:force": "node simple-scheduler.js fixture-results --force",
+    "sync:player-odds:force": "node simple-scheduler.js player-odds --force",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.0.0",
+    "axios": "^1.4.0",
+    "dotenv": "^16.0.0",
+    "node-cron": "^3.0.0"
+  }
+} 
