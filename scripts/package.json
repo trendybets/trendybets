@@ -1,22 +1,20 @@
 {
   "name": "trendybets-scripts",
   "version": "1.0.0",
-  "description": "Scripts for TrendyBets data management",
-  "main": "index.js",
+  "description": "TrendyBets data synchronization scripts",
   "scripts": {
-    "migrate": "node db-migrations/run_migrations.js",
-    "sync": "node sync-tools/process_game_data.js",
-    "sync-api": "node sync-tools/process_game_data.js --api",
-    "start-scheduler": "node sync-tools/schedule_sync.js",
-    "start-api-scheduler": "node sync-tools/api-sync-scheduler.js",
-    "api-sync": "node -e \"require('./sync-tools/api-sync-scheduler').executeSync(process.argv[1])\"",
-    "run-sync": "node ./run-sync.js",
-    "install-pm2": "npm install -g pm2"
+    "start": "cd direct-sync && npm start",
+    "sync": "cd direct-sync && npm run sync",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.0.0",
-    "axios": "^1.8.2",
-    "dotenv": "^16.0.0",
-    "node-cron": "^3.0.0"
-  }
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trendybets/trendybets.git"
+  },
+  "author": "TrendyBets Team",
+  "license": "UNLICENSED",
+  "private": true
 }

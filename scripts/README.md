@@ -2,9 +2,9 @@
 
 This directory contains scripts for maintaining and synchronizing data in the TrendyBets application.
 
-## Recommended Approach: Direct Database Sync
+## Direct Database Sync System
 
-We've implemented a new, more efficient approach for data synchronization that connects directly to Supabase without using API routes:
+The recommended approach for data synchronization connects directly to Supabase without using API routes:
 
 ```bash
 cd ~/trendybets/scripts/direct-sync
@@ -12,30 +12,19 @@ npm install
 npm start  # Start the scheduler
 ```
 
-See the [Direct Sync README](./direct-sync/README.md) for more details. This is the **recommended approach** going forward.
-
-## Legacy Approaches (Deprecated)
-
-The following directories contain older synchronization approaches that are now considered legacy:
-
-- **db-migrations/** - Database migration scripts
-- **sync-tools/** - API-based sync tools (uses Next.js API routes)
-- **utils/** - Utility scripts
+See the [Direct Sync README](./direct-sync/README.md) for more details.
 
 ## Directory Structure
 
 ```
 scripts/
-├── direct-sync/           # NEW: Direct database sync (recommended)
-│   ├── sync-sports-leagues.js
-│   ├── sync-teams.js
-│   └── simple-scheduler.js
+├── direct-sync/           # Direct database sync system
+│   ├── README.md          # Documentation for the direct sync system
+│   ├── simple-scheduler.js # Main scheduler
+│   ├── sync-*.js          # Individual sync scripts for different data types
+│   └── package.json       # Dependencies
 │
-├── db-migrations/         # Legacy: Database migration scripts
-│
-├── sync-tools/            # Legacy: API-based sync tools
-│
-└── utils/                 # Legacy: Utility scripts
+└── db-migrations/         # Database migration scripts
 ```
 
 ## Dependencies
@@ -48,7 +37,7 @@ These scripts depend on:
 
 ## Getting Started
 
-To use the new direct sync approach:
+To use the direct sync system:
 
 1. **Install dependencies**:
    ```bash
@@ -67,8 +56,12 @@ To use the new direct sync approach:
 3. **Run a sync manually**:
    ```bash
    cd ~/trendybets/scripts/direct-sync
-   npm run sync:sports  # Sync sports and leagues
-   npm run sync:teams   # Sync teams data
+   npm run sync:sports     # Sync sports data
+   npm run sync:leagues    # Sync leagues data
+   npm run sync:teams      # Sync teams data
+   npm run sync:fixtures   # Sync upcoming fixtures
+   npm run sync:odds       # Sync game odds
+   # And many more - see direct-sync/README.md for the full list
    ```
 
 4. **Or start the scheduler**:
@@ -87,7 +80,7 @@ npm install -g pm2
 
 # Start the scheduler
 cd ~/trendybets/scripts/direct-sync
-pm2 start simple-scheduler.js --name "trendybets-sync"
+pm2 start simple-scheduler.js --name "trendybets-sync" -- start
 
 # Make sure it restarts on system boot
 pm2 save
@@ -96,20 +89,23 @@ pm2 startup
 
 ## Monitoring
 
-All sync operations log their activities to the `sync_log` table in Supabase, and scheduler activities are logged to the `scheduler_log` table.
+All sync operations log their activities to the `sync_log` table in Supabase.
 
-## Game Statistics Sync
+## Sync Schedule
 
-This system maintains the optimized `game_scores` and `team_stats` tables that provide enhanced querying capabilities for team comparisons and game research.
+| Sync Job | Schedule | Dependencies |
+|----------|----------|--------------|
+| sports | Every 24 hours | None |
+| leagues | Every 24 hours | sports |
+| teams | Every 24 hours | leagues |
+| players | Every 12 hours | teams |
+| player-history | Every 24 hours at 4 AM | players |
+| sportsbooks | Every 12 hours | None |
+| fixtures | Every 30 minutes | leagues, teams |
+| fixtures-completed | Once daily at 2 AM | None |
+| fixture-results | Once daily at 3 AM | fixtures-completed |
+| odds | Every 10 minutes | fixtures, sportsbooks |
+| markets | Every 24 hours | None |
+| player-odds | Every 30 minutes | fixtures, sportsbooks |
 
-- **See:** [Game Data Synchronization System](./sync-tools/README.md)
-
-## API Endpoint Sync
-
-This system automates the calling of your API endpoints that fetch and process data from external sources, replacing the need for manual buttons in the frontend.
-
-- **See:** [API Sync Scheduler](./sync-tools/api-sync-scheduler-README.md)
-
-## Customization
-
-See the individual README files for each sync system to learn how to customize frequencies, add new endpoints, or modify the sync behavior. 
+See the [Direct Sync README](./direct-sync/README.md) for more details and customization options. 
