@@ -180,11 +180,23 @@ export async function GET(request: Request) {
       console.log('Sample odds data:', allFixtureOdds.slice(0, 2));
     }
     
+    // Create multiple formats of player IDs to ensure we find records regardless of case
+    const playerIdFormats = playerIds.flatMap(id => [
+      id,                   // Original format
+      id.toUpperCase(),     // Uppercase format
+      id.toLowerCase()      // Lowercase format
+    ]);
+    
+    // Remove duplicates
+    const uniquePlayerIdFormats = Array.from(new Set(playerIdFormats));
+    
+    console.log(`Querying players table with ${uniquePlayerIdFormats.length} ID format variations`);
+    
     // Fetch player details from Supabase players table
     const { data: playerDetails, error: playerDetailsError } = await supabase
       .from('players')
       .select('*, team:teams(name)')
-      .in('id', normalizedPlayerIds);
+      .in('id', uniquePlayerIdFormats);
     
     if (playerDetailsError) {
       console.warn(`Failed to fetch player details from Supabase: ${playerDetailsError.message}`);
@@ -201,105 +213,94 @@ export async function GET(request: Request) {
       playerDetailsMap.set(normalizePlayerId(player.id), player);
     });
     
-    // Fetch player history from Supabase player_history table
-    const { data: playerHistory, error: playerHistoryError } = await supabase
-      .from('player_history')
-      .select('*')
-      .in('player_id', normalizedPlayerIds);
-    
-    if (playerHistoryError) {
-      console.warn(`Failed to fetch player history from Supabase: ${playerHistoryError.message}`);
-    }
-    
-    console.log(`Fetched ${playerHistory?.length || 0} player history records from Supabase`);
-    if (playerIds.length > 0 && (!playerHistory || playerHistory.length === 0)) {
-      console.warn('No player history found in Supabase. Sample player IDs:', playerIds.slice(0, 5));
-    } else if (playerHistory && playerHistory.length > 0) {
-      // Log sample of player history to debug
-      console.log('Sample player history record:', playerHistory[0]);
-      
-      // Count history records per player
-      const playerHistoryCounts = new Map();
-      playerHistory.forEach(history => {
-        const playerId = history.player_id;
-        playerHistoryCounts.set(playerId, (playerHistoryCounts.get(playerId) || 0) + 1);
-      });
-      
-      // Log players with most and least history
-      const playerCountsArray = Array.from(playerHistoryCounts.entries());
-      const playersWithMostHistory = playerCountsArray
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5);
-      const playersWithLeastHistory = playerCountsArray
-        .sort((a, b) => a[1] - b[1])
-        .slice(0, 5);
-      
-      console.log('Players with most history records:', 
-        playersWithMostHistory.map(([id, count]) => ({
-          id,
-          name: playerDetailsMap.get(id)?.full_name || 'Unknown',
-          count
-        }))
-      );
-      
-      console.log('Players with least history records:', 
-        playersWithLeastHistory.map(([id, count]) => ({
-          id,
-          name: playerDetailsMap.get(id)?.full_name || 'Unknown',
-          count
-        }))
-      );
-      
-      // Check for players with no history
-      const playersWithNoHistory = playerIds.filter(id => !playerHistoryCounts.has(id));
-      if (playersWithNoHistory.length > 0) {
-        console.log('Players with no history records:', 
-          playersWithNoHistory.slice(0, 10).map(id => ({
-            id,
-            name: playerDetailsMap.get(id)?.full_name || 'Unknown'
-          }))
-        );
-      }
-    }
-    
-    // Group player history by player and stat type
+    // REMOVE the initial failed batch query and replace with an optimized approach
+    // Initialize playerHistoryMap to store player history
     const playerHistoryMap = new Map();
-    playerHistory?.forEach(history => {
-      // Normalize player ID
-      const normalizedPlayerId = normalizePlayerId(history.player_id);
+    console.log(`Fetching player history for ${playerIds.length} players (optimized approach)`);
+    
+    // Process players in batches to avoid hitting request limits
+    const BATCH_SIZE = 20;
+    const batchesCount = Math.ceil(playerIds.length / BATCH_SIZE);
+    console.log(`Will process player history in ${batchesCount} batches of ${BATCH_SIZE} players each`);
+    
+    // Create a function to fetch history for a batch of players
+    // This uses the successful direct query approach for all players
+    const fetchHistoryBatch = async (playerIdsBatch: string[]) => {
+      const batchFormats = playerIdsBatch.flatMap(id => [
+        id,                   // Original format
+        id.toUpperCase(),     // Uppercase format
+        id.toLowerCase()      // Lowercase format
+      ]);
       
-      // Create keys for different stat types
-      const pointsKey = `${normalizedPlayerId}:points`;
-      const assistsKey = `${normalizedPlayerId}:assists`;
-      const reboundsKey = `${normalizedPlayerId}:rebounds`;
+      // Remove duplicates
+      const uniqueBatchFormats = Array.from(new Set(batchFormats));
       
-      // Initialize arrays if they don't exist
-      if (!playerHistoryMap.has(pointsKey)) {
-        playerHistoryMap.set(pointsKey, []);
+      const { data: batchHistory, error: batchError } = await supabase
+        .from('player_history')
+        .select('*')
+        .in('player_id', uniqueBatchFormats)
+        .order('start_date', { ascending: false });
+        
+      if (batchError) {
+        console.warn(`Failed to fetch history batch: ${batchError.message}`);
+        return [];
       }
-      if (!playerHistoryMap.has(assistsKey)) {
-        playerHistoryMap.set(assistsKey, []);
-      }
-      if (!playerHistoryMap.has(reboundsKey)) {
-        playerHistoryMap.set(reboundsKey, []);
-      }
       
-      // Add the stats to their respective arrays
-      playerHistoryMap.get(pointsKey).push({
-        game_date: history.start_date,
-        stat_value: history.points
-      });
+      return batchHistory || [];
+    };
+    
+    // Process all batches
+    let totalHistoryRecords = 0;
+    
+    for (let i = 0; i < batchesCount; i++) {
+      const start = i * BATCH_SIZE;
+      const end = Math.min(start + BATCH_SIZE, playerIds.length);
+      const currentBatch = playerIds.slice(start, end);
       
-      playerHistoryMap.get(assistsKey).push({
-        game_date: history.start_date,
-        stat_value: history.assists
-      });
+      console.log(`Processing history batch ${i+1}/${batchesCount} with ${currentBatch.length} players`);
+      const batchResults = await fetchHistoryBatch(currentBatch);
+      totalHistoryRecords += batchResults.length;
       
-      playerHistoryMap.get(reboundsKey).push({
-        game_date: history.start_date,
-        stat_value: history.total_rebounds
+      // Group the history records by player and stat type
+      batchResults.forEach(history => {
+        // Normalize player ID for consistent lookup
+        const normalizedPlayerId = normalizePlayerId(history.player_id);
+        
+        // Create keys for different stat types
+        const pointsKey = `${normalizedPlayerId}:points`;
+        const assistsKey = `${normalizedPlayerId}:assists`;
+        const reboundsKey = `${normalizedPlayerId}:rebounds`;
+        
+        // Initialize arrays if they don't exist
+        if (!playerHistoryMap.has(pointsKey)) {
+          playerHistoryMap.set(pointsKey, []);
+        }
+        if (!playerHistoryMap.has(assistsKey)) {
+          playerHistoryMap.set(assistsKey, []);
+        }
+        if (!playerHistoryMap.has(reboundsKey)) {
+          playerHistoryMap.set(reboundsKey, []);
+        }
+        
+        // Add the stats to their respective arrays
+        playerHistoryMap.get(pointsKey).push({
+          game_date: history.start_date,
+          stat_value: history.points
+        });
+        
+        playerHistoryMap.get(assistsKey).push({
+          game_date: history.start_date,
+          stat_value: history.assists
+        });
+        
+        playerHistoryMap.get(reboundsKey).push({
+          game_date: history.start_date,
+          stat_value: history.total_rebounds
+        });
       });
-    });
+    }
+    
+    console.log(`Successfully fetched ${totalHistoryRecords} player history records for ${playerIds.length} players`);
     
     // Log stats for a few players to debug
     if (playerIds.length > 0) {
@@ -366,94 +367,16 @@ export async function GET(request: Request) {
       const historyKey = `${normalizedPlayerId}:${statType.toLowerCase()}`;
       let playerGameStats = playerHistoryMap.get(historyKey) || [];
       
-      // If we don't have history for this player, try to fetch it directly
+      // Log if we don't have history for this player (but don't attempt to fetch again)
       if (playerGameStats.length === 0) {
-        try {
-          console.log(`No history found for ${odd.selection || 'Unknown'} (${odd.player_id}), fetching directly...`);
-          
-          // Try different formats of the player ID
-          const possiblePlayerIds = [
-            odd.player_id,                    // Original ID
-            normalizePlayerId(odd.player_id), // Normalized ID (uppercase)
-            odd.player_id.toLowerCase(),      // Lowercase ID
-            odd.player_id.replace(/[^a-zA-Z0-9]/g, '') // Alphanumeric only
-          ];
-          
-          // Log the possible IDs we're trying
-          console.log(`Trying possible player IDs for ${odd.selection || 'Unknown'}:`, possiblePlayerIds);
-          
-          // Fetch player history directly from the database for this specific player
-          const { data: directHistory, error: directHistoryError } = await supabase
-            .from('player_history')
-            .select('*')
-            .in('player_id', possiblePlayerIds)
-            .order('start_date', { ascending: false })
-            .limit(20);
-          
-          if (directHistoryError) {
-            console.warn(`Failed to fetch direct history for ${odd.player_id}: ${directHistoryError.message}`);
-          } else if (directHistory && directHistory.length > 0) {
-            console.log(`Found ${directHistory.length} direct history records for ${odd.selection || 'Unknown'} (${odd.player_id})`);
-            
-            // Map the history to the correct format based on stat type
-            playerGameStats = directHistory.map((game: any) => ({
-              game_date: game.start_date,
-              stat_value: statType === 'Points' ? game.points : 
-                         statType === 'Assists' ? game.assists : 
-                         game.total_rebounds
-            }));
-          } else {
-            // If we still don't have history, try to find the player by name
-            if (odd.selection) {
-              console.log(`Trying to find player by name: ${odd.selection}`);
-              
-              // First, try to find the player in the players table
-              const { data: playerByName, error: playerByNameError } = await supabase
-                .from('players')
-                .select('id, full_name')
-                .ilike('full_name', `%${odd.selection}%`)
-                .limit(5);
-              
-              if (playerByNameError) {
-                console.warn(`Failed to find player by name: ${playerByNameError.message}`);
-              } else if (playerByName && playerByName.length > 0) {
-                console.log(`Found ${playerByName.length} players matching name "${odd.selection}":`, 
-                  playerByName.map(p => ({ id: p.id, name: p.full_name }))
-                );
-                
-                // Try to fetch history for the first matching player
-                const matchedPlayerId = playerByName[0].id;
-                
-                const { data: nameMatchHistory, error: nameMatchHistoryError } = await supabase
-                  .from('player_history')
-                  .select('*')
-                  .eq('player_id', matchedPlayerId)
-                  .order('start_date', { ascending: false })
-                  .limit(20);
-                
-                if (nameMatchHistoryError) {
-                  console.warn(`Failed to fetch history for matched player ${matchedPlayerId}: ${nameMatchHistoryError.message}`);
-                } else if (nameMatchHistory && nameMatchHistory.length > 0) {
-                  console.log(`Found ${nameMatchHistory.length} history records for matched player ${playerByName[0].full_name} (${matchedPlayerId})`);
-                  
-                  // Map the history to the correct format based on stat type
-                  playerGameStats = nameMatchHistory.map((game: any) => ({
-                    game_date: game.start_date,
-                    stat_value: statType === 'Points' ? game.points : 
-                               statType === 'Assists' ? game.assists : 
-                               game.total_rebounds
-                  }));
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.error(`Error fetching direct history for ${odd.player_id}:`, error);
-        }
+        console.log(`No history found for ${odd.selection || 'Unknown'} (${odd.player_id}) after batch processing`);
       }
       
       // Sort stats by date (most recent first)
       playerGameStats.sort((a: any, b: any) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
+      
+      // Limit to most recent 20 games for consistency
+      playerGameStats = playerGameStats.slice(0, 20);
       
       // Extract stat values
       const gameStats = playerGameStats.map((game: any) => game.stat_value);
@@ -581,6 +504,41 @@ export async function GET(request: Request) {
     const playerOdds = Array.from(uniqueProps.values());
     console.log(`Successfully processed ${playerOdds.length} player props`);
 
+    // Before pagination, analyze and log game count data
+    const gameCountAnalysis: Record<number, number> = {};
+    const processedData = playerOdds || [];
+    processedData.forEach((playerData: any) => {
+      const gameCount = playerData.games?.length || 0;
+      gameCountAnalysis[gameCount] = (gameCountAnalysis[gameCount] || 0) + 1;
+    });
+    
+    console.log('Game count distribution:', gameCountAnalysis);
+    
+    // Log players with fewer than 5 games
+    const playersWithFewGames = processedData
+      .filter((playerData: any) => (playerData.games?.length || 0) < 5)
+      .map((playerData: any) => ({
+        name: playerData.player.name,
+        gameCount: playerData.games?.length || 0,
+        statType: playerData.stat_type
+      }));
+      
+    if (playersWithFewGames.length > 0) {
+      console.log(`Found ${playersWithFewGames.length} players with fewer than 5 games. Sample:`, 
+        playersWithFewGames.slice(0, 5));
+    }
+    
+    // Calculate percentages for analytics
+    const totalPlayers = processedData.length;
+    const playersWithAtLeast5Games = processedData.filter((p: any) => (p.games?.length || 0) >= 5).length;
+    const playersWithAtLeast10Games = processedData.filter((p: any) => (p.games?.length || 0) >= 10).length;
+    const playersWithAtLeast20Games = processedData.filter((p: any) => (p.games?.length || 0) >= 20).length;
+    
+    console.log('Player game availability statistics:');
+    console.log(`- ${(playersWithAtLeast5Games / totalPlayers * 100).toFixed(1)}% have at least 5 games`);
+    console.log(`- ${(playersWithAtLeast10Games / totalPlayers * 100).toFixed(1)}% have at least 10 games`);
+    console.log(`- ${(playersWithAtLeast20Games / totalPlayers * 100).toFixed(1)}% have at least 20 games`);
+    
     // Add pagination metadata
     const response = {
       data: playerOdds,
