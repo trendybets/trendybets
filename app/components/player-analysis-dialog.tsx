@@ -538,12 +538,12 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
           }
         },
         tooltip: {
-          backgroundColor: 'rgba(17, 24, 39, 0.8)',
+          backgroundColor: 'rgba(17, 24, 39, 0.9)',
           titleColor: 'rgb(243, 244, 246)',
           bodyColor: 'rgb(243, 244, 246)',
           borderColor: 'rgba(107, 114, 128, 0.2)',
           borderWidth: 1,
-          padding: 10,
+          padding: 12,
           bodyFont: {
             family: "'Inter', sans-serif",
             size: 12
@@ -557,7 +557,14 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
           boxWidth: 8,
           boxHeight: 8,
           boxPadding: 4,
-          usePointStyle: true
+          usePointStyle: true,
+          callbacks: {
+            title: (items: any) => {
+              // Display game number instead of date
+              const index = items[0].dataIndex;
+              return `Game ${index + 1}`;
+            }
+          }
         }
       },
       scales: {
@@ -566,13 +573,12 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
             display: false
           },
           ticks: {
+            display: false, // Hide the x-axis labels completely
             color: 'rgb(107, 114, 128)',
             font: {
               family: "'Inter', sans-serif",
               size: 10
-            },
-            maxRotation: 45,
-            minRotation: 45
+            }
           }
         },
         y: {
@@ -619,17 +625,10 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
     // Calculate the line value
     const lineValue = player.line || 0;
 
-    // Generate labels (game dates or opponent names)
-    const labels = games.map(game => {
-      if (game.opponent) {
-        return game.opponent;
-      } else if (game.date) {
-        return game.date;
-      }
-      return 'Game';
-    });
+    // Generate simplified labels (just game numbers)
+    const labels = games.map((_, index) => `Game ${index + 1}`);
 
-    // Generate datasets
+    // Generate datasets with enhanced visuals
     return {
       labels,
       datasets: [
@@ -638,13 +637,18 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
           label: statType,
           data: statValues,
           backgroundColor: statValues.map(value => 
-            value >= lineValue ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)'
+            value >= lineValue ? 'rgba(34, 197, 94, 0.85)' : 'rgba(239, 68, 68, 0.85)'
           ),
           borderColor: statValues.map(value => 
             value >= lineValue ? 'rgb(22, 163, 74)' : 'rgb(220, 38, 38)'
           ),
           borderWidth: 1,
-          borderRadius: 4,
+          borderRadius: 6,
+          // Add shadow for depth
+          shadowOffsetX: 2,
+          shadowOffsetY: 2,
+          shadowBlur: 5,
+          shadowColor: 'rgba(0, 0, 0, 0.3)',
         },
         {
           type: 'line' as const,
@@ -732,12 +736,22 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        {!player ? null : (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl p-0 bg-white dark:bg-primary-black-900 rounded-xl overflow-hidden">
+        {isLoading ? (
+          <div className="p-6 space-y-8" aria-hidden="true">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-64 w-full" />
+            <div className="grid grid-cols-3 gap-4">
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-32 w-full" />
+            </div>
+          </div>
+        ) : (
           <>
-            {/* Dialog Header */}
-            <div className="flex items-center justify-between mb-4">
+            {/* Player Header */}
+            <div className="flex items-center justify-between mb-4 p-6">
               <div className="flex items-center">
                 {isLoading ? (
                   <Skeleton className="h-12 w-12 rounded-full" aria-hidden="true" />
@@ -761,28 +775,28 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                     </div>
                   ) : (
                     <>
-                      <h2 className="text-xl font-bold text-gray-900">{processedPlayer.player.name}</h2>
-                      <div className="text-sm text-gray-500">{processedPlayer.player.team} • {processedPlayer.player.position}</div>
+                      <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{processedPlayer.player.name}</h2>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">{processedPlayer.player.team} • {processedPlayer.player.position}</div>
                     </>
                   )}
                 </div>
               </div>
               
               {processedPlayer.next_game && (
-                <div className="game-info-card" aria-label="Next game information">
-                  <div className="text-xs text-gray-500 mb-1">Next Game</div>
-                  <div className="text-sm font-medium matchup-display">
+                <div className="game-info-card bg-gray-50 dark:bg-gray-800 p-3 rounded-lg" aria-label="Next game information">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Next Game</div>
+                  <div className="text-sm font-medium matchup-display text-gray-900 dark:text-gray-100">
                     {processedPlayer.next_game.home_team === processedPlayer.player.team 
                       ? `vs ${processedPlayer.next_game.away_team}` 
                       : `@ ${processedPlayer.next_game.home_team}`}
                   </div>
-                  <div className="text-xs text-gray-500 mt-1 game-time">{processedPlayer.next_game.date}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 game-time">{processedPlayer.next_game.date}</div>
                 </div>
               )}
             </div>
             
             {/* Tab Navigation */}
-            <div className="px-6 flex border-t border-gray-100" role="tablist" aria-label="Player analysis tabs">
+            <div className="px-6 flex border-t border-gray-100 dark:border-gray-800" role="tablist" aria-label="Player analysis tabs">
               {[
                 { id: 'overview', label: 'Overview' },
                 { id: 'performance', label: 'Performance' },
@@ -795,8 +809,8 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                   className={cn(
                     "py-3 px-4 text-sm font-medium border-b-2 transition-colors espn-tab",
                     activeTab === tab.id 
-                      ? "espn-tab-active" 
-                      : "espn-tab-inactive"
+                      ? "espn-tab-active border-blue-500 text-blue-600 dark:text-blue-400" 
+                      : "espn-tab-inactive border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                   )}
                   role="tab"
                   id={`tab-${tab.id}`}
@@ -820,7 +834,7 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
             </div>
             
             {/* Tab Content */}
-            <div className="mt-4">
+            <div className="p-6">
               {/* Overview Tab */}
               <div 
                 role="tabpanel" 
@@ -831,49 +845,50 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                 {activeTab === 'overview' && (
                   <div>
                     {/* Key Stats Section */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                       {isLoading ? (
                         <>
+                          <StatsCardSkeleton aria-hidden="true" />
                           <StatsCardSkeleton aria-hidden="true" />
                           <StatsCardSkeleton aria-hidden="true" />
                           <StatsCardSkeleton aria-hidden="true" />
                         </>
                       ) : (
                         <>
-                          <div className="stat-card" aria-label="Line value">
-                            <div className="text-sm text-gray-500 mb-1">Line</div>
-                            <div className="text-2xl font-bold text-gray-900">{getLineValue()}</div>
-                            <div className="text-xs text-gray-500 mt-1">{processedPlayer.stat_type}</div>
+                          <div className="stat-card bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-sm" aria-label="Line value">
+                            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Line</div>
+                            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{getLineValue()}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{processedPlayer.stat_type}</div>
                           </div>
                           
-                          <div className="stat-card" aria-label={`Average ${processedPlayer.stat_type} in ${selectedTimeframe}`}>
-                            <div className="text-sm text-gray-500 mb-1">Average ({selectedTimeframe})</div>
-                            <div className="text-2xl font-bold text-gray-900">{getAverageValue().toFixed(1)}</div>
-                            <div className="text-xs text-gray-500 mt-1">{processedPlayer.stat_type}</div>
+                          <div className="stat-card bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-sm" aria-label={`Average ${processedPlayer.stat_type} in ${selectedTimeframe}`}>
+                            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Average ({selectedTimeframe})</div>
+                            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{getAverageValue().toFixed(1)}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{processedPlayer.stat_type}</div>
                           </div>
                           
-                          <div className="stat-card" aria-label={`Hit rate ${(getHitRate(selectedTimeframe) * 100).toFixed(0)}% in ${selectedTimeframe}`}>
-                            <div className="text-sm text-gray-500 mb-1">Hit Rate ({selectedTimeframe})</div>
+                          <div className="stat-card bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-sm" aria-label={`Hit rate ${(getHitRate(selectedTimeframe) * 100).toFixed(0)}% in ${selectedTimeframe}`}>
+                            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Hit Rate ({selectedTimeframe})</div>
                             <div className={cn(
                               "text-2xl font-bold",
-                              getHitRate(selectedTimeframe) >= 0.7 ? "text-green-600" : 
-                              getHitRate(selectedTimeframe) >= 0.5 ? "text-yellow-600" : 
-                              "text-red-600"
+                              getHitRate(selectedTimeframe) >= 0.7 ? "text-green-600 dark:text-green-500" : 
+                              getHitRate(selectedTimeframe) >= 0.5 ? "text-yellow-600 dark:text-yellow-500" : 
+                              "text-red-600 dark:text-red-500"
                             )}>
                               {(getHitRate(selectedTimeframe) * 100).toFixed(0)}%
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                               {calculateHitCounts().hits} of {calculateHitCounts().total} games
                             </div>
                           </div>
                           
-                          <div className="stat-card" aria-label={`Current streak: ${Math.abs(getCurrentStreak())} ${getCurrentStreak() > 0 ? "consecutive hits" : getCurrentStreak() < 0 ? "consecutive misses" : "no streak"}`}>
-                            <div className="text-sm text-gray-500 mb-1">Current Streak</div>
-                            <div className="text-2xl font-bold text-gray-900">{Math.abs(getCurrentStreak())}</div>
+                          <div className="stat-card bg-gray-50 dark:bg-gray-800 p-4 rounded-lg shadow-sm" aria-label={`Current streak: ${Math.abs(getCurrentStreak())} ${getCurrentStreak() > 0 ? "consecutive hits" : getCurrentStreak() < 0 ? "consecutive misses" : "no streak"}`}>
+                            <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Current Streak</div>
+                            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{Math.abs(getCurrentStreak())}</div>
                             <div className={cn(
                               "text-xs font-medium mt-1",
-                              getCurrentStreak() > 0 ? "text-green-600" : 
-                              getCurrentStreak() < 0 ? "text-red-600" : 
+                              getCurrentStreak() > 0 ? "text-green-600 dark:text-green-500" : 
+                              getCurrentStreak() < 0 ? "text-red-600 dark:text-red-500" : 
                               "text-gray-500"
                             )}>
                               {getCurrentStreak() > 0 ? "Consecutive Hits" : 
@@ -887,23 +902,23 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                     
                     {/* Statistics Section - Timeframes */}
                     <div className="mb-6">
-                      <h3 className="text-base font-medium text-gray-900 mb-3">{processedPlayer.stat_type} Hit Rate</h3>
-                      <div className="grid grid-cols-6 gap-3">
+                      <h3 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-3">{processedPlayer.stat_type} Hit Rate</h3>
+                      <div className="grid grid-cols-5 gap-3">
                         {isLoading ? (
-                          Array(6).fill(0).map((_, i) => (
+                          Array(5).fill(0).map((_, i) => (
                             <Skeleton key={i} className="h-16 w-full rounded-lg" aria-hidden="true" />
                           ))
                         ) : (
-                          ['H2H', 'L5', 'L10', 'L20', '2024', '2023'].map((period) => (
+                          ['H2H', 'L5', 'L10', 'L20', '2024'].map((period) => (
                             <div 
                               key={period} 
-                              className="text-center bg-gray-50 py-3 px-3 rounded-lg"
+                              className="text-center bg-gray-50 dark:bg-gray-800 py-4 px-3 rounded-lg shadow-sm"
                               aria-label={`${period} hit rate: ${period === 'H2H' ? '100' : (getHitRate(period) * 100).toFixed(0)}%`}
                             >
-                              <div className="text-xs text-gray-500 mb-1">{period}</div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{period}</div>
                               <div className={cn(
-                                "text-base font-semibold",
-                                getHitRate(period) > 0.5 ? "text-green-600" : "text-red-600"
+                                "text-lg font-semibold",
+                                getHitRate(period) > 0.5 ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"
                               )}>
                                 {period === 'H2H' ? '100%' : `${(getHitRate(period) * 100).toFixed(0)}%`}
                               </div>
@@ -914,10 +929,10 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                     </div>
                     
                     {/* Chart Section */}
-                    <div className="bg-white rounded-lg border border-gray-200 mb-6">
+                    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 mb-6 shadow-sm">
                       {/* Chart Header with Trend Info */}
-                      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                        <h3 className="text-base font-medium text-gray-900">
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                        <h3 className="text-base font-medium text-gray-900 dark:text-gray-100">
                           {processedPlayer.stat_type} Performance History
                         </h3>
                         <div className="flex gap-2" role="group" aria-label="Timeframe selection">
@@ -928,8 +943,8 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                               className={cn(
                                 "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                                 selectedTimeframe === time 
-                                ? "bg-gray-900 text-white" 
-                                : "text-gray-600 hover:bg-gray-100"
+                                ? "bg-blue-600 dark:bg-blue-700 text-white" 
+                                : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
                               )}
                               aria-pressed={selectedTimeframe === time}
                               aria-label={`Show last ${time.slice(1)} games`}
@@ -945,7 +960,7 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                         {isLoading ? (
                           <Skeleton className="h-64 w-full" aria-hidden="true" />
                         ) : (
-                          <div className="h-64" aria-label={`${processedPlayer.stat_type} performance chart for the last ${selectedTimeframe.slice(1)} games`}>
+                          <div className="h-72" aria-label={`${processedPlayer.stat_type} performance chart for the last ${selectedTimeframe.slice(1)} games`}>
                             <Bar 
                               data={generatePerformanceChartData(
                                 processedPlayer, 
@@ -957,73 +972,24 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                           </div>
                         )}
                       </div>
-                    </div>
-                    
-                    {/* Enhanced Supporting Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Betting Info */}
-                      <div>
-                        <h3 className="text-base font-medium text-gray-900 mb-3">Betting Information</h3>
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          <div className="flex justify-between items-center mb-3">
-                            <div className="text-sm font-medium text-gray-700">
-                              {processedPlayer.recommended_bet?.type === 'over' ? 'Over' : 'Under'} {getLineValue()}
-                            </div>
-                            <div className="text-sm font-semibold text-gray-900">-130</div>
-                          </div>
-
-                          <div className="flex items-center gap-2 mb-3">
-                            <div className="text-sm text-gray-600">Confidence:</div>
-                            <div className={cn("text-sm font-medium", getConfidenceColor())}>
-                              {getConfidenceLabel()}
+                      
+                      {/* Limited Data Warning */}
+                      {processedPlayer.games && processedPlayer.games.length < parseInt(selectedTimeframe.slice(1)) && (
+                        <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                          <div className="flex items-start">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-amber-500 dark:text-amber-400 mr-2 flex-shrink-0 mt-0.5">
+                              <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
+                            </svg>
+                            <div>
+                              <h4 className="text-sm font-medium text-amber-800 dark:text-amber-300">Limited Data Available</h4>
+                              <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                                This player has only {processedPlayer.games.length} recent games, but {selectedTimeframe} requires {selectedTimeframe.slice(1)}. 
+                                Statistics and hit rates may not be as accurate with limited data.
+                              </p>
                             </div>
                           </div>
-
-                          {processedPlayer.recommended_bet?.reason && (
-                            <div className="text-sm text-gray-600 mt-2 p-2 bg-white rounded border border-gray-100">
-                              {processedPlayer.recommended_bet.reason}
-                            </div>
-                          )}
                         </div>
-                      </div>
-
-                      {/* Recent Game Log */}
-                      <div>
-                        <h3 className="text-base font-medium text-gray-900 mb-3">Recent Games</h3>
-                        <div className="bg-gray-50 rounded-lg overflow-hidden">
-                          <table className="w-full text-sm" aria-label="Recent games log">
-                            <thead className="bg-gray-100">
-                              <tr>
-                                <th className="text-left py-2 px-3 text-xs font-medium text-gray-500" scope="col">Game</th>
-                                <th className="text-right py-2 px-3 text-xs font-medium text-gray-500" scope="col">{processedPlayer.stat_type}</th>
-                                <th className="text-right py-2 px-3 text-xs font-medium text-gray-500" scope="col">Result</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {processedPlayer.games?.slice(0, 5).map((game, idx) => {
-                                const statValue = processedPlayer.stat_type.toLowerCase() === 'points' ? game.points : 
-                                                  processedPlayer.stat_type.toLowerCase() === 'assists' ? game.assists : 
-                                                  game.total_rebounds;
-                                const isOver = statValue > getLineValue();
-                                const opponentName = game.opponent || "Unknown";
-                                
-                                return (
-                                  <tr key={idx} className="border-t border-gray-200">
-                                    <td className="py-2 px-3 text-gray-700">{game.is_away ? '@' : 'vs'} {opponentName}</td>
-                                    <td className="py-2 px-3 text-right font-medium text-gray-900">{statValue}</td>
-                                    <td className={cn(
-                                      "py-2 px-3 text-right font-medium",
-                                      isOver ? "text-green-600" : "text-red-600"
-                                    )}>
-                                      {isOver ? "OVER" : "UNDER"}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 )}

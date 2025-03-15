@@ -66,6 +66,11 @@ export function useTrendsTable({
       return { hits: 0, total: 0, percentage: 0, direction: 'NONE', isStrong: false }
     }
     
+    // Check if we have fewer games than expected for the timeframe
+    if (row.games.length < timeframeNumber) {
+      console.warn(`Player ${row.player.name} has fewer games (${row.games.length}) than expected (${timeframeNumber}) for timeframe ${timeframeNumber === 5 ? 'L5' : timeframeNumber === 10 ? 'L10' : 'L20'}`);
+    }
+    
     const relevantGames = row.games.slice(0, Math.min(timeframeNumber, row.games.length))
     const line = row.line || 0
     
