@@ -94,8 +94,12 @@ function PlayerRowComponent({
   // Format hit rate for display
   const hitRatePercent = Math.round(stats.percentage * 100)
   
+  // Flag for insufficient data
+  const hasInsufficientData = stats.total < timeframeNumber
+  
   // Determine confidence level based on hit rate
   const getConfidenceLevel = () => {
+    if (hasInsufficientData) return 'low' // Lower confidence when data is insufficient
     if (hitRatePercent >= 75) return 'very-high'
     if (hitRatePercent >= 65) return 'high'
     if (hitRatePercent >= 55) return 'medium'
@@ -283,35 +287,63 @@ function PlayerRowComponent({
       
       {/* Hit Rate */}
       <td className="px-6 py-4 whitespace-nowrap">
-        <div className="flex flex-col">
-          {/* Hit Rate Bar */}
-          <div className="w-full bg-primary-black-100 dark:bg-primary-black-700 rounded-full h-2.5 mb-1">
+        <div className="w-full">
+          {/* Hit Rate Progress Bar */}
+          <div className="w-full mb-2 bg-primary-black-100 dark:bg-primary-black-700 rounded-full h-2 overflow-hidden">
             <div 
-              className={cn("h-2.5 rounded-full", hitRateColor)}
+              className={cn("h-full rounded-full", hitRateColor)}
               style={{ width: `${hitRateDisplay.percentage}%` }}
             ></div>
           </div>
           
-          {/* Hit Rate Text */}
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-primary-black-500 dark:text-primary-black-400">
-              {hitRateDisplay.hits}/{hitRateDisplay.total} ({hitRateDisplay.percentage}%)
-            </span>
-            
-            {/* Recommendation */}
-            <div 
-              className={cn(
-                "flex items-center text-xs font-medium px-1.5 py-0.5 rounded",
-                confidenceLevel === 'very-high' || confidenceLevel === 'high'
-                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                  : "bg-primary-black-100 text-primary-black-600 dark:bg-primary-black-700 dark:text-primary-black-300"
-              )}
-            >
-              {(confidenceLevel === 'very-high' || confidenceLevel === 'high') && (
-                <Award className="h-3 w-3 mr-1" />
-              )}
-              {recommendation}
+          {/* Hit Rate Text with Recommendation Badge */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              {/* Recommendation Badge */}
+              <div className={cn(
+                "mr-2 px-2 py-0.5 rounded-full text-xs font-semibold uppercase flex items-center",
+                recommendation === 'OVER'
+                  ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                  : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+              )}>
+                {recommendation === 'OVER' ? (
+                  <TrendingUp className="h-3 w-3 mr-1" />
+                ) : (
+                  <TrendingDown className="h-3 w-3 mr-1" />
+                )}
+                {recommendation}
+              </div>
+              
+              {/* Hit Rate */}
+              <div className="flex items-center text-xs">
+                <span className={cn(
+                  "font-medium",
+                  hasInsufficientData 
+                    ? "text-amber-500 dark:text-amber-400"
+                    : "text-primary-black-700 dark:text-primary-black-300"
+                )}>
+                  {hasInsufficientData ? (
+                    <span className="flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 mr-1">
+                        <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
+                      </svg>
+                      {hitRateDisplay.hits}/{hitRateDisplay.total}
+                    </span>
+                  ) : (
+                    `${hitRateDisplay.hits}/${hitRateDisplay.total}`
+                  )}
+                </span>
+                <span className="text-primary-black-500 dark:text-primary-black-400 ml-2">
+                  ({hitRateDisplay.percentage}%)
+                </span>
+              </div>
             </div>
+            
+            {hasInsufficientData && (
+              <span className="text-xs text-amber-500 dark:text-amber-400">
+                Limited data
+              </span>
+            )}
           </div>
         </div>
       </td>
