@@ -1,31 +1,52 @@
 {
   "crons": [
     {
-      "path": "/api/sync-player-history",
-      "schedule": "0 */6 * * *"
+      "path": "/api/cron/sync-sports",
+      "schedule": "0 0 * * *"
     },
     {
-      "path": "/api/sync-fixtures-completed",
+      "path": "/api/cron/sync-leagues",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/sync-teams",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/sync-players",
       "schedule": "0 */12 * * *"
     },
     {
-      "path": "/api/sync-fixtures",
-      "schedule": "0 */4 * * *"
+      "path": "/api/cron/sync-player-history",
+      "schedule": "0 4 * * *"
     },
     {
-      "path": "/api/run-predictions",
-      "schedule": "30 */6 * * *"
-    }
-  ],
-  "headers": [
+      "path": "/api/cron/sync-sportsbooks",
+      "schedule": "0 */12 * * *"
+    },
     {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "Connection", "value": "keep-alive" }
-      ]
+      "path": "/api/cron/sync-fixtures",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-fixtures-completed",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/sync-fixture-results",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/sync-odds",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-markets",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/sync-player-odds",
+      "schedule": "*/30 * * * *"
     }
-  ],
-  "env": {
-    "NODE_OPTIONS": "--dns-result-order=ipv4first"
-  }
-} 
+  ]
+}
