@@ -610,7 +610,9 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                               {(getHitRate(selectedTimeframe) * 100).toFixed(0)}%
                             </div>
                             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                              {calculateHitCounts().hits} of {calculateHitCounts().total} games
+                              {processedPlayer.recommended_bet?.type === 'over' 
+                                ? `${calculateHitCounts().hits} of ${calculateHitCounts().total} games`
+                                : `${calculateHitCounts().total - calculateHitCounts().hits} of ${calculateHitCounts().total} games`}
                             </div>
                           </div>
                           

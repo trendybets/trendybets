@@ -85,29 +85,35 @@ function PlayerRowComponent({
   // Check if we have limited data
   const hasLimitedData = player.games && player.games.length < timeframeNumber
   
-  // Format the hit rate for display
-  const formattedHitRate = formatHitRate(hitRate)
-  
   // Determine bet recommendation based on hit rate
   const recommendedBetType = hitRate >= 0.55 ? 'OVER' : 'UNDER'
   const isStrongOver = hitRate >= 0.7
   const isStrongUnder = hitRate <= 0.3
   const isStrongTrend = isStrongOver || isStrongUnder
   
+  // Format the hit rate for display
+  const formattedHitRate = recommendedBetType === "OVER" 
+    ? formatHitRate(hitRate) 
+    : formatHitRate(1 - hitRate)
+  
   // Determine color scheme for hit rate
   const getHitRateColor = () => {
-    if (hitRate >= 0.7) return 'text-green-600 dark:text-green-500'
-    if (hitRate >= 0.6) return 'text-teal-600 dark:text-teal-500'
-    if (hitRate >= 0.5) return 'text-blue-600 dark:text-blue-500'
-    if (hitRate >= 0.4) return 'text-yellow-600 dark:text-yellow-500'
-    if (hitRate >= 0.3) return 'text-orange-600 dark:text-orange-500'
+    const displayRate = recommendedBetType === "OVER" ? hitRate : 1 - hitRate;
+    
+    if (displayRate >= 0.7) return 'text-green-600 dark:text-green-500'
+    if (displayRate >= 0.6) return 'text-teal-600 dark:text-teal-500'
+    if (displayRate >= 0.5) return 'text-blue-600 dark:text-blue-500'
+    if (displayRate >= 0.4) return 'text-yellow-600 dark:text-yellow-500'
+    if (displayRate >= 0.3) return 'text-orange-600 dark:text-orange-500'
     return 'text-red-600 dark:text-red-500'
   }
   
   // Get color scheme for progress bar
   const getHitRateColorScheme = () => {
-    if (hitRate >= 0.7) return 'success'
-    if (hitRate <= 0.3) return 'danger'
+    const displayRate = recommendedBetType === "OVER" ? hitRate : 1 - hitRate;
+    
+    if (displayRate >= 0.7) return 'success'
+    if (displayRate <= 0.3) return 'danger'
     return 'default'
   }
   
@@ -277,7 +283,9 @@ function PlayerRowComponent({
               isStrongUnder ? "text-red-600 dark:text-red-500" : 
               "text-primary-black-500 dark:text-primary-black-400"
             )}>
-              {hitRateData.hits}/{hitRateData.total} hits
+              {recommendedBetType === "OVER" 
+                ? `${hitRateData.hits}/${hitRateData.total} hits`
+                : `${hitRateData.total - hitRateData.hits}/${hitRateData.total} hits`}
             </div>
           </div>
         </div>
