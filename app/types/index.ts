@@ -18,6 +18,7 @@ export interface RecommendedBet {
   type: 'over' | 'under'
   confidence: 'very-high' | 'high' | 'medium' | 'low'
   reason: string
+  odds?: number
 }
 
 export interface GameStats {

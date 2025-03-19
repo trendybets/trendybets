@@ -21,6 +21,11 @@ import { cn } from "@/lib/utils"
 import { Skeleton, StatsCardSkeleton } from "@/components/ui/skeleton"
 import Image from "next/image"
 import { getSafeImageUrl } from "@/lib/image-utils"
+import { motion } from "framer-motion"
+import PerformanceHistoryGraph from "./PerformanceHistoryGraph"
+import DistributionGraph from "./DistributionGraph"
+import AnimatedProgressBar from "./AnimatedProgressBar"
+import { GameStats } from '../types'
 
 // Register ChartJS components
 ChartJS.register(
@@ -246,34 +251,99 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
     return Math.sqrt(variance).toFixed(1);
   }
 
-  // Calculate distribution buckets for histogram
+  const calculateMetrics = (games: GameStats[]) => {
+    if (!games || games.length === 0) return { avg: 0, hitRate: 0 };
+    
+    const statValues = games.map(game => {
+      switch (processedPlayer.stat_type.toLowerCase()) {
+        case 'points': return game.points;
+        case 'assists': return game.assists;
+        case 'rebounds': return game.total_rebounds;
+        default: return 0;
+      }
+    });
+    
+    const avg = statValues.reduce((acc, val) => acc + val, 0) / statValues.length;
+    const lineValue = getLineValue();
+    
+    const hitsCount = statValues.filter(val => val > lineValue).length;
+    const hitRate = statValues.length > 0 ? hitsCount / statValues.length : 0;
+    
+    return { avg: parseFloat(avg.toFixed(1)), hitRate };
+  }
+
+  // Calculate streak data from games
+  const calculateStreak = (games: GameStats[]) => {
+    if (!games || games.length === 0) return { streak: 0, type: '' };
+    
+    const lineValue = getLineValue();
+    let currentStreak = 1;
+    let statValues = games.map(game => {
+      switch (processedPlayer.stat_type.toLowerCase()) {
+        case 'points': return game.points;
+        case 'assists': return game.assists;
+        case 'rebounds': return game.total_rebounds;
+        default: return 0;
+      }
+    });
+    
+    // Check the first game to determine streak type
+    const isOver = statValues[0] > lineValue;
+    const streakType = isOver ? 'Overs' : 'Unders';
+    
+    // Count consecutive games matching the streak type
+    for (let i = 1; i < statValues.length; i++) {
+      if ((statValues[i] > lineValue) === isOver) {
+        currentStreak++;
+      } else {
+        break;
+      }
+    }
+    
+    return { streak: currentStreak, type: streakType };
+  }
+
+  // Distribution chart data
   const getDistributionData = () => {
     if (!processedPlayer.games || processedPlayer.games.length === 0) {
       return { labels: [], data: [] };
     }
     
-    const values = processedPlayer.games.slice(0, parseInt(selectedTimeframe.slice(1))).map(game => {
-      return processedPlayer.stat_type.toLowerCase() === 'points' ? game.points : 
-             processedPlayer.stat_type.toLowerCase() === 'assists' ? game.assists : game.total_rebounds;
+    // Get relevant stat values
+    const statValues = processedPlayer.games.slice(0, parseInt(selectedTimeframe.slice(1))).map(game => {
+      switch (processedPlayer.stat_type.toLowerCase()) {
+        case 'points': return game.points;
+        case 'assists': return game.assists;
+        case 'rebounds': return game.total_rebounds;
+        default: return 0;
+      }
     });
     
-    // Create buckets for distribution
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const bucketSize = Math.max(1, Math.ceil((max - min) / 5)); // 5 buckets
+    // Calculate min and max for buckets
+    const min = Math.floor(Math.min(...statValues));
+    const max = Math.ceil(Math.max(...statValues));
+    const range = max - min;
+    const bucketSize = Math.max(1, Math.ceil(range / 8)); // Create about 8 buckets
     
-    const buckets = Array(Math.ceil((max - min + 1) / bucketSize)).fill(0);
+    // Initialize buckets
+    const buckets: Record<string, number> = {};
+    for (let i = min; i <= max; i += bucketSize) {
+      buckets[`${i}-${i + bucketSize - 1}`] = 0;
+    }
     
-    values.forEach(val => {
-      const bucketIndex = Math.floor((val - min) / bucketSize);
-      buckets[bucketIndex]++;
+    // Fill buckets
+    statValues.forEach(value => {
+      const bucketIndex = Math.floor((value - min) / bucketSize);
+      const bucketStart = min + bucketIndex * bucketSize;
+      const bucketKey = `${bucketStart}-${bucketStart + bucketSize - 1}`;
+      if (buckets[bucketKey] !== undefined) {
+        buckets[bucketKey]++;
+      }
     });
     
     return {
-      labels: Array.from({ length: buckets.length }, (_, i) => 
-        `${min + i * bucketSize}-${min + (i + 1) * bucketSize - 1}`
-      ),
-      data: buckets
+      labels: Object.keys(buckets),
+      data: Object.values(buckets)
     };
   }
 
@@ -347,350 +417,12 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
     return { avg: parseFloat(avg.toFixed(1)), hitRate };
   }
 
-  const chartData = {
-    labels: processedPlayer.games?.slice(0, parseInt(selectedTimeframe.slice(1))).map(game => {
-      const isAway = game.is_away;
-      const opponentName = game.opponent || "Unknown";
-      return `${isAway ? '@' : 'vs'} ${opponentName}`;
-    }).reverse() || [],
-    datasets: [
-      {
-        label: processedPlayer.stat_type,
-        data: processedPlayer.games?.slice(0, parseInt(selectedTimeframe.slice(1))).map(game => {
-          switch (processedPlayer.stat_type.toLowerCase()) {
-            case 'points': return game.points;
-            case 'assists': return game.assists;
-            case 'rebounds': return game.total_rebounds;
-            default: return 0;
-          }
-        }).reverse() || [],
-        backgroundColor: (context: any) => {
-          const value = context.raw;
-          const lineValue = getLineValue();
-          return value > lineValue ? 'rgb(34, 197, 94)' : 'rgb(239, 68, 68)';
-        },
-        borderRadius: 6,
-        barThickness: 20,
-      },
-      {
-        label: 'Line',
-        data: Array(processedPlayer.games?.length || 0).fill(getLineValue()),
-        type: 'line' as const,
-        borderColor: 'rgba(0, 0, 0, 0.5)',
-        borderDash: [5, 5],
-        borderWidth: 2,
-        pointRadius: 0,
-      }
-    ]
-  }
-
-  // Distribution chart data
-  const distributionData = getDistributionData();
-  const distChartData = {
-    labels: distributionData.labels,
-    datasets: [
-      {
-        label: 'Frequency',
-        data: distributionData.data,
-        backgroundColor: 'rgba(99, 102, 241, 0.6)',
-        borderColor: 'rgb(79, 70, 229)',
-        borderWidth: 1,
-        borderRadius: 4,
-      }
-    ]
-  };
-
-  // Helper functions for calculations
-  const calculateAverage = (player: PlayerData): number => {
-    if (!player.games || player.games.length === 0) return 0;
-    
-    const numGames = player.games.length;
-    let total = 0;
-    
-    player.games.forEach(game => {
-      if (player.stat_type.toLowerCase() === 'points') {
-        total += game.points;
-      } else if (player.stat_type.toLowerCase() === 'assists') {
-        total += game.assists;
-      } else if (player.stat_type.toLowerCase() === 'rebounds' || player.stat_type.toLowerCase() === 'total_rebounds') {
-        total += game.total_rebounds;
-      }
-    });
-    
-    return total / numGames;
-  };
-
-  const calculateHitRate = (player: PlayerData): number => {
-    if (!player.games || player.games.length === 0 || !player.line) return 0;
-    
-    const numGames = player.games.length;
-    let hits = 0;
-    
-    player.games.forEach(game => {
-      let value = 0;
-      if (player.stat_type.toLowerCase() === 'points') {
-        value = game.points;
-      } else if (player.stat_type.toLowerCase() === 'assists') {
-        value = game.assists;
-      } else if (player.stat_type.toLowerCase() === 'rebounds' || player.stat_type.toLowerCase() === 'total_rebounds') {
-        value = game.total_rebounds;
-      }
-      
-      if (value > player.line) {
-        hits++;
-      }
-    });
-    
-    return Math.round((hits / numGames) * 100);
-  };
-
-  const calculateStreak = (player: PlayerData): number => {
-    if (!player.games || player.games.length === 0 || !player.line) return 0;
-    
-    let streak = 0;
-    let currentStreak = 0;
-    let isOver = false;
-    
-    // Check the first game to determine the streak type
-    if (player.games.length > 0) {
-      let value = 0;
-      if (player.stat_type.toLowerCase() === 'points') {
-        value = player.games[0].points;
-      } else if (player.stat_type.toLowerCase() === 'assists') {
-        value = player.games[0].assists;
-      } else if (player.stat_type.toLowerCase() === 'rebounds' || player.stat_type.toLowerCase() === 'total_rebounds') {
-        value = player.games[0].total_rebounds;
-      }
-      
-      isOver = value > player.line;
-      currentStreak = 1;
-    }
-    
-    // Calculate the streak
-    for (let i = 1; i < player.games.length; i++) {
-      let value = 0;
-      if (player.stat_type.toLowerCase() === 'points') {
-        value = player.games[i].points;
-      } else if (player.stat_type.toLowerCase() === 'assists') {
-        value = player.games[i].assists;
-      } else if (player.stat_type.toLowerCase() === 'rebounds' || player.stat_type.toLowerCase() === 'total_rebounds') {
-        value = player.games[i].total_rebounds;
-      }
-      
-      const currentIsOver = value > player.line;
-      
-      if (currentIsOver === isOver) {
-        currentStreak++;
-      } else {
-        break;
-      }
-    }
-    
-    return currentStreak;
-  };
-
-  const calculateStreakType = (player: PlayerData): string => {
-    if (!player.games || player.games.length === 0 || !player.line) return '';
-    
-    let value = 0;
-    if (player.stat_type.toLowerCase() === 'points') {
-      value = player.games[0].points;
-    } else if (player.stat_type.toLowerCase() === 'assists') {
-      value = player.games[0].assists;
-    } else if (player.stat_type.toLowerCase() === 'rebounds' || player.stat_type.toLowerCase() === 'total_rebounds') {
-      value = player.games[0].total_rebounds;
-    }
-    
-    return value > player.line ? 'Overs' : 'Unders';
-  };
-
-  // Function to generate chart options with better styling
-  const getChartOptions = (title: string) => {
-    return {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: true,
-          position: 'top' as const,
-          labels: {
-            color: 'rgb(107, 114, 128)',
-            font: {
-              family: "'Inter', sans-serif",
-              size: 12
-            },
-            boxWidth: 15,
-            padding: 15
-          }
-        },
-        title: {
-          display: true,
-          text: title,
-          color: 'rgb(31, 41, 55)',
-          font: {
-            family: "'Inter', sans-serif",
-            size: 16,
-            weight: 'bold' as const
-          },
-          padding: {
-            top: 10,
-            bottom: 20
-          }
-        },
-        tooltip: {
-          backgroundColor: 'rgba(17, 24, 39, 0.9)',
-          titleColor: 'rgb(243, 244, 246)',
-          bodyColor: 'rgb(243, 244, 246)',
-          borderColor: 'rgba(107, 114, 128, 0.2)',
-          borderWidth: 1,
-          padding: 12,
-          bodyFont: {
-            family: "'Inter', sans-serif",
-            size: 12
-          },
-          titleFont: {
-            family: "'Inter', sans-serif",
-            size: 14,
-            weight: 'bold' as const
-          },
-          displayColors: true,
-          boxWidth: 8,
-          boxHeight: 8,
-          boxPadding: 4,
-          usePointStyle: true,
-          callbacks: {
-            title: (items: any) => {
-              // Display game number instead of date
-              const index = items[0].dataIndex;
-              return `Game ${index + 1}`;
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          grid: {
-            display: false
-          },
-          ticks: {
-            display: false, // Hide the x-axis labels completely
-            color: 'rgb(107, 114, 128)',
-            font: {
-              family: "'Inter', sans-serif",
-              size: 10
-            }
-          }
-        },
-        y: {
-          grid: {
-            color: 'rgba(229, 231, 235, 0.5)'
-          },
-          ticks: {
-            color: 'rgb(107, 114, 128)',
-            font: {
-              family: "'Inter', sans-serif",
-              size: 12
-            }
-          }
-        }
-      }
-    };
-  };
-
-  // Function to generate performance chart data
-  const generatePerformanceChartData = (player: PlayerData | null, statType: string, timeframe: string) => {
-    if (!player || !player.games || player.games.length === 0) {
-      return {
-        labels: [] as string[],
-        datasets: [] as any[]
-      };
-    }
-
-    // Get the appropriate number of games based on timeframe
-    const numGames = timeframe === 'L5' ? 5 : timeframe === 'L10' ? 10 : 20;
-    const games = player.games.slice(0, numGames).reverse(); // Reverse to show oldest to newest
-
-    // Get the appropriate stat values based on stat type
-    const statValues = games.map(game => {
-      if (statType.toLowerCase() === 'points') {
-        return game.points;
-      } else if (statType.toLowerCase() === 'assists') {
-        return game.assists;
-      } else if (statType.toLowerCase() === 'rebounds' || statType.toLowerCase() === 'total_rebounds') {
-        return game.total_rebounds;
-      }
-      return 0;
-    });
-
-    // Calculate the line value
-    const lineValue = player.line || 0;
-
-    // Generate simplified labels (just game numbers)
-    const labels = games.map((_, index) => `Game ${index + 1}`);
-
-    // Generate datasets with enhanced visuals
-    return {
-      labels,
-      datasets: [
-        {
-          type: 'bar' as const,
-          label: statType,
-          data: statValues,
-          backgroundColor: statValues.map(value => 
-            value >= lineValue ? 'rgba(34, 197, 94, 0.85)' : 'rgba(239, 68, 68, 0.85)'
-          ),
-          borderColor: statValues.map(value => 
-            value >= lineValue ? 'rgb(22, 163, 74)' : 'rgb(220, 38, 38)'
-          ),
-          borderWidth: 1,
-          borderRadius: 6,
-          // Add shadow for depth
-          shadowOffsetX: 2,
-          shadowOffsetY: 2,
-          shadowBlur: 5,
-          shadowColor: 'rgba(0, 0, 0, 0.3)',
-        },
-        {
-          type: 'line' as const,
-          label: 'Line',
-          data: Array(games.length).fill(lineValue),
-          borderColor: 'rgba(59, 130, 246, 0.8)',
-          borderWidth: 2,
-          borderDash: [5, 5],
-          pointRadius: 0,
-          fill: false,
-        }
-      ]
-    };
-  };
-
   // Format confidence level
-  const getConfidenceLabel = () => {
-    if (!processedPlayer.recommended_bet) return "N/A";
-    
-    const confidenceMap = {
-      'very-high': 'Very High',
-      'high': 'High',
-      'medium': 'Medium',
-      'low': 'Low'
-    };
-    
-    return confidenceMap[processedPlayer.recommended_bet.confidence] || processedPlayer.recommended_bet.confidence;
-  }
-  
-  // Get confidence color
-  const getConfidenceColor = () => {
-    if (!processedPlayer.recommended_bet) return "text-gray-500";
-    
-    const confidenceColorMap = {
-      'very-high': 'text-green-600',
-      'high': 'text-green-500',
-      'medium': 'text-yellow-500',
-      'low': 'text-orange-500'
-    };
-    
-    return confidenceColorMap[processedPlayer.recommended_bet.confidence] || "text-gray-500";
-  }
+  const formatConfidence = (value: number) => {
+    if (value >= 0.7) return 'High';
+    if (value >= 0.5) return 'Medium';
+    return 'Low';
+  };
 
   // Get streak text
   const getStreakText = () => {
@@ -955,19 +687,17 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                         </div>
                       </div>
                       
-                      {/* Chart */}
+                      {/* Performance Chart */}
                       <div className="p-4">
                         {isLoading ? (
                           <Skeleton className="h-64 w-full" aria-hidden="true" />
                         ) : (
                           <div className="h-72" aria-label={`${processedPlayer.stat_type} performance chart for the last ${selectedTimeframe.slice(1)} games`}>
-                            <Bar 
-                              data={generatePerformanceChartData(
-                                processedPlayer, 
-                                processedPlayer.stat_type || 'Points', 
-                                selectedTimeframe
-                              ) as any} 
-                              options={getChartOptions(`${processedPlayer.stat_type || 'Stat'} Performance`)}
+                            <PerformanceHistoryGraph 
+                              games={processedPlayer.games?.slice(0, parseInt(selectedTimeframe.slice(1))) || []}
+                              statType={processedPlayer.stat_type}
+                              line={getLineValue()}
+                              title={`${processedPlayer.stat_type} Performance History`}
                             />
                           </div>
                         )}
@@ -989,6 +719,20 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                             </div>
                           </div>
                         </div>
+                      )}
+                    </div>
+                    
+                    {/* Distribution Graph Section */}
+                    <div className="mb-6">
+                      {isLoading ? (
+                        <Skeleton className="h-64 w-full" aria-hidden="true" />
+                      ) : (
+                        <DistributionGraph
+                          games={processedPlayer.games?.slice(0, parseInt(selectedTimeframe.slice(1))) || []}
+                          statType={processedPlayer.stat_type}
+                          line={getLineValue()}
+                          title={`${processedPlayer.stat_type} Distribution`}
+                        />
                       )}
                     </div>
                   </div>
@@ -1047,13 +791,11 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                       
                       <div className="h-64 w-full">
                         {processedPlayer ? (
-                          <Bar 
-                            data={generatePerformanceChartData(
-                              processedPlayer, 
-                              processedPlayer.stat_type || 'Points', 
-                              selectedTimeframe
-                            )} 
-                            options={getChartOptions(`${processedPlayer.stat_type || 'Stat'} Performance`)}
+                          <PerformanceHistoryGraph 
+                            games={processedPlayer.games?.slice(0, parseInt(selectedTimeframe.slice(1))) || []}
+                            statType={processedPlayer.stat_type}
+                            line={getLineValue()}
+                            title={`${processedPlayer.stat_type} Performance History`}
                           />
                         ) : (
                           <div className="flex items-center justify-center h-full">
@@ -1069,7 +811,7 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                             <h4 className="text-sm font-medium text-primary-black-500 dark:text-primary-black-400 mb-1">Average</h4>
                             <p className="text-2xl font-bold text-primary-black-900 dark:text-primary-black-100">
                               {processedPlayer.games && processedPlayer.games.length > 0 
-                                ? calculateAverage(processedPlayer).toFixed(1) 
+                                ? calculateMetrics(processedPlayer.games.slice(0, parseInt(selectedTimeframe.slice(1)))).avg.toFixed(1) 
                                 : 'N/A'}
                             </p>
                           </div>
@@ -1078,7 +820,7 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                             <h4 className="text-sm font-medium text-primary-black-500 dark:text-primary-black-400 mb-1">Hit Rate</h4>
                             <p className="text-2xl font-bold text-primary-black-900 dark:text-primary-black-100">
                               {processedPlayer.games && processedPlayer.games.length > 0 
-                                ? `${calculateHitRate(processedPlayer)}%` 
+                                ? `${calculateMetrics(processedPlayer.games.slice(0, parseInt(selectedTimeframe.slice(1)))).hitRate.toFixed(0)}%` 
                                 : 'N/A'}
                             </p>
                           </div>
@@ -1087,7 +829,7 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                             <h4 className="text-sm font-medium text-primary-black-500 dark:text-primary-black-400 mb-1">Current Streak</h4>
                             <p className="text-2xl font-bold text-primary-black-900 dark:text-primary-black-100">
                               {processedPlayer.games && processedPlayer.games.length > 0 
-                                ? `${calculateStreak(processedPlayer)} ${calculateStreakType(processedPlayer)}` 
+                                ? `${calculateStreak(processedPlayer.games.slice(0, parseInt(selectedTimeframe.slice(1)))).streak} ${calculateStreak(processedPlayer.games.slice(0, parseInt(selectedTimeframe.slice(1)))).type}` 
                                 : 'N/A'}
                             </p>
                           </div>
