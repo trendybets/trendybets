@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Search, Filter, ChevronDown } from 'lucide-react'
+import { Search, Filter, ChevronDown, Info, TrendingUp, TrendingDown, RefreshCw, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PlayerData } from '../types'
 import { PlayerRow } from './player-row'
@@ -9,8 +9,16 @@ import { TableSkeleton } from '@/components/ui/skeleton'
 import { DynamicPlayerAnalysisDialog } from './dynamic-player-analysis-dialog'
 import { useTrendsTable } from '@/lib/hooks/use-trends-table'
 import { Dispatch, SetStateAction } from 'react'
-import { Button } from '@/app/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { colors } from '@/app/styles/design-system'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { motion } from 'framer-motion'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 export interface GameStats {
   points: number
@@ -42,6 +50,8 @@ interface TrendsTableProps {
 
 type TimeframeKey = 'last5' | 'last10' | 'last20'
 type SortDirection = 'asc' | 'desc'
+type SortKey = 'hit_rate' | 'average' | 'line' | 'name' | 'confidence'
+type ViewMode = 'all' | 'strong-over' | 'strong-under' | 'home' | 'away'
 
 export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMore, availableTeams, availableFixtures, filters, setFilters }: TrendsTableProps) {
   // Use the custom hook to manage state
@@ -67,6 +77,159 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
 
   // State for mobile filter drawer
   const [showMobileFilters, setShowMobileFilters] = useState(false)
+  
+  // State for sorting
+  const [sortKey, setSortKey] = useState<SortKey>('hit_rate')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  
+  // State for view mode with updated default value
+  const [viewMode, setViewMode] = useState<ViewMode>('all')
+  
+  // Type assertion to resolve type mismatch - this tells TypeScript that we know what we're doing
+  const typedCalculateHits = calculateHits as unknown as (player: PlayerData, timeframe: number) => { 
+    hits: number; 
+    total: number; 
+    percentage: number; 
+    direction: string; 
+    isStrong: boolean;
+  };
+  
+  const typedGetAverageValue = getAverageValue as unknown as (player: PlayerData, timeframe: number) => number;
+  
+  // Create type-safe wrapper functions for hook functions that expect number
+  const safeCalculateHits = (player: PlayerData, timeframeStr: string) => {
+    const timeframeNumber = getTimeframeNumber(timeframeStr);
+    return typedCalculateHits(player, timeframeNumber);
+  }
+  
+  const safeGetAverageValue = (player: PlayerData, timeframeStr: string) => {
+    const timeframeNumber = getTimeframeNumber(timeframeStr);
+    return typedGetAverageValue(player, timeframeNumber);
+  }
+  
+  // Custom filtered data based on view mode
+  const getFilteredData = () => {
+    // Apply base filtering from the custom hook
+    let filtered = [...filteredAndSortedData]
+    
+    // Apply additional filtering based on view mode
+    switch (viewMode) {
+      case 'strong-over':
+        filtered = filtered.filter(player => {
+          const hitRateData = safeCalculateHits(player, timeframe)
+          const hitRate = hitRateData.hits / Math.max(1, hitRateData.total)
+          return hitRate >= 0.7
+        })
+        break
+      case 'strong-under':
+        filtered = filtered.filter(player => {
+          const hitRateData = safeCalculateHits(player, timeframe)
+          const hitRate = hitRateData.hits / Math.max(1, hitRateData.total)
+          return hitRate <= 0.3
+        })
+        break
+      case 'home':
+        filtered = filtered.filter(player => 
+          player.next_game && player.player.team === player.next_game.home_team
+        )
+        break
+      case 'away':
+        filtered = filtered.filter(player => 
+          player.next_game && player.player.team === player.next_game.away_team
+        )
+        break
+      default:
+        // 'all' - no additional filtering
+        break
+    }
+    
+    // Apply custom sorting
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortKey) {
+        case 'hit_rate':
+          const aHitRate = safeCalculateHits(a, timeframe).hits / Math.max(1, safeCalculateHits(a, timeframe).total)
+          const bHitRate = safeCalculateHits(b, timeframe).hits / Math.max(1, safeCalculateHits(b, timeframe).total)
+          comparison = aHitRate - bHitRate
+          break
+        case 'average':
+          const aAvg = safeGetAverageValue(a, timeframe)
+          const bAvg = safeGetAverageValue(b, timeframe)
+          comparison = aAvg - bAvg
+          break
+        case 'line':
+          comparison = a.line - b.line
+          break
+        case 'name':
+          comparison = a.player.name.localeCompare(b.player.name)
+          break
+        case 'confidence':
+          const confidenceOrder = { 'very-high': 4, 'high': 3, 'medium': 2, 'low': 1 }
+          const aConfidence = a.recommended_bet ? confidenceOrder[a.recommended_bet.confidence] || 0 : 0
+          const bConfidence = b.recommended_bet ? confidenceOrder[b.recommended_bet.confidence] || 0 : 0
+          comparison = aConfidence - bConfidence
+          break
+      }
+      
+      // Apply sort direction
+      return sortDirection === 'asc' ? comparison : -comparison
+    })
+    
+    return filtered
+  }
+  
+  const displayData = getFilteredData()
+  
+  // Calculate stats about the displayed data
+  const tableStats = {
+    total: displayData.length,
+    strongOverTrends: displayData.filter(player => {
+      const hitRateData = safeCalculateHits(player, timeframe)
+      const hitRate = hitRateData.hits / Math.max(1, hitRateData.total)
+      return hitRate >= 0.7
+    }).length,
+    strongUnderTrends: displayData.filter(player => {
+      const hitRateData = safeCalculateHits(player, timeframe)
+      const hitRate = hitRateData.hits / Math.max(1, hitRateData.total)
+      return hitRate <= 0.3
+    }).length,
+    limitedData: displayData.filter(player => {
+      return player.games && player.games.length < getTimeframeNumber(timeframe)
+    }).length
+  }
+  
+  // Function to handle sorting
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      // Toggle direction if same key
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      // Set new key and reset direction to desc
+      setSortKey(key)
+      setSortDirection('desc')
+    }
+  }
+
+  // Define variants for animations
+  const rowVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 },
+    hover: { backgroundColor: 'rgba(249, 250, 251, 0.1)', scale: 1.01 }
+  }
+
+  // Empty state component
+  const EmptyState = () => (
+    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+      <div className="bg-gray-100 p-4 rounded-full mb-4">
+        <Search className="h-8 w-8 text-gray-400" />
+      </div>
+      <h3 className="text-xl font-medium text-gray-900 mb-1">No trends found</h3>
+      <p className="text-gray-500 max-w-md">
+        Try adjusting your filters or search query to find more betting trends.
+      </p>
+    </div>
+  )
 
   // Setup intersection observer for infinite scrolling
   useEffect(() => {
@@ -100,196 +263,281 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
   }
 
   return (
-    <div className="w-full overflow-hidden rounded-lg shadow-sm">
-      {/* Filters and Search */}
-      <div className="p-5 border-b border-primary-black-200 dark:border-primary-black-700 bg-gradient-to-r from-primary-blue-200 via-primary-blue-50 to-primary-blue-200 dark:from-primary-blue-900/40 dark:via-primary-blue-900/20 dark:to-primary-blue-900/40 relative shadow-sm">
-        {/* Subtle pattern overlay */}
-        <div className="absolute inset-0 opacity-5 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none"></div>
-        
-        {/* Filter section title */}
-        <div className="flex items-center mb-3 text-primary-blue-600 dark:text-primary-blue-400">
-          <Filter className="h-4 w-4 mr-2" />
-          <h3 className="text-sm font-semibold uppercase tracking-wider">Filter Props</h3>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 relative z-10">
-          {/* Search */}
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <Search className="h-4 w-4 text-primary-blue-500 dark:text-primary-blue-400" />
-            </div>
-            <input
-              type="text"
-              placeholder="Search players..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4 py-2.5 w-full rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 placeholder-primary-black-400 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent transition-all duration-200 hover:border-primary-blue-300 dark:hover:border-primary-blue-600"
-            />
-          </div>
-          
-          {/* Timeframe Filter */}
-          <div className="relative">
-            <select
-              value={timeframe}
-              onChange={(e) => setTimeframe(e.target.value)}
-              className="appearance-none w-full pl-3 pr-8 py-2.5 rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent transition-all duration-200 hover:border-primary-blue-300 dark:hover:border-primary-blue-600"
-            >
-              <option value="L5">Last 5 Games</option>
-              <option value="L10">Last 10 Games</option>
-              <option value="L20">Last 20 Games</option>
-            </select>
-            <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-              <ChevronDown className="h-4 w-4 text-primary-blue-500 dark:text-primary-blue-400" />
-            </div>
-          </div>
-          
-          {/* Stat Type Filter */}
-          <div className="relative">
-            <select
-              value={statType}
-              onChange={(e) => setStatType(e.target.value)}
-              className="appearance-none w-full pl-3 pr-8 py-2.5 rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent transition-all duration-200 hover:border-primary-blue-300 dark:hover:border-primary-blue-600"
-            >
-              <option value="All Props">All Props</option>
-              <option value="Points">Points</option>
-              <option value="Assists">Assists</option>
-              <option value="Rebounds">Rebounds</option>
-            </select>
-            <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-              <ChevronDown className="h-4 w-4 text-primary-blue-500 dark:text-primary-blue-400" />
-            </div>
-          </div>
-        </div>
-        
-        {/* Second row of filters */}
-        {setFilters && filters && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 relative z-10">
-            {/* Team Filter */}
-            <div className="relative">
-              <select
-                value={filters.team}
-                onChange={(e) => handleFilterChange('team', e.target.value)}
-                className="appearance-none w-full pl-3 pr-8 py-2.5 rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent transition-all duration-200 hover:border-primary-blue-300 dark:hover:border-primary-blue-600"
-              >
-                <option value="all">All Teams</option>
-                {availableTeams?.map(team => (
-                  <option key={team} value={team}>{team}</option>
-                ))}
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                <ChevronDown className="h-4 w-4 text-primary-blue-500 dark:text-primary-blue-400" />
+    <div className="bg-white shadow rounded-lg overflow-hidden">
+      {/* Enhanced header with stats and filters */}
+      <div className="border-b border-gray-200 bg-gray-50 p-4 sm:px-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+          <div>
+            <h2 className="text-lg font-medium text-gray-900">
+              Betting Trends
+              {!isLoading && (
+                <span className="ml-2 text-sm text-gray-500">
+                  ({displayData.length} players)
+                </span>
+              )}
+            </h2>
+            
+            {/* Stats pills with updated terminology */}
+            {!isLoading && displayData.length > 0 && (
+              <div className="flex space-x-3 mt-2 text-xs">
+                <div className="flex items-center text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+                  <TrendingUp className="h-3 w-3 mr-1" />
+                  <span>{tableStats.strongOverTrends} Strong Over</span>
+                </div>
+                <div className="flex items-center text-red-600 bg-red-50 px-2 py-1 rounded-full">
+                  <TrendingDown className="h-3 w-3 mr-1" />
+                  <span>{tableStats.strongUnderTrends} Strong Under</span>
+                </div>
+                {tableStats.limitedData > 0 && (
+                  <div className="flex items-center text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    <span>{tableStats.limitedData} Limited Data</span>
+                  </div>
+                )}
               </div>
+            )}
+          </div>
+          
+          <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-3">
+            {/* Search field */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search players or teams..."
+                className="pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
             
-            {/* Fixture Filter */}
-            <div className="relative">
-              <select
-                value={filters.fixture}
-                onChange={(e) => handleFilterChange('fixture', e.target.value)}
-                className="appearance-none w-full pl-3 pr-8 py-2.5 rounded-md border border-primary-black-200 dark:border-primary-black-600 bg-white dark:bg-primary-black-700 text-primary-black-800 dark:text-primary-black-100 focus:outline-none focus:ring-2 focus:ring-primary-blue-500 focus:border-transparent transition-all duration-200 hover:border-primary-blue-300 dark:hover:border-primary-blue-600"
+            {/* Timeframe tabs */}
+            <Tabs 
+              value={timeframe} 
+              onValueChange={setTimeframe}
+              className="bg-white border border-gray-200 rounded-md"
+            >
+              <TabsList className="bg-gray-50">
+                <TabsTrigger value="L5" className="px-3 py-1 text-sm">L5</TabsTrigger>
+                <TabsTrigger value="L10" className="px-3 py-1 text-sm">L10</TabsTrigger>
+                <TabsTrigger value="L20" className="px-3 py-1 text-sm">L20</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            
+            {/* View mode filter with updated labels */}
+            <div className="flex">
+              <Button
+                variant={viewMode === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('all')}
+                className="rounded-l-md rounded-r-none border-r-0"
               >
-                <option value="all">All Games</option>
-                {availableFixtures?.map(fixture => (
-                  <option key={fixture} value={fixture}>{fixture}</option>
-                ))}
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                <ChevronDown className="h-4 w-4 text-primary-blue-500 dark:text-primary-blue-400" />
-              </div>
+                All
+              </Button>
+              <Button
+                variant={viewMode === 'strong-over' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('strong-over')}
+                className="rounded-none border-r-0"
+              >
+                Over
+              </Button>
+              <Button
+                variant={viewMode === 'strong-under' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('strong-under')}
+                className="rounded-none border-r-0"
+              >
+                Under
+              </Button>
+              <Button
+                variant={viewMode === 'home' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('home')}
+                className="rounded-none border-r-0"
+              >
+                Home
+              </Button>
+              <Button
+                variant={viewMode === 'away' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('away')}
+                className="rounded-r-md rounded-l-none"
+              >
+                Away
+              </Button>
             </div>
           </div>
+        </div>
+      </div>
+      
+      {/* Table header with better alignment */}
+      <div className="border-b border-gray-200">
+        <div className="flex items-center py-3 px-4 sm:px-6 bg-gray-50 text-sm font-medium text-gray-500">
+          <div className="w-[40%] pl-10">
+            <button
+              className={cn(
+                "flex items-center hover:text-gray-700",
+                sortKey === 'name' && "text-indigo-600"
+              )}
+              onClick={() => handleSort('name')}
+            >
+              Player / Team
+              <ChevronDown 
+                className={cn(
+                  "ml-1 h-4 w-4",
+                  sortKey === 'name' && sortDirection === 'desc' && "rotate-180"
+                )} 
+              />
+            </button>
+          </div>
+          <div className="w-[15%] flex justify-center">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className={cn(
+                      "flex items-center justify-center hover:text-gray-700",
+                      sortKey === 'line' && "text-indigo-600"
+                    )}
+                    onClick={() => handleSort('line')}
+                  >
+                    Line
+                    <ChevronDown 
+                      className={cn(
+                        "ml-1 h-4 w-4",
+                        sortKey === 'line' && sortDirection === 'desc' && "rotate-180"
+                      )} 
+                    />
+                    <Info className="ml-1 h-3 w-3 text-gray-400" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p className="text-xs">The betting line for this prop</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <div className="w-[15%] flex justify-center">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className={cn(
+                      "flex items-center justify-center hover:text-gray-700",
+                      sortKey === 'average' && "text-indigo-600"
+                    )}
+                    onClick={() => handleSort('average')}
+                  >
+                    Avg
+                    <ChevronDown 
+                      className={cn(
+                        "ml-1 h-4 w-4",
+                        sortKey === 'average' && sortDirection === 'desc' && "rotate-180"
+                      )} 
+                    />
+                    <Info className="ml-1 h-3 w-3 text-gray-400" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p className="text-xs">Average performance over the selected timeframe</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <div className="w-[15%] flex justify-center">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className={cn(
+                      "flex items-center justify-center hover:text-gray-700",
+                      sortKey === 'hit_rate' && "text-indigo-600"
+                    )}
+                    onClick={() => handleSort('hit_rate')}
+                  >
+                    Hit Rate
+                    <ChevronDown 
+                      className={cn(
+                        "ml-1 h-4 w-4",
+                        sortKey === 'hit_rate' && sortDirection === 'desc' && "rotate-180"
+                      )} 
+                    />
+                    <Info className="ml-1 h-3 w-3 text-gray-400" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p className="text-xs">Percentage of games where the player went over the line</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <div className="w-[15%] flex justify-center">
+            <span className="text-xs font-medium uppercase tracking-wider">
+              Details
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Table body */}
+      <div className="min-h-[400px]">
+        {isLoading ? (
+          <TableSkeleton rows={10} />
+        ) : displayData.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <>
+            <div className="divide-y divide-gray-100">
+              {displayData.map((row, index) => (
+                <motion.div
+                  key={`${row.player.id}-${row.stat_type}`}
+                  initial="hidden"
+                  animate="visible"
+                  variants={rowVariants}
+                  whileHover="hover"
+                  transition={{ duration: 0.2, delay: index * 0.05 }}
+                  onClick={() => setSelectedPlayer(row)}
+                  className="border-b border-gray-100 last:border-0 cursor-pointer"
+                >
+                  <PlayerRow 
+                    player={row}
+                    timeframe={timeframe}
+                    isHovered={hoveredRowId === `${row.player.id}-${row.stat_type}`}
+                    onHover={(isHovered) => 
+                      handleRowHover(`${row.player.id}-${row.stat_type}`, isHovered)
+                    }
+                    calculateHits={safeCalculateHits}
+                    getAverageValue={safeGetAverageValue}
+                    getTimeframeNumber={getTimeframeNumber}
+                    onSelect={setSelectedPlayer}
+                  />
+                </motion.div>
+              ))}
+            </div>
+            {hasMore && (
+              <div
+                ref={loaderRef}
+                className="flex justify-center items-center p-4 text-gray-400"
+              >
+                <RefreshCw className="h-5 w-5 animate-spin" />
+                <span className="ml-2">Loading more...</span>
+              </div>
+            )}
+          </>
         )}
       </div>
-      
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-primary-black-200 dark:divide-primary-black-700">
-          <thead className="bg-primary-blue-50 dark:bg-primary-blue-900/20">
-            <tr>
-              <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-primary-black-600 dark:text-primary-black-300 uppercase tracking-wider">
-                Player
-              </th>
-              <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-primary-black-600 dark:text-primary-black-300 uppercase tracking-wider">
-                Prop Line
-              </th>
-              <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-primary-black-600 dark:text-primary-black-300 uppercase tracking-wider">
-                Average
-              </th>
-              <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-primary-black-600 dark:text-primary-black-300 uppercase tracking-wider">
-                Hit Rate
-              </th>
-              <th scope="col" className="px-6 py-3.5 text-right text-xs font-semibold text-primary-black-600 dark:text-primary-black-300 uppercase tracking-wider">
-                Details
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-primary-black-900 divide-y divide-primary-black-100 dark:divide-primary-black-700">
-            {isLoading && filteredAndSortedData.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-4">
-                  <TableSkeleton rows={10} columns={5} />
-                </td>
-              </tr>
-            ) : filteredAndSortedData.length > 0 ? (
-              filteredAndSortedData.map((player, index) => (
-                <PlayerRow 
-                  key={`${player.player.id}-${player.stat_type}`}
-                  player={player}
-                  timeframe={timeframe}
-                  onSelect={setSelectedPlayer}
-                  isHovered={hoveredRowId === `${player.player.id}-${player.stat_type}`}
-                  onHover={(isHovered) => handleRowHover(`${player.player.id}-${player.stat_type}`, isHovered)}
-                  calculateHits={calculateHits}
-                  getTimeframeNumber={getTimeframeNumber}
-                  getAverageValue={getAverageValue}
-                  className={index % 2 === 0 ? "bg-white dark:bg-primary-black-900" : "bg-primary-black-50/50 dark:bg-primary-black-800/50"}
-                />
-              ))
-            ) : (
-              <tr>
-                <td colSpan={5} className="px-6 py-4 text-center text-primary-black-500 dark:text-primary-black-400">
-                  No players found matching your criteria
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      
-      {/* Load More Button */}
-      {hasMore && !isLoading && (
-        <div className="p-5 flex justify-center border-t border-primary-black-100 dark:border-primary-black-700">
-          <Button
-            onClick={onLoadMore}
-            variant="outline"
-            className="text-primary-blue-500 border-primary-blue-500 hover:bg-primary-blue-50 transition-colors duration-200"
-          >
-            Load More
-          </Button>
-        </div>
+
+      {/* Player analysis dialog */}
+      {selectedPlayer && (
+        <DynamicPlayerAnalysisDialog
+          player={selectedPlayer}
+          isOpen={!!selectedPlayer}
+          onClose={() => setSelectedPlayer(null)}
+        />
       )}
-      
-      {/* Infinite Scroll Loader */}
-      {hasMore && (
-        <div 
-          ref={loaderRef} 
-          className="py-4 flex justify-center items-center"
-        >
-          {isLoading && (
-            <div className="flex items-center space-x-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-blue-500"></div>
-              <span className="text-sm text-primary-black-500">Loading more...</span>
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* Player Analysis Dialog */}
-      <DynamicPlayerAnalysisDialog
-        player={selectedPlayer}
-        isOpen={!!selectedPlayer}
-        onClose={() => setSelectedPlayer(null)}
-      />
     </div>
   )
 } 
