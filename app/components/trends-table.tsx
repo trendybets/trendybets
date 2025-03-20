@@ -113,19 +113,23 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
     let filtered = [...filteredAndSortedData]
     
     // Apply additional filtering based on view mode
+    // Adjust threshold based on timeframe - longer timeframes should have more relaxed thresholds
+    const overThreshold = timeframe === 'L20' ? 0.65 : timeframe === 'L10' ? 0.67 : 0.7;
+    const underThreshold = timeframe === 'L20' ? 0.35 : timeframe === 'L10' ? 0.33 : 0.3;
+    
     switch (viewMode) {
       case 'strong-over':
         filtered = filtered.filter(player => {
           const hitRateData = safeCalculateHits(player, timeframe)
           const hitRate = hitRateData.hits / Math.max(1, hitRateData.total)
-          return hitRate >= 0.7
+          return hitRate >= overThreshold // Use the adaptive threshold
         })
         break
       case 'strong-under':
         filtered = filtered.filter(player => {
           const hitRateData = safeCalculateHits(player, timeframe)
           const hitRate = hitRateData.hits / Math.max(1, hitRateData.total)
-          return hitRate <= 0.3
+          return hitRate <= underThreshold // Use the adaptive threshold
         })
         break
       case 'home':
@@ -196,18 +200,18 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
   
   const displayData = getFilteredData()
   
-  // Calculate stats about the displayed data
+  // Calculate stats about the displayed data with adaptive thresholds
   const tableStats = {
     total: displayData.length,
     strongOverTrends: displayData.filter(player => {
       const hitRateData = safeCalculateHits(player, timeframe)
       const hitRate = hitRateData.hits / Math.max(1, hitRateData.total)
-      return hitRate >= 0.7
+      return hitRate >= (timeframe === 'L20' ? 0.65 : timeframe === 'L10' ? 0.67 : 0.7)
     }).length,
     strongUnderTrends: displayData.filter(player => {
       const hitRateData = safeCalculateHits(player, timeframe)
       const hitRate = hitRateData.hits / Math.max(1, hitRateData.total)
-      return hitRate <= 0.3
+      return hitRate <= (timeframe === 'L20' ? 0.35 : timeframe === 'L10' ? 0.33 : 0.3)
     }).length,
     limitedData: displayData.filter(player => {
       return player.games && player.games.length < getTimeframeNumber(timeframe)
@@ -257,19 +261,35 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
     </div>
   )
 
-  // Setup intersection observer for infinite scrolling
+  // Add a timeframe change handler
   useEffect(() => {
+    // Reset pagination data when timeframe changes
+    if (onLoadMore && hasMore) {
+      // There's no need to trigger immediate re-fetch here
+      // Just make sure the loader is visible and will trigger on scroll
+      const scrollableContainer = document.querySelector('.min-h-\\[400px\\]');
+      if (scrollableContainer) {
+        // Scroll back to the top when timeframe changes
+        scrollableContainer.scrollTop = 0;
+      }
+    }
+  }, [timeframe]); // Only re-run when timeframe changes
+
+  // Setup the intersection observer for infinite scrolling
+  useEffect(() => {
+    if (!hasMore || isLoading || !loaderRef.current) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !isLoading) {
-          // Preserve current filters when loading more
+          // Call onLoadMore with the current timeframe to ensure consistent data loading
           if (onLoadMore) {
-            // Pass current view mode as a parameter if your API supports filtering
+            console.log(`Loading more data with timeframe: ${timeframe}`);
             onLoadMore();
           }
         }
       },
-      { threshold: 0.5 }
+      { threshold: 0.1, rootMargin: '100px' } // More aggressive loading threshold
     );
 
     const currentLoader = loaderRef.current;
@@ -282,7 +302,7 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
         observer.unobserve(currentLoader);
       }
     };
-  }, [hasMore, isLoading, onLoadMore, viewMode, timeframe]); // Include viewMode and timeframe in dependencies
+  }, [hasMore, isLoading, onLoadMore, timeframe, loaderRef]); // Include timeframe in dependencies
 
   // Filter options
   const statOptions = [
@@ -310,6 +330,45 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
     }
   }
 
+  // Creating a Tabs component for timeframe selection
+  const TimeframeTabs = () => (
+    <Tabs 
+      value={timeframe} 
+      onValueChange={(value) => {
+        // When timeframe changes, update the timeframe state
+        setTimeframe(value);
+        
+        // Reset to top of content area for better user experience
+        const scrollableContainer = document.querySelector('.min-h-\\[400px\\]');
+        if (scrollableContainer) {
+          scrollableContainer.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Log the timeframe change with current viewMode for debugging
+        console.log(`Timeframe changed to: ${value}, current view mode: ${viewMode}`);
+      }}
+      className="bg-white border border-gray-200 rounded-md"
+    >
+      <TabsList className="bg-gray-50">
+        <TabsTrigger value="L5" className="px-3 py-1.5 text-sm font-medium">L5</TabsTrigger>
+        <TabsTrigger value="L10" className="px-3 py-1.5 text-sm font-medium">L10</TabsTrigger>
+        <TabsTrigger value="L20" className="px-3 py-1.5 text-sm font-medium">L20</TabsTrigger>
+      </TabsList>
+    </Tabs>
+  );
+
+  // Add a special effect to reset scroll position when viewMode or timeframe changes
+  useEffect(() => {
+    // Reset scroll position when any filter changes 
+    const scrollableContainer = document.querySelector('.min-h-\\[400px\\]');
+    if (scrollableContainer) {
+      scrollableContainer.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    
+    // Reset selected player when filters change to avoid showing stale data
+    setSelectedPlayer(null);
+  }, [viewMode, timeframe]);
+
   return (
     <div className="bg-white shadow rounded-lg overflow-hidden">
       {/* Enhanced header with stats and filters */}
@@ -331,11 +390,21 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                 <div className="flex space-x-3 mt-2 text-xs">
                   <div className="flex items-center text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
                     <TrendingUp className="h-3 w-3 mr-1" />
-                    <span className="font-medium">{tableStats.strongOverTrends} Strong Over</span>
+                    <span className="font-medium">
+                      {tableStats.strongOverTrends} Strong Over
+                      {timeframe === 'L20' && <span className="text-xs ml-1 opacity-80">(65%+)</span>}
+                      {timeframe === 'L10' && <span className="text-xs ml-1 opacity-80">(67%+)</span>}
+                      {timeframe === 'L5' && <span className="text-xs ml-1 opacity-80">(70%+)</span>}
+                    </span>
                   </div>
                   <div className="flex items-center text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
                     <TrendingDown className="h-3 w-3 mr-1" />
-                    <span className="font-medium">{tableStats.strongUnderTrends} Strong Under</span>
+                    <span className="font-medium">
+                      {tableStats.strongUnderTrends} Strong Under
+                      {timeframe === 'L20' && <span className="text-xs ml-1 opacity-80">(35%-)</span>}
+                      {timeframe === 'L10' && <span className="text-xs ml-1 opacity-80">(33%-)</span>}
+                      {timeframe === 'L5' && <span className="text-xs ml-1 opacity-80">(30%-)</span>}
+                    </span>
                   </div>
                   {tableStats.limitedData > 0 && (
                     <div className="flex items-center text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
@@ -347,18 +416,8 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
               )}
             </div>
             
-            {/* Timeframe tabs moved to the right */}
-            <Tabs 
-              value={timeframe} 
-              onValueChange={setTimeframe}
-              className="bg-white border border-gray-200 rounded-md"
-            >
-              <TabsList className="bg-gray-50">
-                <TabsTrigger value="L5" className="px-3 py-1.5 text-sm font-medium">L5</TabsTrigger>
-                <TabsTrigger value="L10" className="px-3 py-1.5 text-sm font-medium">L10</TabsTrigger>
-                <TabsTrigger value="L20" className="px-3 py-1.5 text-sm font-medium">L20</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            {/* Use the TimeframeTabs component */}
+            <TimeframeTabs />
           </div>
           
           <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-3">
@@ -392,7 +451,9 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                 onClick={() => setViewMode('strong-over')}
                 className="rounded-none border-r-0"
               >
-                Over
+                Over {viewMode === 'strong-over' && timeframe === 'L20' && "(65%+)"}
+                {viewMode === 'strong-over' && timeframe === 'L10' && "(67%+)"}
+                {viewMode === 'strong-over' && timeframe === 'L5' && "(70%+)"}
               </Button>
               <Button
                 variant={viewMode === 'strong-under' ? 'default' : 'outline'}
@@ -400,7 +461,9 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                 onClick={() => setViewMode('strong-under')}
                 className="rounded-none border-r-0"
               >
-                Under
+                Under {viewMode === 'strong-under' && timeframe === 'L20' && "(35%-)"}
+                {viewMode === 'strong-under' && timeframe === 'L10' && "(33%-)"}
+                {viewMode === 'strong-under' && timeframe === 'L5' && "(30%-)"}
               </Button>
               <Button
                 variant={viewMode === 'home' ? 'default' : 'outline'}
@@ -475,10 +538,10 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
             {hasMore && (
               <div
                 ref={loaderRef}
-                className="flex justify-center items-center p-4 text-gray-400"
+                className="py-6 px-4 flex justify-center items-center bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700"
               >
-                <RefreshCw className="h-5 w-5 animate-spin" />
-                <span className="ml-2">Loading more...</span>
+                <RefreshCw className="h-5 w-5 animate-spin text-primary-blue-500 mr-3" />
+                <span className="text-gray-600 dark:text-gray-300 font-medium">Loading more results...</span>
               </div>
             )}
           </>
