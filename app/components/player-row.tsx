@@ -177,7 +177,7 @@ function PlayerRowComponent({
     <>
       <div 
         className={cn(
-          "transition-colors duration-200 group cursor-pointer flex items-stretch",
+          "transition-colors duration-200 group cursor-pointer flex items-center",
           isHovered ? "bg-primary-blue-50/50 dark:bg-primary-blue-900/20" : "",
           isExpanded ? "bg-primary-blue-50 dark:bg-primary-blue-900/20 border-b-0" : "",
           className
@@ -186,20 +186,24 @@ function PlayerRowComponent({
         onMouseLeave={() => onHover(false)}
         onClick={() => onSelect(player)}
       >
-        {/* Player Info */}
-        <div className="w-[40%] pl-4 pr-2 py-4">
-          <div className="flex items-center">
-            <button
-              className="mr-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              onClick={handleToggleExpand}
-              aria-label={isExpanded ? "Collapse details" : "Expand details"}
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-            </button>
+        {/* Player Info - Left section */}
+        <div className="w-[50%] pl-4 pr-2 py-3 flex items-center">
+          <button
+            className="mr-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
+            aria-label={isExpanded ? "Collapse details" : "Expand details"}
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </button>
+          
+          <div className="flex items-center flex-1">
             <div className="relative h-10 w-10 rounded-full overflow-hidden mr-3 flex-shrink-0">
               <Image
                 src={getSafeImageUrl(player.player.image_url)}
@@ -210,24 +214,20 @@ function PlayerRowComponent({
                 priority={false}
               />
             </div>
-            <div>
-              <div className="font-medium text-primary-black-900 dark:text-primary-black-100 flex items-center">
-                {player.player.name}
+            
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center">
+                <div className="font-medium text-primary-black-900 dark:text-primary-black-100 truncate mr-2">
+                  {player.player.name}
+                </div>
                 {hasLimitedData && (
-                  <div className="ml-2 text-amber-500 dark:text-amber-400 tooltip-wrapper" title={`Limited data: only ${player.games?.length || 0} of ${timeframeNumber} games available`}>
-                    <AlertTriangle className="h-4 w-4" />
+                  <div className="flex-shrink-0 text-amber-500 dark:text-amber-400 tooltip-wrapper" title={`Limited data: only ${player.games?.length || 0} of ${timeframeNumber} games available`}>
+                    <AlertTriangle className="h-3.5 w-3.5" />
                   </div>
                 )}
-                {isStrongTrend && (
-                  <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
-                    isStrongOver ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
-                    'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                  }`}>
-                    {isStrongOver ? 'Strong Over' : 'Strong Under'}
-                  </span>
-                )}
               </div>
-              <div className="text-sm text-primary-black-500 dark:text-primary-black-400 flex items-center">
+              
+              <div className="flex items-center text-sm text-primary-black-500 dark:text-primary-black-400">
                 <PlayerTeamDisplay team={player.player.team} className="mr-2" />
                 <span className="text-xs px-2 py-0.5 bg-primary-black-100 dark:bg-primary-black-700 rounded-full">
                   {player.stat_type}
@@ -237,69 +237,59 @@ function PlayerRowComponent({
           </div>
         </div>
         
-        {/* Prop Line */}
-        <div className="w-[15%] px-2 py-4 flex justify-center items-start">
-          <div className="flex flex-col items-center">
-            <div className="font-medium text-primary-black-900 dark:text-primary-black-100 mb-1">
-              {player.line}
+        {/* Stats & Recommendation - Right section */}
+        <div className={cn(
+          "w-[50%] px-4 py-3 flex items-center justify-between rounded-r-lg",
+          isStrongOver ? "bg-green-50 dark:bg-green-900/20" : 
+          isStrongUnder ? "bg-red-50 dark:bg-red-900/20" : ""
+        )}>
+          {/* Line & Avg */}
+          <div className="flex items-center space-x-6">
+            <div className="flex flex-col items-center">
+              <div className="text-sm text-primary-black-500 dark:text-primary-black-400 mb-1">Line</div>
+              <div className="font-semibold text-primary-black-900 dark:text-primary-black-100">{player.line}</div>
             </div>
-            <div className={cn(
-              "text-xs font-medium px-2 py-0.5 rounded-full",
-              recommendedBetType === "OVER" 
-                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" 
-                : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-            )}>
+            
+            <div className="flex flex-col items-center">
+              <div className="text-sm text-primary-black-500 dark:text-primary-black-400 mb-1">Average</div>
+              <div className={cn(
+                "font-semibold",
+                isOverLine ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"
+              )}>
+                {averageValue.toFixed(1)}
+              </div>
+            </div>
+          </div>
+          
+          {/* Recommendation & Hit Rate */}
+          <div className="flex items-center">
+            <div className="flex flex-col items-center mr-6">
+              <div className="text-sm text-primary-black-500 dark:text-primary-black-400 mb-1">Hit Rate</div>
+              <div className={cn(
+                "font-semibold",
+                getHitRateColor()
+              )}>
+                {formattedHitRate}
+              </div>
+              <div className="text-xs text-primary-black-500 dark:text-primary-black-400">
+                {recommendedBetType === "OVER" 
+                  ? `${hitRateData.hits}/${hitRateData.total} hits`
+                  : `${hitRateData.total - hitRateData.hits}/${hitRateData.total} hits`}
+              </div>
+            </div>
+            
+            <Button 
+              size="sm" 
+              variant={isStrongTrend ? "default" : "outline"}
+              className={cn(
+                "font-medium min-w-[90px]",
+                isStrongOver ? "bg-green-600 hover:bg-green-700" : 
+                isStrongUnder ? "bg-red-600 hover:bg-red-700" : ""
+              )}
+            >
               {recommendedBetType}
-            </div>
+            </Button>
           </div>
-        </div>
-        
-        {/* Average */}
-        <div className="w-[15%] px-2 py-4 flex justify-center items-start">
-          <div className="flex flex-col items-center">
-            <div className="font-medium text-primary-black-900 dark:text-primary-black-100 mb-1">
-              {averageValue.toFixed(1)}
-            </div>
-            <div className={cn(
-              "text-xs whitespace-nowrap",
-              isOverLine ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"
-            )}>
-              {isOverLine ? "+" : ""}{differenceFromLine} vs line
-            </div>
-          </div>
-        </div>
-        
-        {/* Hit Rate */}
-        <div className="w-[15%] px-2 py-4 flex justify-center items-start">
-          <div className="flex flex-col items-center">
-            <div className={cn(
-              "font-medium mb-1",
-              getHitRateColor()
-            )}>
-              {formattedHitRate}
-            </div>
-            <div className={cn(
-              "text-xs whitespace-nowrap",
-              isStrongOver ? "text-green-600 dark:text-green-500" : 
-              isStrongUnder ? "text-red-600 dark:text-red-500" : 
-              "text-primary-black-500 dark:text-primary-black-400"
-            )}>
-              {recommendedBetType === "OVER" 
-                ? `${hitRateData.hits}/${hitRateData.total} hits`
-                : `${hitRateData.total - hitRateData.hits}/${hitRateData.total} hits`}
-            </div>
-          </div>
-        </div>
-        
-        {/* Details Button */}
-        <div className="w-[15%] px-2 py-4 flex justify-center items-center">
-          <Button 
-            size="sm" 
-            variant="outline" 
-            className="text-primary-blue-500 border-primary-blue-500 hover:bg-primary-blue-50 dark:hover:bg-primary-blue-900/20 w-24 h-9"
-          >
-            Details
-          </Button>
         </div>
       </div>
       
