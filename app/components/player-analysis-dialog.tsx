@@ -25,6 +25,7 @@ import { motion } from "framer-motion"
 import PerformanceHistoryGraph from "./PerformanceHistoryGraph"
 import DistributionGraph from "./DistributionGraph"
 import AnimatedProgressBar from "./AnimatedProgressBar"
+import { PlayerPerformanceBarChart } from "./PlayerPerformanceBarChart"
 import { GameStats } from '../types'
 
 // Register ChartJS components
@@ -694,12 +695,13 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                         {isLoading ? (
                           <Skeleton className="h-64 w-full" aria-hidden="true" />
                         ) : (
-                          <div className="h-72" aria-label={`${processedPlayer.stat_type} performance chart for the last ${selectedTimeframe.slice(1)} games`}>
-                            <PerformanceHistoryGraph 
+                          <div className="min-h-[300px]" aria-label={`${processedPlayer.stat_type} performance chart for the last ${selectedTimeframe.slice(1)} games`}>
+                            <PlayerPerformanceBarChart 
                               games={processedPlayer.games?.slice(0, parseInt(selectedTimeframe.slice(1))) || []}
                               statType={processedPlayer.stat_type}
                               line={getLineValue()}
-                              title={`${processedPlayer.stat_type} Performance History`}
+                              title=""
+                              className="shadow-none border-none p-0 bg-transparent"
                             />
                           </div>
                         )}
@@ -751,93 +753,70 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                 {activeTab === 'performance' && (
                   <div className="space-y-6 mt-6">
                     <div className="bg-white dark:bg-primary-black-900 rounded-lg border border-primary-black-100 dark:border-primary-black-700 p-4">
-                      <h3 className="text-lg font-semibold text-primary-black-900 dark:text-primary-black-100 mb-4">
-                        {processedPlayer?.stat_type || 'Stat'} Performance History
-                      </h3>
-                      
-                      <div className="flex space-x-2 mb-4">
-                        <button
-                          onClick={() => setSelectedTimeframe('L5')}
-                          className={cn(
-                            "px-3 py-1 text-sm rounded-md transition-colors",
-                            selectedTimeframe === 'L5'
-                              ? "bg-primary-blue-500 text-white"
-                              : "bg-primary-black-100 dark:bg-primary-black-700 text-primary-black-700 dark:text-primary-black-300 hover:bg-primary-black-200 dark:hover:bg-primary-black-600"
-                          )}
-                        >
-                          L5
-                        </button>
-                        <button
-                          onClick={() => setSelectedTimeframe('L10')}
-                          className={cn(
-                            "px-3 py-1 text-sm rounded-md transition-colors",
-                            selectedTimeframe === 'L10'
-                              ? "bg-primary-blue-500 text-white"
-                              : "bg-primary-black-100 dark:bg-primary-black-700 text-primary-black-700 dark:text-primary-black-300 hover:bg-primary-black-200 dark:hover:bg-primary-black-600"
-                          )}
-                        >
-                          L10
-                        </button>
-                        <button
-                          onClick={() => setSelectedTimeframe('L20')}
-                          className={cn(
-                            "px-3 py-1 text-sm rounded-md transition-colors",
-                            selectedTimeframe === 'L20'
-                              ? "bg-primary-blue-500 text-white"
-                              : "bg-primary-black-100 dark:bg-primary-black-700 text-primary-black-700 dark:text-primary-black-300 hover:bg-primary-black-200 dark:hover:bg-primary-black-600"
-                          )}
-                        >
-                          L20
-                        </button>
-                      </div>
-                      
-                      <div className="h-64 w-full">
-                        {processedPlayer ? (
-                          <PerformanceHistoryGraph 
-                            games={processedPlayer.games?.slice(0, parseInt(selectedTimeframe.slice(1))) || []}
-                            statType={processedPlayer.stat_type}
-                            line={getLineValue()}
-                            title={`${processedPlayer.stat_type} Performance History`}
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full">
-                            <p className="text-primary-black-500 dark:text-primary-black-400">No data available</p>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Performance Summary */}
-                      {processedPlayer && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                          <div className="bg-primary-black-50 dark:bg-primary-black-800 rounded-lg p-4">
-                            <h4 className="text-sm font-medium text-primary-black-500 dark:text-primary-black-400 mb-1">Average</h4>
-                            <p className="text-2xl font-bold text-primary-black-900 dark:text-primary-black-100">
-                              {processedPlayer.games && processedPlayer.games.length > 0 
-                                ? calculateMetrics(processedPlayer.games.slice(0, parseInt(selectedTimeframe.slice(1)))).avg.toFixed(1) 
-                                : 'N/A'}
-                            </p>
-                          </div>
-                          
-                          <div className="bg-primary-black-50 dark:bg-primary-black-800 rounded-lg p-4">
-                            <h4 className="text-sm font-medium text-primary-black-500 dark:text-primary-black-400 mb-1">Hit Rate</h4>
-                            <p className="text-2xl font-bold text-primary-black-900 dark:text-primary-black-100">
-                              {processedPlayer.games && processedPlayer.games.length > 0 
-                                ? `${calculateMetrics(processedPlayer.games.slice(0, parseInt(selectedTimeframe.slice(1)))).hitRate.toFixed(0)}%` 
-                                : 'N/A'}
-                            </p>
-                          </div>
-                          
-                          <div className="bg-primary-black-50 dark:bg-primary-black-800 rounded-lg p-4">
-                            <h4 className="text-sm font-medium text-primary-black-500 dark:text-primary-black-400 mb-1">Current Streak</h4>
-                            <p className="text-2xl font-bold text-primary-black-900 dark:text-primary-black-100">
-                              {processedPlayer.games && processedPlayer.games.length > 0 
-                                ? `${calculateStreak(processedPlayer.games.slice(0, parseInt(selectedTimeframe.slice(1)))).streak} ${calculateStreak(processedPlayer.games.slice(0, parseInt(selectedTimeframe.slice(1)))).type}` 
-                                : 'N/A'}
-                            </p>
-                          </div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-primary-black-900 dark:text-primary-black-100">
+                          {processedPlayer.stat_type} Performance History
+                        </h3>
+                        <div className="flex gap-2" role="group" aria-label="Timeframe selection">
+                          {['L5', 'L10', 'L20'].map((time) => (
+                            <button
+                              key={time}
+                              onClick={() => setSelectedTimeframe(time)}
+                              className={cn(
+                                "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                                selectedTimeframe === time 
+                                ? "bg-blue-600 dark:bg-blue-700 text-white" 
+                                : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                              )}
+                              aria-pressed={selectedTimeframe === time}
+                              aria-label={`Show last ${time.slice(1)} games`}
+                            >
+                              {time}
+                            </button>
+                          ))}
                         </div>
-                      )}
+                      </div>
+
+                      <PlayerPerformanceBarChart 
+                        games={processedPlayer.games?.slice(0, parseInt(selectedTimeframe.slice(1))) || []} 
+                        statType={processedPlayer.stat_type}
+                        line={getLineValue()}
+                        title=""
+                        className="shadow-none border-none p-0 bg-transparent"
+                      />
                     </div>
+                    
+                    {/* Performance Summary */}
+                    {processedPlayer && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                        <div className="bg-primary-black-50 dark:bg-primary-black-800 rounded-lg p-4">
+                          <h4 className="text-sm font-medium text-primary-black-500 dark:text-primary-black-400 mb-1">Average</h4>
+                          <p className="text-2xl font-bold text-primary-black-900 dark:text-primary-black-100">
+                            {processedPlayer.games && processedPlayer.games.length > 0 
+                              ? calculateMetrics(processedPlayer.games.slice(0, parseInt(selectedTimeframe.slice(1)))).avg.toFixed(1) 
+                              : 'N/A'}
+                          </p>
+                        </div>
+                        
+                        <div className="bg-primary-black-50 dark:bg-primary-black-800 rounded-lg p-4">
+                          <h4 className="text-sm font-medium text-primary-black-500 dark:text-primary-black-400 mb-1">Hit Rate</h4>
+                          <p className="text-2xl font-bold text-primary-black-900 dark:text-primary-black-100">
+                            {processedPlayer.games && processedPlayer.games.length > 0 
+                              ? `${(calculateMetrics(processedPlayer.games.slice(0, parseInt(selectedTimeframe.slice(1)))).hitRate * 100).toFixed(0)}%` 
+                              : 'N/A'}
+                          </p>
+                        </div>
+                        
+                        <div className="bg-primary-black-50 dark:bg-primary-black-800 rounded-lg p-4">
+                          <h4 className="text-sm font-medium text-primary-black-500 dark:text-primary-black-400 mb-1">Current Streak</h4>
+                          <p className="text-2xl font-bold text-primary-black-900 dark:text-primary-black-100">
+                            {processedPlayer.games && processedPlayer.games.length > 0 
+                              ? `${calculateStreak(processedPlayer.games.slice(0, parseInt(selectedTimeframe.slice(1)))).streak} ${calculateStreak(processedPlayer.games.slice(0, parseInt(selectedTimeframe.slice(1)))).type}` 
+                              : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
