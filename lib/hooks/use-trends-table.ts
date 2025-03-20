@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { PlayerData, GameStats } from '@/app/types'
 import { useFilters } from '@/lib/context/app-state'
 
@@ -6,7 +6,7 @@ interface UseTrendsTableProps {
   data: PlayerData[]
   isLoading?: boolean
   hasMore?: boolean
-  onLoadMore?: () => void
+  onLoadMore?: (timeframe: string) => void
 }
 
 export function useTrendsTable({ 
@@ -131,7 +131,7 @@ export function useTrendsTable({
     
     const observer = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore && !isLoading && onLoadMore) {
-        onLoadMore()
+        onLoadMore(timeframe)
       }
     }, { threshold: 0.5 })
     
@@ -142,7 +142,16 @@ export function useTrendsTable({
         observer.unobserve(loaderRef.current)
       }
     }
-  }, [hasMore, isLoading, onLoadMore])
+  }, [hasMore, isLoading, onLoadMore, timeframe])
+
+  // Reset state when timeframe changes
+  useEffect(() => {
+    // Reset/update relevant state when timeframe changes
+    // This will depend on the specific implementation details, but might involve:
+    // - Resetting pagination state
+    // - Recalculating filtered data
+    // - Updating loading state or triggers
+  }, [timeframe])
 
   return {
     // State

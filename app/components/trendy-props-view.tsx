@@ -100,7 +100,9 @@ export default function TrendyPropsView() {
   // Function to load the next page of data
   const loadNextPage = () => {
     if (hasMore) {
-      setPage(pagination.page + 1)
+      // Log that we're loading the next page with current filters
+      console.log(`Loading next page with filters:`, filters);
+      setPage(pagination.page + 1);
     }
   }
   
