@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { motion, AnimatePresence } from 'framer-motion'
 import MiniBarGraph from './MiniBarGraph'
 import AnimatedProgressBar from './AnimatedProgressBar'
+import { PlayerPerformanceBarChart } from './PlayerPerformanceBarChart'
 
 // Team colors for visual accents
 const teamColors: Record<string, { primary: string; secondary: string }> = {
@@ -317,17 +318,19 @@ function PlayerRowComponent({
           >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Performance Graph */}
-              <div className="bg-white dark:bg-primary-black-800 rounded-lg p-4 border border-primary-black-200 dark:border-primary-black-700 shadow-sm">
+              <div className="md:col-span-2 bg-white dark:bg-primary-black-800 rounded-lg p-4 border border-primary-black-200 dark:border-primary-black-700 shadow-sm">
                 <h4 className="text-sm font-medium text-primary-black-600 dark:text-primary-black-300 mb-3">
                   Recent Performance
                 </h4>
-                <div className="h-16">
+                <div className="h-64">
                   {player.games && player.games.length > 0 ? (
-                    <MiniBarGraph
+                    <PlayerPerformanceBarChart
                       games={player.games.slice(0, 10)}
                       statType={player.stat_type}
                       line={player.line || 0}
-                      height={64}
+                      title=""
+                      showTrend={false}
+                      className="border-none shadow-none p-0"
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full text-xs text-primary-black-400">
@@ -343,65 +346,70 @@ function PlayerRowComponent({
                 )}
               </div>
               
-              {/* Hit Rate Progress */}
-              <div className="bg-white dark:bg-primary-black-800 rounded-lg p-4 border border-primary-black-200 dark:border-primary-black-700 shadow-sm">
-                <h4 className="text-sm font-medium text-primary-black-600 dark:text-primary-black-300 mb-2">
-                  Hit Rate
-                </h4>
-                <div className="mb-4">
-                  <AnimatedProgressBar
-                    value={hitRate * 100}
-                    label={`${timeframe} Games`}
-                    colorScheme={getHitRateColorScheme()}
-                    valueFormatter={(val) => `${val.toFixed(0)}%`}
-                  />
-                </div>
-                <div className="text-xs text-primary-black-500 dark:text-primary-black-400 mt-1">
-                  {hitRateData.hits} of {hitRateData.total} games {hitRate > 0.5 ? 'over' : 'under'} the line
-                </div>
-                <div className={cn(
-                  "mt-2 text-sm font-medium",
-                  recommendedBetType === "OVER" ? "text-green-600" : "text-red-600"
-                )}>
-                  Recommendation: {recommendedBetType}
-                </div>
-              </div>
-              
-              {/* Streak & Stats */}
-              <div className="bg-white dark:bg-primary-black-800 rounded-lg p-4 border border-primary-black-200 dark:border-primary-black-700 shadow-sm">
-                <h4 className="text-sm font-medium text-primary-black-600 dark:text-primary-black-300 mb-2">
-                  Current Streak
-                </h4>
-                <div className="flex items-center">
-                  <div className={cn(
-                    "text-2xl font-bold mr-2",
-                    streak.type === 'OVER' ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500'
-                  )}>
-                    {streak.count}
+              {/* Hit Rate Progress and Streak & Stats - in the third column */}
+              <div className="space-y-4">
+                {/* Hit Rate Progress */}
+                <div className="bg-white dark:bg-primary-black-800 rounded-lg p-4 border border-primary-black-200 dark:border-primary-black-700 shadow-sm">
+                  <h4 className="text-sm font-medium text-primary-black-600 dark:text-primary-black-300 mb-2">
+                    Hit Rate
+                  </h4>
+                  <div className="mb-4">
+                    <AnimatedProgressBar
+                      value={hitRate * 100}
+                      label={`${timeframe} Games`}
+                      colorScheme={getHitRateColorScheme()}
+                      valueFormatter={(val) => `${val.toFixed(0)}%`}
+                    />
+                  </div>
+                  <div className="text-xs text-primary-black-500 dark:text-primary-black-400 mt-1">
+                    {recommendedBetType === "OVER" 
+                      ? `${hitRateData.hits}/${hitRateData.total} hits`
+                      : `${hitRateData.total - hitRateData.hits}/${hitRateData.total} hits`}
                   </div>
                   <div className={cn(
-                    "text-sm",
-                    streak.type === 'OVER' ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500'
+                    "mt-2 text-sm font-medium",
+                    recommendedBetType === "OVER" ? "text-green-600" : "text-red-600"
                   )}>
-                    consecutive {streak.type.toLowerCase()}s
+                    Recommendation: {recommendedBetType}
                   </div>
                 </div>
-                <div className="flex mt-3 space-x-1">
-                  {Array.from({ length: Math.min(streak.count, 5) }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={cn(
-                        "h-2 flex-1 rounded-full",
-                        streak.type === 'OVER' ? 'bg-green-500' : 'bg-red-500'
-                      )}
-                    />
-                  ))}
-                  {Array.from({ length: Math.max(0, 5 - streak.count) }).map((_, i) => (
-                    <div
-                      key={i + streak.count}
-                      className="h-2 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
-                    />
-                  ))}
+                
+                {/* Streak & Stats */}
+                <div className="bg-white dark:bg-primary-black-800 rounded-lg p-4 border border-primary-black-200 dark:border-primary-black-700 shadow-sm">
+                  <h4 className="text-sm font-medium text-primary-black-600 dark:text-primary-black-300 mb-2">
+                    Current Streak
+                  </h4>
+                  <div className="flex items-center">
+                    <div className={cn(
+                      "text-2xl font-bold mr-2",
+                      streak.type === 'OVER' ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500'
+                    )}>
+                      {streak.count}
+                    </div>
+                    <div className={cn(
+                      "text-sm",
+                      streak.type === 'OVER' ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500'
+                    )}>
+                      consecutive {streak.type.toLowerCase()}s
+                    </div>
+                  </div>
+                  <div className="flex mt-3 space-x-1">
+                    {Array.from({ length: Math.min(streak.count, 5) }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={cn(
+                          "h-2 flex-1 rounded-full",
+                          streak.type === 'OVER' ? 'bg-green-500' : 'bg-red-500'
+                        )}
+                      />
+                    ))}
+                    {Array.from({ length: Math.max(0, 5 - streak.count) }).map((_, i) => (
+                      <div
+                        key={i + streak.count}
+                        className="h-2 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
