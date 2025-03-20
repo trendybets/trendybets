@@ -149,27 +149,42 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
       
       switch (sortKey) {
         case 'hit_rate':
-          const aHitRate = safeCalculateHits(a, timeframe).hits / Math.max(1, safeCalculateHits(a, timeframe).total)
-          const bHitRate = safeCalculateHits(b, timeframe).hits / Math.max(1, safeCalculateHits(b, timeframe).total)
-          comparison = aHitRate - bHitRate
-          break
+          // Get hit rates
+          const aHitRateData = safeCalculateHits(a, timeframe);
+          const bHitRateData = safeCalculateHits(b, timeframe);
+          
+          // Calculate raw hit rates (percentage of games going over)
+          const aRawHitRate = aHitRateData.hits / Math.max(1, aHitRateData.total);
+          const bRawHitRate = bHitRateData.hits / Math.max(1, bHitRateData.total);
+          
+          // Determine if each player is an over or under recommendation
+          const aIsOver = aRawHitRate >= 0.55;
+          const bIsOver = bRawHitRate >= 0.55;
+          
+          // Calculate the effective hit rate based on recommendation
+          // For under bets, 0.2 is actually better than 0.3 (80% vs 70% wins)
+          const aEffectiveRate = aIsOver ? aRawHitRate : 1 - aRawHitRate;
+          const bEffectiveRate = bIsOver ? bRawHitRate : 1 - bRawHitRate;
+          
+          comparison = aEffectiveRate - bEffectiveRate;
+          break;
         case 'average':
           const aAvg = safeGetAverageValue(a, timeframe)
           const bAvg = safeGetAverageValue(b, timeframe)
           comparison = aAvg - bAvg
-          break
+          break;
         case 'line':
           comparison = a.line - b.line
-          break
+          break;
         case 'name':
           comparison = a.player.name.localeCompare(b.player.name)
-          break
+          break;
         case 'confidence':
           const confidenceOrder = { 'very-high': 4, 'high': 3, 'medium': 2, 'low': 1 }
           const aConfidence = a.recommended_bet ? confidenceOrder[a.recommended_bet.confidence] || 0 : 0
           const bConfidence = b.recommended_bet ? confidenceOrder[b.recommended_bet.confidence] || 0 : 0
           comparison = aConfidence - bConfidence
-          break
+          break;
       }
       
       // Apply sort direction
@@ -211,6 +226,17 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
     }
   }
 
+  // Ensure sorting is correctly applied when data or filters change
+  useEffect(() => {
+    // Force a resort with current sort settings when data changes
+    setSortKey(sortKey);
+  }, [data, timeframe, viewMode, searchQuery]);
+  
+  // Clear selected player when timeframe changes to avoid showing stale data
+  useEffect(() => {
+    setSelectedPlayer(null);
+  }, [timeframe]);
+
   // Define variants for animations
   const rowVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -233,8 +259,30 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
 
   // Setup intersection observer for infinite scrolling
   useEffect(() => {
-    return setupObserver()
-  }, [setupObserver])
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoading) {
+          // Preserve current filters when loading more
+          if (onLoadMore) {
+            // Pass current view mode as a parameter if your API supports filtering
+            onLoadMore();
+          }
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    const currentLoader = loaderRef.current;
+    if (currentLoader) {
+      observer.observe(currentLoader);
+    }
+
+    return () => {
+      if (currentLoader) {
+        observer.unobserve(currentLoader);
+      }
+    };
+  }, [hasMore, isLoading, onLoadMore, viewMode, timeframe]); // Include viewMode and timeframe in dependencies
 
   // Filter options
   const statOptions = [
@@ -265,42 +313,57 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
   return (
     <div className="bg-white shadow rounded-lg overflow-hidden">
       {/* Enhanced header with stats and filters */}
-      <div className="border-b border-gray-200 bg-gray-50 p-4 sm:px-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-          <div>
-            <h2 className="text-lg font-medium text-gray-900">
-              Betting Trends
-              {!isLoading && (
-                <span className="ml-2 text-sm text-gray-500">
-                  ({displayData.length} players)
-                </span>
-              )}
-            </h2>
-            
-            {/* Stats pills with updated terminology */}
-            {!isLoading && displayData.length > 0 && (
-              <div className="flex space-x-3 mt-2 text-xs">
-                <div className="flex items-center text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
-                  <TrendingUp className="h-3 w-3 mr-1" />
-                  <span>{tableStats.strongOverTrends} Strong Over</span>
-                </div>
-                <div className="flex items-center text-red-600 bg-red-50 px-2 py-1 rounded-full">
-                  <TrendingDown className="h-3 w-3 mr-1" />
-                  <span>{tableStats.strongUnderTrends} Strong Under</span>
-                </div>
-                {tableStats.limitedData > 0 && (
-                  <div className="flex items-center text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
-                    <AlertTriangle className="h-3 w-3 mr-1" />
-                    <span>{tableStats.limitedData} Limited Data</span>
-                  </div>
+      <div className="border-b border-gray-200 bg-gray-50 p-5">
+        <div className="flex flex-col space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">
+                Betting Trends
+                {!isLoading && (
+                  <span className="ml-2 text-sm text-gray-500">
+                    ({displayData.length} players)
+                  </span>
                 )}
-              </div>
-            )}
+              </h2>
+              
+              {/* Stats pills with updated terminology */}
+              {!isLoading && displayData.length > 0 && (
+                <div className="flex space-x-3 mt-2 text-xs">
+                  <div className="flex items-center text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
+                    <TrendingUp className="h-3 w-3 mr-1" />
+                    <span className="font-medium">{tableStats.strongOverTrends} Strong Over</span>
+                  </div>
+                  <div className="flex items-center text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
+                    <TrendingDown className="h-3 w-3 mr-1" />
+                    <span className="font-medium">{tableStats.strongUnderTrends} Strong Under</span>
+                  </div>
+                  {tableStats.limitedData > 0 && (
+                    <div className="flex items-center text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      <span className="font-medium">{tableStats.limitedData} Limited Data</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {/* Timeframe tabs moved to the right */}
+            <Tabs 
+              value={timeframe} 
+              onValueChange={setTimeframe}
+              className="bg-white border border-gray-200 rounded-md"
+            >
+              <TabsList className="bg-gray-50">
+                <TabsTrigger value="L5" className="px-3 py-1.5 text-sm font-medium">L5</TabsTrigger>
+                <TabsTrigger value="L10" className="px-3 py-1.5 text-sm font-medium">L10</TabsTrigger>
+                <TabsTrigger value="L20" className="px-3 py-1.5 text-sm font-medium">L20</TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
           
           <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-3">
             {/* Search field */}
-            <div className="relative">
+            <div className="relative flex-grow max-w-md">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search className="h-4 w-4 text-gray-400" />
               </div>
@@ -312,19 +375,6 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            
-            {/* Timeframe tabs */}
-            <Tabs 
-              value={timeframe} 
-              onValueChange={setTimeframe}
-              className="bg-white border border-gray-200 rounded-md"
-            >
-              <TabsList className="bg-gray-50">
-                <TabsTrigger value="L5" className="px-3 py-1 text-sm">L5</TabsTrigger>
-                <TabsTrigger value="L10" className="px-3 py-1 text-sm">L10</TabsTrigger>
-                <TabsTrigger value="L20" className="px-3 py-1 text-sm">L20</TabsTrigger>
-              </TabsList>
-            </Tabs>
             
             {/* View mode filter with updated labels */}
             <div className="flex">
@@ -373,112 +423,18 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
         </div>
       </div>
       
-      {/* Table header with better alignment */}
-      <div className="border-b border-gray-200">
-        <div className="flex items-center py-3 px-4 sm:px-6 bg-gray-50 text-sm font-medium text-gray-500">
-          <div className="w-[40%] pl-10">
-            <button
-              className={cn(
-                "flex items-center hover:text-gray-700",
-                sortKey === 'name' && "text-indigo-600"
-              )}
-              onClick={() => handleSort('name')}
-            >
-              Player / Team
-              <ChevronDown 
-                className={cn(
-                  "ml-1 h-4 w-4",
-                  sortKey === 'name' && sortDirection === 'desc' && "rotate-180"
-                )} 
-              />
-            </button>
-          </div>
-          <div className="w-[15%] flex justify-center">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    className={cn(
-                      "flex items-center justify-center hover:text-gray-700",
-                      sortKey === 'line' && "text-indigo-600"
-                    )}
-                    onClick={() => handleSort('line')}
-                  >
-                    Line
-                    <ChevronDown 
-                      className={cn(
-                        "ml-1 h-4 w-4",
-                        sortKey === 'line' && sortDirection === 'desc' && "rotate-180"
-                      )} 
-                    />
-                    <Info className="ml-1 h-3 w-3 text-gray-400" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <p className="text-xs">The betting line for this prop</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          <div className="w-[15%] flex justify-center">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    className={cn(
-                      "flex items-center justify-center hover:text-gray-700",
-                      sortKey === 'average' && "text-indigo-600"
-                    )}
-                    onClick={() => handleSort('average')}
-                  >
-                    Avg
-                    <ChevronDown 
-                      className={cn(
-                        "ml-1 h-4 w-4",
-                        sortKey === 'average' && sortDirection === 'desc' && "rotate-180"
-                      )} 
-                    />
-                    <Info className="ml-1 h-3 w-3 text-gray-400" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <p className="text-xs">Average performance over the selected timeframe</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          <div className="w-[15%] flex justify-center">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    className={cn(
-                      "flex items-center justify-center hover:text-gray-700",
-                      sortKey === 'hit_rate' && "text-indigo-600"
-                    )}
-                    onClick={() => handleSort('hit_rate')}
-                  >
-                    Hit Rate
-                    <ChevronDown 
-                      className={cn(
-                        "ml-1 h-4 w-4",
-                        sortKey === 'hit_rate' && sortDirection === 'desc' && "rotate-180"
-                      )} 
-                    />
-                    <Info className="ml-1 h-3 w-3 text-gray-400" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <p className="text-xs">Percentage of games where the player went over the line</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          <div className="w-[15%] flex justify-center">
-            <span className="text-xs font-medium uppercase tracking-wider">
-              Details
-            </span>
-          </div>
+      {/* Table header - Simplified */}
+      <div className="border-b border-gray-200 bg-gray-50 px-6 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider flex justify-between items-center">
+        <span>Player Stats & Recommendations</span>
+        <div className="flex items-center space-x-1">
+          <span>Sorted by:</span>
+          <button 
+            onClick={() => setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc')}
+            className="text-blue-600 flex items-center hover:underline"
+          > 
+            Hit Rate 
+            <ChevronDown className={cn("ml-1 h-3 w-3", sortDirection === 'asc' ? "rotate-180" : "")} />
+          </button>
         </div>
       </div>
 
@@ -497,10 +453,9 @@ export function TrendsTable({ data, isLoading = false, hasMore = false, onLoadMo
                   initial="hidden"
                   animate="visible"
                   variants={rowVariants}
-                  whileHover="hover"
-                  transition={{ duration: 0.2, delay: index * 0.05 }}
+                  transition={{ duration: 0.2, delay: index * 0.03 }}
                   onClick={() => setSelectedPlayer(row)}
-                  className="border-b border-gray-100 last:border-0 cursor-pointer"
+                  className="border-b border-gray-100 last:border-0"
                 >
                   <PlayerRow 
                     player={row}
