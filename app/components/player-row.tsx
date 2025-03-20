@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, useState } from 'react'
+import React, { memo, useState, useEffect } from 'react'
 import { PlayerData } from '../types'
 import { cn } from '@/lib/utils'
 import { TrendingUp, TrendingDown, ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react'
@@ -14,6 +14,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import MiniBarGraph from './MiniBarGraph'
 import AnimatedProgressBar from './AnimatedProgressBar'
 import { PlayerPerformanceBarChart } from './PlayerPerformanceBarChart'
+import { createClient } from '@supabase/supabase-js'
+
+// Define Supabase URL and key variables at the top level
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hvegilvwwvdmivnphlyo.supabase.co';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2ZWdpbHZ3d3ZkbWl2bnBobHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTY3MDU4OTIsImV4cCI6MjAzMjI4MTg5Mn0.bIhCn1cQgH0kDldI-9z8OJHPPu0SXqAEOJnj9V90JqY';
 
 // Team colors for visual accents
 const teamColors: Record<string, { primary: string; secondary: string }> = {
@@ -76,6 +81,7 @@ function PlayerRowComponent({
   className
 }: PlayerRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [sportsbookLogo, setSportsbookLogo] = useState<string | null>(null)
   
   // Get hit rate data
   const hitRateData = calculateHits(player, timeframe)
@@ -166,6 +172,35 @@ function PlayerRowComponent({
   
   const streak = getStreak()
   const hasStreak = streak.count > 2
+  
+  // Fetch sportsbook logo when expanded
+  useEffect(() => {
+    if (isExpanded && !sportsbookLogo) {
+      const fetchSportsbookLogo = async () => {
+        try {
+          // Initialize Supabase client with the defined variables
+          const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          
+          // Fetch DraftKings logo (since that's where our odds come from)
+          const { data, error } = await supabase
+            .from('sportsbook')
+            .select('logo')
+            .eq('name', 'DraftKings')
+            .single();
+            
+          if (error) {
+            console.error('Error fetching sportsbook logo:', error);
+          } else if (data?.logo) {
+            setSportsbookLogo(data.logo);
+          }
+        } catch (error) {
+          console.error('Error fetching sportsbook logo:', error);
+        }
+      };
+      
+      fetchSportsbookLogo();
+    }
+  }, [isExpanded, sportsbookLogo]);
   
   // Toggle expanded state
   const handleToggleExpand = (e: React.MouseEvent) => {
@@ -306,6 +341,27 @@ function PlayerRowComponent({
               className
             )}
           >
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-medium text-primary-black-600 dark:text-primary-black-300">
+                Recent Performance & Stats
+              </div>
+              
+              {sportsbookLogo && (
+                <div className="flex items-center bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-lg">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mr-2">Odds by</div>
+                  <div className="h-5 w-16 relative">
+                    <Image 
+                      src={sportsbookLogo}
+                      alt="DraftKings"
+                      fill
+                      sizes="64px"
+                      className="object-contain"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Performance Graph */}
               <div className="md:col-span-2 bg-white dark:bg-primary-black-800 rounded-lg p-4 border border-primary-black-200 dark:border-primary-black-700 shadow-sm">

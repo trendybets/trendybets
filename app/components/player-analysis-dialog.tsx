@@ -27,6 +27,11 @@ import DistributionGraph from "./DistributionGraph"
 import AnimatedProgressBar from "./AnimatedProgressBar"
 import { PlayerPerformanceBarChart } from "./PlayerPerformanceBarChart"
 import { GameStats } from '../types'
+import { createClient } from '@supabase/supabase-js'
+
+// Define Supabase URL and key variables at the top level
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hvegilvwwvdmivnphlyo.supabase.co';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2ZWdpbHZ3d3ZkbWl2bnBobHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTY3MDU4OTIsImV4cCI6MjAzMjI4MTg5Mn0.bIhCn1cQgH0kDldI-9z8OJHPPu0SXqAEOJnj9V90JqY';
 
 // Register ChartJS components
 ChartJS.register(
@@ -79,6 +84,34 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [processedPlayer, setProcessedPlayer] = useState<PlayerData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [sportsbookLogo, setSportsbookLogo] = useState<string | null>(null)
+  
+  // Fetch sportsbook logo
+  useEffect(() => {
+    async function fetchSportsbookLogo() {
+      try {
+        // Initialize Supabase client with the defined variables
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        // Fetch DraftKings logo (since that's where our odds come from)
+        const { data, error } = await supabase
+          .from('sportsbook')
+          .select('logo')
+          .eq('name', 'DraftKings')
+          .single();
+          
+        if (error) {
+          console.error('Error fetching sportsbook logo:', error);
+        } else if (data?.logo) {
+          setSportsbookLogo(data.logo);
+        }
+      } catch (error) {
+        console.error('Error fetching sportsbook logo:', error);
+      }
+    }
+    
+    fetchSportsbookLogo();
+  }, []);
   
   // Process player data to ensure opponent names are set
   useEffect(() => {
@@ -515,17 +548,34 @@ export function PlayerAnalysisDialog({ player, isOpen, onClose, onError }: Playe
                 </div>
               </div>
               
-              {processedPlayer.next_game && (
-                <div className="game-info-card bg-gray-50 dark:bg-gray-800 p-3 rounded-lg" aria-label="Next game information">
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Next Game</div>
-                  <div className="text-sm font-medium matchup-display text-gray-900 dark:text-gray-100">
-                    {processedPlayer.next_game.home_team === processedPlayer.player.team 
-                      ? `vs ${processedPlayer.next_game.away_team}` 
-                      : `@ ${processedPlayer.next_game.home_team}`}
+              <div className="flex items-center">
+                {sportsbookLogo && (
+                  <div className="mr-3 flex items-center bg-gray-50 dark:bg-gray-800 px-3 py-2 rounded-lg">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mr-2">Odds provided by</div>
+                    <div className="h-6 w-20 relative">
+                      <Image 
+                        src={sportsbookLogo}
+                        alt="DraftKings"
+                        fill
+                        sizes="80px"
+                        className="object-contain"
+                      />
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 game-time">{processedPlayer.next_game.date}</div>
-                </div>
-              )}
+                )}
+                
+                {processedPlayer.next_game && (
+                  <div className="game-info-card bg-gray-50 dark:bg-gray-800 p-3 rounded-lg" aria-label="Next game information">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Next Game</div>
+                    <div className="text-sm font-medium matchup-display text-gray-900 dark:text-gray-100">
+                      {processedPlayer.next_game.home_team === processedPlayer.player.team 
+                        ? `vs ${processedPlayer.next_game.away_team}` 
+                        : `@ ${processedPlayer.next_game.home_team}`}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 game-time">{processedPlayer.next_game.date}</div>
+                  </div>
+                )}
+              </div>
             </div>
             
             {/* Tab Navigation */}
